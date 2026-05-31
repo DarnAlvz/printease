@@ -1,0 +1,5 @@
+#database connection
+backend/config/db.php
+
+#user uploads
+uploads/
