@@ -28,6 +28,32 @@ if (!$shop) {
 
 $shop_id = $shop['shop_id'];
 
+// Check if there's a search query for order ID
+$search_order_id = isset($_GET['order_id']) ? intval($_GET['order_id']) : 0;
+
+if ($search_order_id > 0) {
+    $sql = "SELECT o.*, u.full_name, u.email
+            FROM orders o
+            JOIN users u ON o.customer_id = u.user_id
+            WHERE o.shop_id = ? AND o.order_id = ?
+            ORDER BY o.created_at DESC";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    mysqli_stmt_bind_param($stmt, "ii", $shop_id, $search_order_id);
+} else {
+    $sql = "SELECT o.*, u.full_name, u.email
+            FROM orders o
+            JOIN users u ON o.customer_id = u.user_id
+            WHERE o.shop_id = ?
+            ORDER BY o.created_at DESC";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    mysqli_stmt_bind_param($stmt, "i", $shop_id);
+}
+
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+
 $sql = "SELECT o.*, u.full_name, u.email
         FROM orders o
         JOIN users u ON o.customer_id = u.user_id
@@ -41,6 +67,12 @@ $result = mysqli_stmt_get_result($stmt);
 ?>
 
 <h2>Manage Orders</h2>
+<form method="GET" style="margin-bottom:15px;">
+    <input type="number" name="order_id" placeholder="Search Order #" required>
+    <button type="submit">Search</button>
+    <a href="orders.php">Clear</a>
+</form>
+
 <?php showMessage(); ?>
 
 <?php if (mysqli_num_rows($result) == 0): ?>
@@ -48,6 +80,7 @@ $result = mysqli_stmt_get_result($stmt);
 <?php else: ?>
     <?php while ($order = mysqli_fetch_assoc($result)): ?>
         <div style="border:1px solid #ccc; padding:15px; margin-bottom:10px;">
+            <p><strong>Order #:</strong> <?php echo e($order['order_id']); ?></p>
             <p><strong>Paper Size:</strong> <?php echo e($order['paper_size']); ?></p>
             <p><strong>Paper Type:</strong> <?php echo e($order['paper_type']); ?></p>
             <p><strong>Print Type:</strong> <?php echo e($order['print_type']); ?></p>

@@ -9,6 +9,18 @@ require_once __DIR__ . "/../../../backend/actions/pickup_reminder_checker.php";
 
 $owner_id = $_SESSION['user_id'];
 
+$notif_sql = "SELECT COUNT(*) AS total 
+              FROM notifications 
+              WHERE user_id = ? 
+              AND is_read = 0";
+
+$notif_stmt = mysqli_prepare($conn, $notif_sql);
+mysqli_stmt_bind_param($notif_stmt, "i", $owner_id);
+mysqli_stmt_execute($notif_stmt);
+$notif_result = mysqli_stmt_get_result($notif_stmt);
+$notif_row = mysqli_fetch_assoc($notif_result);
+$notif_count = $notif_row['total'] ?? 0;
+
 $sql = "SELECT ps.*, u.account_status 
         FROM print_shops ps
         JOIN users u ON ps.owner_id = u.user_id
@@ -70,12 +82,6 @@ $account_status = $shop ? ($shop['account_status'] ?? 'pending') : 'pending';
                     approval to manage orders.</p>
             </div>
 
-            <?php
-            $notif_count = mysqli_fetch_assoc(mysqli_query(
-                $conn,
-                "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $owner_id AND is_read = 0"
-            ))['total'];
-            ?>
             <div class="mt-4">
                 <a href="notifications.php" class="bg-purple-600 text-white px-4 py-2 rounded relative">
                     Notifications
