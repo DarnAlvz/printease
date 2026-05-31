@@ -1,8 +1,8 @@
 <?php
-include "../config/db.php";
-include "../config/app.php";
-include "../includes/auth.php";
-include "../includes/functions.php";
+require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/app.php";
+require_once __DIR__ . "/../includes/auth.php";
+require_once __DIR__ . "/../includes/functions.php";
 
 checkRole("super_admin");
 
@@ -63,7 +63,7 @@ if (mysqli_stmt_execute($stmt)) {
 
     logActivity($conn, $_SESSION['user_id'], "Updated user #$user_id to $account_status", "User Management");
 
-    $status_message = "Your account status has been " . ucfirst($account_status) . ".";
+    $status_message = "Your account has been " . ucfirst($account_status) . ".";
     sendNotification($conn, $user_id, $status_message);
 
     setMessage("User status updated successfully.");

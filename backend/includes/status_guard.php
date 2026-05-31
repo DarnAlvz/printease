@@ -25,21 +25,16 @@ function requireVerifiedStatus($conn) {
             die("User not found.");
         }
 
-        $status = $user['account_status'] ?? 'incomplete';
+        $status = $user['account_status'] ?? 'pending';
 
         switch ($status) {
             case 'verified':
                 return true;
 
-            case 'incomplete':
-                $_SESSION['message'] = "Please complete your profile before accessing this feature.";
-                header("Location: ../../frontend/user/customer/profile.php");
-                exit();
-
             case 'pending':
                 die("<div style='padding:40px;text-align:center;font-family:sans-serif;'>
                     <h2>Account Pending Verification</h2>
-                    <p>Your account is pending verification by the Super Admin. Please wait for approval.</p>
+                    <p>Your account is pending verification by the Admin. Please wait for approval.</p>
                     <p><a href='dashboard.php' style='color:#2563eb;'>Back to Dashboard</a></p>
                 </div>");
 
@@ -78,7 +73,7 @@ function requireVerifiedStatus($conn) {
             case 'pending':
                 die("<div style='padding:40px;text-align:center;font-family:sans-serif;'>
                     <h2>Permit Pending Verification</h2>
-                    <p>Your business permit is pending verification by the Super Admin. Please wait for approval.</p>
+                    <p>Your business permit is pending verification by the Admin. Please wait for approval.</p>
                     <p><a href='dashboard.php' style='color:#2563eb;'>Back to Dashboard</a></p>
                 </div>");
 

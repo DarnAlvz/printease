@@ -1,7 +1,7 @@
 <?php
-include "../config/db.php";
-include "../includes/auth.php";
-include "../includes/functions.php";
+require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../includes/auth.php";
+require_once __DIR__ . "/../includes/functions.php";
 checkRole("shop_owner");
 
 if (isset($_POST['save_profile'])) {
@@ -51,7 +51,7 @@ if (isset($_POST['save_profile'])) {
                     WHERE shop_id=? AND owner_id=?";
             $stmt = mysqli_prepare($conn, $sql);
             mysqli_stmt_bind_param($stmt, "sssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $shop_id, $owner_id);
-            $message = "Shop profile saved. Your new permit is pending verification by Super Admin.";
+            $message = "Shop profile saved. Your new permit is pending verification by Admin.";
             $activity = "Saved shop profile with new permit (pending verification)";
         } else {
             $sql = "UPDATE print_shops SET 
@@ -68,7 +68,7 @@ if (isset($_POST['save_profile'])) {
                 VALUES (?, ?, ?, ?, ?, ?, 'pending')";
         $stmt = mysqli_prepare($conn, $sql);
         mysqli_stmt_bind_param($stmt, "isssss", $owner_id, $shop_name, $shop_address, $contact_number, $shop_status, $new_name);
-        $message = "Shop profile saved. Your permit is pending verification by Super Admin.";
+        $message = "Shop profile saved. Your permit is pending verification by Admin.";
         $activity = "Saved shop profile (pending verification)";
     }
 

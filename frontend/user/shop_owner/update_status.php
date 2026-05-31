@@ -1,10 +1,10 @@
 <?php
 
-include "../../../backend/includes/auth.php";
+require_once __DIR__ . "/../../../backend/includes/auth.php";
 checkRole("shop_owner");
-include "../../../backend/config/db.php";
-include "../../../backend/includes/status_guard.php";
-include "../../../backend/includes/shop_guard.php";
+require_once __DIR__ . "/../../../backend/config/db.php";
+require_once __DIR__ . "/../../../backend/includes/status_guard.php";
+require_once __DIR__ . "/../../../backend/includes/shop_guard.php";
 requireVerifiedStatus($conn);
 requireVerifiedShop($conn);
 

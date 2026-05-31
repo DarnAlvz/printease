@@ -1,11 +1,11 @@
 <?php
-include "../../../backend/includes/auth.php";
+require_once __DIR__ . "/../../../backend/includes/auth.php";
 checkRole("customer");
 
-include "../../../backend/config/db.php";
-include "../../../backend/config/app.php";
-include "../../../backend/includes/functions.php";
-include "../../../backend/includes/status_guard.php";
+require_once __DIR__ . "/../../../backend/config/db.php";
+require_once __DIR__ . "/../../../backend/config/app.php";
+require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 requireVerifiedStatus($conn);
 
 $customer_id = $_SESSION['user_id'];
@@ -34,7 +34,7 @@ $result = mysqli_stmt_get_result($stmt);
 
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
         <div>
-            <h1 class="text-2xl font-bold">Order History</h1>
+            <h1 class="text-2xl font-bold">My Order</h1>
             <p>Track your print orders and payments.</p>
         </div>
 

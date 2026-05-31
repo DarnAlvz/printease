@@ -1,13 +1,13 @@
 <?php
-include "../../../backend/includes/auth.php";
+require_once __DIR__ . "/../../../backend/includes/auth.php";
 checkRole("shop_owner");
 
-include "../../../backend/config/db.php";
-include "../../../backend/config/app.php";
-include "../../../backend/includes/functions.php";
-include "../../../backend/includes/status_guard.php";
-include "../../../backend/includes/shop_guard.php";
-include "../../../backend/includes/profile_guard.php";
+require_once __DIR__ . "/../../../backend/config/db.php";
+require_once __DIR__ . "/../../../backend/config/app.php";
+require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../../backend/includes/status_guard.php";
+require_once __DIR__ . "/../../../backend/includes/shop_guard.php";
+require_once __DIR__ . "/../../../backend/includes/profile_guard.php";
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
@@ -48,12 +48,15 @@ $result = mysqli_stmt_get_result($stmt);
 <?php else: ?>
     <?php while ($order = mysqli_fetch_assoc($result)): ?>
         <div style="border:1px solid #ccc; padding:15px; margin-bottom:10px;">
-            <p><strong>Order ID:</strong> <?php echo e($order['order_id']); ?></p>
-            <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
-            <p><strong>Email:</strong> <?php echo e($order['email']); ?></p>
             <p><strong>Paper Size:</strong> <?php echo e($order['paper_size']); ?></p>
+            <p><strong>Paper Type:</strong> <?php echo e($order['paper_type']); ?></p>
             <p><strong>Print Type:</strong> <?php echo e($order['print_type']); ?></p>
             <p><strong>Copies:</strong> <?php echo e($order['copies']); ?></p>
+            <p><strong>Instruction:</strong> <?php echo e($order['customer_instruction'] ?: 'No instruction'); ?></p>
+            <p>
+                <strong>Pickup Time:</strong>
+                <?php echo e(date("g:i A", strtotime($order['pickup_datetime']))); ?>
+            </p>
             <p><strong>Total Amount:</strong> ₱<?php echo e($order['total_amount']); ?></p>
             <p><strong>Payment Status:</strong>
                 <?php
@@ -66,7 +69,7 @@ $result = mysqli_stmt_get_result($stmt);
                 echo e($payment['payment_status'] ?? 'pending');
                 ?>
             </p>
-             <p><strong>Status:</strong>
+            <p><strong>Status:</strong>
                 <?php
                 $status = str_replace('_', ' ', $order['order_status']);
                 echo ucfirst(strtolower($status));
@@ -87,8 +90,8 @@ $result = mysqli_stmt_get_result($stmt);
             <?php else: ?>
                 <?php while ($file = mysqli_fetch_assoc($files)): ?>
                     <a href="<?php echo BASE_URL . e($file['file_path']); ?>" target="_blank">
-                        View File
-                    </a><br>
+                        View Uploaded File
+                    </a>
                 <?php endwhile; ?>
             <?php endif; ?>
 

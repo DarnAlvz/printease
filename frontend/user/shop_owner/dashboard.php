@@ -1,16 +1,19 @@
 <?php
-include "../../../backend/includes/auth.php";
+require_once __DIR__ . "/../../../backend/includes/auth.php";
 checkRole("shop_owner");
 
-include "../../../backend/config/db.php";
-include "../../../backend/config/app.php";
-include "../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../../backend/config/db.php";
+require_once __DIR__ . "/../../../backend/config/app.php";
+require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../../backend/actions/pickup_reminder_checker.php";
 
 $owner_id = $_SESSION['user_id'];
 
-$sql = "SELECT * FROM print_shops 
-        WHERE owner_id = ? 
-        ORDER BY shop_id DESC 
+$sql = "SELECT ps.*, u.account_status 
+        FROM print_shops ps
+        JOIN users u ON ps.owner_id = u.user_id
+        WHERE ps.owner_id = ? 
+        ORDER BY ps.shop_id DESC 
         LIMIT 1";
 $stmt = mysqli_prepare($conn, $sql);
 mysqli_stmt_bind_param($stmt, "i", $owner_id);
@@ -19,7 +22,8 @@ $result = mysqli_stmt_get_result($stmt);
 $shop = mysqli_fetch_assoc($result);
 
 $has_shop = !empty($shop);
-$permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
+$permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'pending';
+$account_status = $shop ? ($shop['account_status'] ?? 'pending') : 'pending';
 ?>
 
 <!DOCTYPE html>
@@ -62,7 +66,8 @@ $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
             <?php endif; ?>
 
             <div class="mt-5 bg-blue-100 border-l-4 border-blue-500 p-4 rounded">
-                <p class="text-blue-800">Your business permit is pending verification by the Super Admin. Please wait for approval to manage orders.</p>
+                <p class="text-blue-800">Your business permit is pending verification by the Super Admin. Please wait for
+                    approval to manage orders.</p>
             </div>
 
             <?php
@@ -75,7 +80,8 @@ $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
                 <a href="notifications.php" class="bg-purple-600 text-white px-4 py-2 rounded relative">
                     Notifications
                     <?php if ($notif_count > 0): ?>
-                        <span style="background:red; color:white; padding:2px 5px; border-radius:50%; position:absolute; top:-5px; right:-10px;">
+                        <span
+                            style="background:red; color:white; padding:2px 5px; border-radius:50%; position:absolute; top:-5px; right:-10px;">
                             <?php echo $notif_count; ?>
                         </span>
                     <?php endif; ?>
@@ -85,11 +91,13 @@ $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
         <?php elseif ($permit_status === 'rejected'): ?>
             <div class="bg-red-100 border-l-4 border-red-500 p-5 rounded">
                 <h2 class="text-xl font-bold text-red-800">Permit Rejected</h2>
-                <p class="text-red-700">Your business permit has been rejected. Please contact the administrator or update your permit.</p>
-                <a href="shop_profile.php" class="bg-blue-600 text-white px-4 py-2 rounded mt-3 inline-block">Update Shop Profile</a>
+                <p class="text-red-700">Your business permit has been rejected. Please contact the administrator or update
+                    your permit.</p>
+                <a href="shop_profile.php" class="bg-blue-600 text-white px-4 py-2 rounded mt-3 inline-block">Update Shop
+                    Profile</a>
             </div>
 
-        <?php elseif ($permit_status === 'verified'): ?>
+        <?php elseif ($permit_status === 'verified' && $account_status === 'verified'): ?>
             <h2 class="text-xl font-bold"><?php echo e($shop['shop_name']); ?></h2>
             <p>Address: <?php echo e($shop['shop_address']); ?></p>
             <p>Contact: <?php echo e($shop['contact_number']); ?></p>

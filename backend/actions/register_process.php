@@ -1,5 +1,5 @@
 <?php
-include "../config/db.php";
+require_once __DIR__ . "../config/db.php";
 
 if (isset($_POST['register'])) {
     $full_name = trim($_POST['full_name']);

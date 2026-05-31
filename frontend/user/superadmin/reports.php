@@ -1,10 +1,10 @@
 <?php
-include "../../../backend/includes/auth.php";
+require_once __DIR__ . "/../../../backend/includes/auth.php";
 checkRole("super_admin");
 
-include "../../../backend/config/db.php";
-include "../../../backend/config/app.php";
-include "../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../../backend/config/db.php";
+require_once __DIR__ . "/../../../backend/config/app.php";
+require_once __DIR__ . "/../../../backend/includes/functions.php";
 
 $total_users = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM users WHERE role != 'super_admin'"))['total'];
 $total_shop_owners = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM users WHERE role = 'shop_owner'"))['total'];

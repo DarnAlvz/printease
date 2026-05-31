@@ -1,12 +1,15 @@
 <?php
-include "../config/db.php";
-include "../config/app.php";
-include "../includes/auth.php";
-include "../includes/functions.php";
-include "../includes/status_guard.php";
+require_once __DIR__ . "../config/db.php";
+require_once __DIR__ . "../config/app.php";
+require_once __DIR__ . "../includes/auth.php";
+require_once __DIR__ . "../includes/functions.php";
+require_once __DIR__ . "../includes/status_guard.php";
+require_once __DIR__ . "../includes/profile_guard.php";
 
 checkRole("customer");
 requireVerifiedStatus($conn);
+requireCompleteCustomerProfile($conn);
+
 
 if (isset($_POST['place_order'])) {
     $customer_id = $_SESSION['user_id'];

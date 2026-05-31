@@ -1,10 +1,10 @@
 <?php
-include "../../../backend/includes/auth.php";
+require_once __DIR__ . "/../../../backend/includes/auth.php";
 checkRole("super_admin");
 
-include "../../../backend/config/db.php";
-include "../../../backend/config/app.php";
-include "../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../../backend/config/db.php";
+require_once __DIR__ . "/../../../backend/config/app.php";
+require_once __DIR__ . "/../../../backend/includes/functions.php";
 
 $sql = "SELECT u.*, ps.business_permit_file, ps.permit_status 
         FROM users u 
