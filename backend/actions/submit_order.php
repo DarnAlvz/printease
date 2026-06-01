@@ -26,6 +26,7 @@ if ($copies < 1 || empty($pickup_datetime)) {
     redirect(BASE_URL . "frontend/user/customer/shops.php");
 }
 
+// Fetch service and shop info
 $service_sql = "SELECT ss.*, ps.owner_id, ps.shop_status, ps.permit_status
                 FROM shop_services ss
                 JOIN print_shops ps ON ss.shop_id = ps.shop_id
@@ -51,10 +52,10 @@ if (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UP
 
 $total_amount = $service['price_per_page'] * $copies;
 
+// File upload
 $upload_dir = "../../uploads/orders/";
-if (!is_dir($upload_dir)) {
+if (!is_dir($upload_dir))
     mkdir($upload_dir, 0777, true);
-}
 
 $original_name = basename($_FILES['document_file']['name']);
 $file_type = pathinfo($original_name, PATHINFO_EXTENSION);
@@ -69,14 +70,31 @@ try {
         throw new Exception("File upload failed.");
     }
 
+
+    // Generate unique order_code
+    do {
+        $random_code = strtoupper(bin2hex(random_bytes(3))); // 6-char random
+        $order_code = 'PE-' . date('Ymd') . '-' . $random_code;
+
+        // Check if it exists in DB
+        $check_sql = "SELECT COUNT(*) as count FROM orders WHERE order_code = ?";
+        $check_stmt = mysqli_prepare($conn, $check_sql);
+        mysqli_stmt_bind_param($check_stmt, "s", $order_code);
+        mysqli_stmt_execute($check_stmt);
+        $result = mysqli_stmt_get_result($check_stmt);
+        $row = mysqli_fetch_assoc($result);
+    } while ($row['count'] > 0); // loop until unique
+
+    // Insert order
     $order_sql = "INSERT INTO orders
-        (customer_id, shop_id, service_id, paper_size, paper_type, print_type, copies, customer_instruction, pickup_datetime, total_amount)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        (order_code, customer_id, shop_id, service_id, paper_size, paper_type, print_type, copies, customer_instruction, pickup_datetime, total_amount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $order_stmt = mysqli_prepare($conn, $order_sql);
     mysqli_stmt_bind_param(
         $order_stmt,
-        "iiisssissd",
+        "siiisssissd",
+        $order_code,
         $customer_id,
         $shop_id,
         $service_id,
@@ -92,24 +110,22 @@ try {
 
     $order_id = mysqli_insert_id($conn);
 
+    // Insert uploaded file
     $file_sql = "INSERT INTO uploaded_files (order_id, file_name, file_path, file_type)
                  VALUES (?, ?, ?, ?)";
-
     $file_stmt = mysqli_prepare($conn, $file_sql);
-
-    if (!$file_stmt) {
+    if (!$file_stmt)
         throw new Exception("Uploaded file SQL Error: " . mysqli_error($conn));
-    }
-
     mysqli_stmt_bind_param($file_stmt, "isss", $order_id, $original_name, $db_path, $file_type);
     mysqli_stmt_execute($file_stmt);
 
-    sendNotification($conn, $service['owner_id'], "New print order received. Order #$order_id.");
+    // Notify shop owner
+    sendNotification($conn, $service['owner_id'], "New print order received. Order #$order_code.");
 
     mysqli_commit($conn);
 
-    setMessage("Order submitted successfully.");
-    redirect(BASE_URL . "frontend/user/customer/shops.php");
+    setMessage("Order submitted successfully. Your Order # is " . $order_code . ".");
+    redirect(BASE_URL . "frontend/user/customer/orders.php");
 
 } catch (Exception $e) {
     mysqli_rollback($conn);

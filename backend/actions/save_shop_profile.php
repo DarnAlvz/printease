@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 checkRole("shop_owner");
@@ -11,7 +12,7 @@ if (isset($_POST['save_profile'])) {
     $contact_number = trim($_POST['contact_number']);
     $shop_status = $_POST['shop_status'];
 
-    $check_sql = "SELECT shop_id, permit_status, business_permit_file FROM print_shops WHERE owner_id = ? LIMIT 1";
+    $check_sql = "SELECT shop_id, permit_status, business_permit_file, shop_logo FROM print_shops WHERE owner_id = ? LIMIT 1";
     $check_stmt = mysqli_prepare($conn, $check_sql);
     mysqli_stmt_bind_param($check_stmt, "i", $owner_id);
     mysqli_stmt_execute($check_stmt);
@@ -21,7 +22,39 @@ if (isset($_POST['save_profile'])) {
         && $_FILES['business_permit_file']['error'] === UPLOAD_ERR_OK
         && $_FILES['business_permit_file']['name'] !== '';
 
+    $has_new_logo = isset($_FILES['shop_logo'])
+        && $_FILES['shop_logo']['error'] === UPLOAD_ERR_OK
+        && $_FILES['shop_logo']['name'] !== '';
+
     $new_name = null;
+    $new_logo_name = null;
+
+    if ($has_new_logo) {
+        $allowed_logo_extensions = ['jpg', 'jpeg', 'png', 'webp', 'jfif'];
+        $logo_name = $_FILES['shop_logo']['name'];
+        $logo_tmp = $_FILES['shop_logo']['tmp_name'];
+        $logo_extension = strtolower(pathinfo($logo_name, PATHINFO_EXTENSION));
+
+        if (!in_array($logo_extension, $allowed_logo_extensions) || @getimagesize($logo_tmp) === false) {
+            setMessage("Please upload a valid shop logo image.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+
+        $logo_dir = __DIR__ . "/../../uploads/shop_logos/";
+        if (!is_dir($logo_dir)) {
+            mkdir($logo_dir, 0775, true);
+        }
+
+        $new_logo_name = time() . "_" . bin2hex(random_bytes(4)) . "." . $logo_extension;
+        $logo_upload_path = $logo_dir . $new_logo_name;
+
+        if (!move_uploaded_file($logo_tmp, $logo_upload_path)) {
+            setMessage("Shop logo upload failed.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+    }
 
     if ($has_new_permit) {
         $permit_name = $_FILES['business_permit_file']['name'];
@@ -45,29 +78,48 @@ if (isset($_POST['save_profile'])) {
         $shop_id = (int) $existing['shop_id'];
 
         if ($has_new_permit) {
-            $sql = "UPDATE print_shops SET 
-                    shop_name=?, shop_address=?, contact_number=?, 
-                    shop_status=?, business_permit_file=?, permit_status='pending'
-                    WHERE shop_id=? AND owner_id=?";
-            $stmt = mysqli_prepare($conn, $sql);
-            mysqli_stmt_bind_param($stmt, "sssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $shop_id, $owner_id);
+            if ($has_new_logo) {
+                $sql = "UPDATE print_shops SET 
+                        shop_name=?, shop_address=?, contact_number=?, 
+                        shop_status=?, business_permit_file=?, shop_logo=?, permit_status='pending'
+                        WHERE shop_id=? AND owner_id=?";
+                $stmt = mysqli_prepare($conn, $sql);
+                mysqli_stmt_bind_param($stmt, "ssssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $new_logo_name, $shop_id, $owner_id);
+            } else {
+                $sql = "UPDATE print_shops SET 
+                        shop_name=?, shop_address=?, contact_number=?, 
+                        shop_status=?, business_permit_file=?, permit_status='pending'
+                        WHERE shop_id=? AND owner_id=?";
+                $stmt = mysqli_prepare($conn, $sql);
+                mysqli_stmt_bind_param($stmt, "sssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $shop_id, $owner_id);
+            }
             $message = "Shop profile saved. Your new permit is pending verification by Admin.";
             $activity = "Saved shop profile with new permit (pending verification)";
         } else {
-            $sql = "UPDATE print_shops SET 
-                    shop_name=?, shop_address=?, contact_number=?, shop_status=?
-                    WHERE shop_id=? AND owner_id=?";
-            $stmt = mysqli_prepare($conn, $sql);
-            mysqli_stmt_bind_param($stmt, "ssssii", $shop_name, $shop_address, $contact_number, $shop_status, $shop_id, $owner_id);
-            $message = "Shop profile saved.";
-            $activity = "Saved shop profile";
+            if ($has_new_logo) {
+                $sql = "UPDATE print_shops SET 
+                        shop_name=?, shop_address=?, contact_number=?, shop_status=?, shop_logo=?
+                        WHERE shop_id=? AND owner_id=?";
+                $stmt = mysqli_prepare($conn, $sql);
+                mysqli_stmt_bind_param($stmt, "sssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_logo_name, $shop_id, $owner_id);
+                $message = "Shop profile and logo saved.";
+                $activity = "Saved shop profile with logo";
+            } else {
+                $sql = "UPDATE print_shops SET 
+                        shop_name=?, shop_address=?, contact_number=?, shop_status=?
+                        WHERE shop_id=? AND owner_id=?";
+                $stmt = mysqli_prepare($conn, $sql);
+                mysqli_stmt_bind_param($stmt, "ssssii", $shop_name, $shop_address, $contact_number, $shop_status, $shop_id, $owner_id);
+                $message = "Shop profile saved.";
+                $activity = "Saved shop profile";
+            }
         }
     } else {
         $sql = "INSERT INTO print_shops 
-                (owner_id, shop_name, shop_address, contact_number, shop_status, business_permit_file, permit_status)
-                VALUES (?, ?, ?, ?, ?, ?, 'pending')";
+                (owner_id, shop_name, shop_address, contact_number, shop_status, business_permit_file, shop_logo, permit_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')";
         $stmt = mysqli_prepare($conn, $sql);
-        mysqli_stmt_bind_param($stmt, "isssss", $owner_id, $shop_name, $shop_address, $contact_number, $shop_status, $new_name);
+        mysqli_stmt_bind_param($stmt, "issssss", $owner_id, $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $new_logo_name);
         $message = "Shop profile saved. Your permit is pending verification by Admin.";
         $activity = "Saved shop profile (pending verification)";
     }

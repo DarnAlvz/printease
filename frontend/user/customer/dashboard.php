@@ -20,6 +20,8 @@ $account_status = $user['account_status'] ?? 'incomplete';
 // Check if profile is complete
 $profile_complete = !empty($user['phone_number']) && !empty($user['address']) && !empty($user['valid_id_file']);
 
+
+
 // Count unread notifications
 $notif_count = mysqli_fetch_assoc(mysqli_query($conn,
     "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $customer_id AND is_read = 0"
@@ -83,6 +85,8 @@ $notif_count = mysqli_fetch_assoc(mysqli_query($conn,
                 ?>
             </p>
         </div>
+
+        
         <div class="bg-white p-5 rounded shadow">
             <h2>Pending Orders</h2>
             <p class="text-3xl font-bold">
