@@ -152,7 +152,7 @@ foreach ($weekly_sales as $index => $value) {
 $chart_polyline = implode(' ', $chart_points);
 $max_status = max(1, (int) $stats['total']);
 
-ownerLayoutStart('dashboard', 'Shop Owner Dashboard', 'Monitor orders, revenue, shop status, and recent activity.', $notif_count, $shop);
+ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
 ?>
 
 <?php if (isset($_GET['profile']) && $_GET['profile'] === 'success'): ?>

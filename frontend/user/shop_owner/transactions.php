@@ -90,127 +90,156 @@ while ($transaction = mysqli_fetch_assoc($transaction_result)) {
     $transactions[] = $transaction;
 }
 
-ownerLayoutStart('transactions', 'Transactions', 'Track paid order transactions for faster sales reporting.', $notif_count, $shop);
+ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop);
 ?>
 
-<section class="summary-grid" style="margin-bottom:24px;">
-    <article class="metric-card accent-card">
-        <div class="metric-head">
-            <span class="metric-icon"><?php echo ownerIcon('badge-dollar-sign', 'icon'); ?></span>
-            <span class="status-badge status-success">Paid</span>
-        </div>
-        <strong><?php echo ownerMoney($summary['total_revenue']); ?></strong>
-        <p>Total Paid Revenue</p>
-    </article>
-    <article class="metric-card">
-        <div class="metric-head">
-            <span>Total Paid Orders</span>
-            <span class="metric-icon"><?php echo ownerIcon('receipt-text', 'icon'); ?></span>
-        </div>
-        <strong><?php echo (int) $summary['total_transactions']; ?></strong>
-        <p class="card-note">Payment records</p>
-    </article>
-    <article class="metric-card">
-        <div class="metric-head">
-            <span>Average Transaction</span>
-            <span class="metric-icon"><?php echo ownerIcon('chart-line', 'icon'); ?></span>
-        </div>
-        <strong><?php echo ownerMoney($summary['average_transaction']); ?></strong>
-        <p class="card-note">
-            Latest:
-            <?php echo !empty($summary['latest_payment']) ? e(date("M d, Y", strtotime($summary['latest_payment']))) : 'No payments yet'; ?>
-        </p>
-    </article>
-</section>
+<section class="transactions-ui">
+    <div class="transactions-prepaid-pill">
+        <?php echo ownerIcon('circle-check', 'icon-sm'); ?>
+        <span>All orders are prepaid via GCash</span>
+    </div>
 
-<section class="filter-card" style="margin-bottom:24px;">
-    <form method="GET">
-        <div class="search-row">
-            <input type="text" name="q" placeholder="Search by order code, customer, method, or status" value="<?php echo e($search); ?>">
-            <button type="submit" class="btn btn-primary"><?php echo ownerIcon('search', 'icon'); ?>Search</button>
-            <a href="transactions.php" class="btn btn-soft"><?php echo ownerIcon('x', 'icon'); ?>Clear</a>
-        </div>
-    </form>
-</section>
-
-<?php if (empty($transactions)): ?>
-    <section class="owner-card empty-state">
-        <h2>No transactions found</h2>
-        <p>Paid customer orders will appear here once payments are recorded.</p>
+    <section class="transactions-stat-grid" aria-label="Transaction summary">
+        <article class="transactions-stat-card">
+            <span class="transactions-stat-icon revenue"><?php echo ownerIcon('badge-dollar-sign', 'icon'); ?></span>
+            <div>
+                <p>Total Revenue</p>
+                <strong><?php echo ownerMoney($summary['total_revenue']); ?></strong>
+            </div>
+        </article>
+        <article class="transactions-stat-card">
+            <span class="transactions-stat-icon paid"><?php echo ownerIcon('circle-check', 'icon'); ?></span>
+            <div>
+                <p>Total Paid Orders</p>
+                <strong><?php echo (int) $summary['total_transactions']; ?></strong>
+            </div>
+        </article>
+        <article class="transactions-stat-card">
+            <span class="transactions-stat-icon processing"><?php echo ownerIcon('clock', 'icon'); ?></span>
+            <div>
+                <p>Average Transaction</p>
+                <strong><?php echo ownerMoney($summary['average_transaction']); ?></strong>
+            </div>
+        </article>
     </section>
-<?php else: ?>
-    <section class="table-card">
-        <div class="owner-table-wrap">
-            <table class="owner-table">
-                <thead>
-                    <tr>
-                        <th>Order</th>
-                        <th>Customer</th>
-                        <th>Print Details</th>
-                        <th>Payment Method</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($transactions as $transaction): ?>
-                        <?php $payment_date = $transaction['created_at'] ?? $transaction['order_created_at'] ?? ''; ?>
+
+    <section class="transactions-filter-card">
+        <form method="GET" class="transactions-search-form">
+            <label class="transactions-search-box">
+                <?php echo ownerIcon('search', 'icon'); ?>
+                <input type="text" name="q" placeholder="Search by order code, customer, method, or status" value="<?php echo e($search); ?>">
+            </label>
+            <button type="submit" class="transactions-submit-hidden">Search</button>
+            <?php if ($search !== ''): ?>
+                <a href="transactions.php" class="transactions-clear-link" aria-label="Clear search"><?php echo ownerIcon('x', 'icon-sm'); ?></a>
+            <?php endif; ?>
+        </form>
+
+        <div class="transactions-visual-tabs" aria-label="Visual status buttons">
+            <button type="button" class="active">All</button>
+            <button type="button">Processing</button>
+            <button type="button">Ready</button>
+            <button type="button">Completed</button>
+        </div>
+    </section>
+
+    <?php if (empty($transactions)): ?>
+        <section class="owner-card empty-state transactions-empty-state">
+            <h2>No transactions found</h2>
+            <p>Paid customer orders will appear here once payments are recorded.</p>
+        </section>
+    <?php else: ?>
+        <section class="transactions-table-card">
+            <div class="owner-table-wrap">
+                <table class="transactions-table">
+                    <thead>
                         <tr>
-                            <td>
-                                <strong><?php echo e($transaction['order_code']); ?></strong><br>
-                                <span class="muted">Order #<?php echo e($transaction['order_id']); ?></span>
-                            </td>
-                            <td>
-                                <strong><?php echo e($transaction['full_name']); ?></strong><br>
-                                <span class="muted"><?php echo e($transaction['email']); ?></span>
-                            </td>
-                            <td>
-                                <span class="chip"><?php echo e($transaction['paper_size']); ?></span>
-                                <span class="chip"><?php echo e($transaction['paper_type']); ?></span>
-                                <span class="chip"><?php echo e($transaction['print_type']); ?></span>
-                                <span class="chip">x<?php echo e($transaction['copies']); ?></span>
-                            </td>
-                            <td><?php echo e(strtoupper($transaction['payment_method'] ?? 'GCash')); ?></td>
-                            <td><strong><?php echo ownerMoney($transaction['amount']); ?></strong></td>
-                            <td>
-                                <span class="status-badge <?php echo ownerStatusClass($transaction['payment_status']); ?>">
-                                    <?php echo e(ownerStatusLabel($transaction['payment_status'])); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if (!empty($payment_date)): ?>
-                                    <?php echo e(date("M d, Y", strtotime($payment_date))); ?><br>
-                                    <span class="muted"><?php echo e(date("g:i A", strtotime($payment_date))); ?></span>
-                                <?php else: ?>
-                                    <span class="muted">Not available</span>
-                                <?php endif; ?>
-                            </td>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Print Details</th>
+                            <th>Payment Method</th>
+                            <th>Amount</th>
+                            <th>Date Paid</th>
+                            <th>Payment Status</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($transactions as $transaction): ?>
+                            <?php $payment_date = $transaction['created_at'] ?? $transaction['order_created_at'] ?? ''; ?>
+                            <tr>
+                                <td><strong class="transactions-order-code"><?php echo e($transaction['order_code']); ?></strong></td>
+                                <td>
+                                    <span class="transactions-customer">
+                                        <?php echo ownerIcon('circle-check', 'icon-sm'); ?>
+                                        <strong><?php echo e($transaction['full_name']); ?></strong>
+                                    </span>
+                                    <span class="transactions-subtext"><?php echo e($transaction['email']); ?></span>
+                                </td>
+                                <td>
+                                    <div class="transactions-chip-row">
+                                        <span><?php echo e($transaction['paper_size']); ?></span>
+                                        <span><?php echo e($transaction['paper_type']); ?></span>
+                                        <span><?php echo e($transaction['print_type']); ?></span>
+                                        <span>x<?php echo e($transaction['copies']); ?></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="transactions-method-chip"><?php echo e(strtoupper($transaction['payment_method'] ?? 'GCash')); ?></span>
+                                </td>
+                                <td><strong class="transactions-amount"><?php echo ownerMoney($transaction['amount']); ?></strong></td>
+                                <td>
+                                    <?php if (!empty($payment_date)): ?>
+                                        <?php echo e(date("Y-m-d", strtotime($payment_date))); ?>
+                                    <?php else: ?>
+                                        <span class="muted">Not available</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <span class="status-badge transactions-status <?php echo ownerStatusClass($transaction['payment_status']); ?>">
+                                        <?php echo e(ownerStatusLabel($transaction['payment_status'])); ?>
+                                    </span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
 
-        <div class="order-mobile-list">
-            <?php foreach ($transactions as $transaction): ?>
-                <?php $payment_date = $transaction['created_at'] ?? $transaction['order_created_at'] ?? ''; ?>
-                <article class="owner-card order-card-mobile">
-                    <div class="card-head">
-                        <h2><?php echo e($transaction['order_code']); ?></h2>
-                        <span class="status-badge <?php echo ownerStatusClass($transaction['payment_status']); ?>">
-                            <?php echo e(ownerStatusLabel($transaction['payment_status'])); ?>
-                        </span>
-                    </div>
-                    <p><strong>Customer:</strong> <?php echo e($transaction['full_name']); ?></p>
-                    <p><strong>Amount:</strong> <?php echo ownerMoney($transaction['amount']); ?></p>
-                    <p><strong>Method:</strong> <?php echo e(strtoupper($transaction['payment_method'] ?? 'GCash')); ?></p>
-                    <p><strong>Details:</strong> <?php echo e($transaction['paper_size']); ?>, <?php echo e($transaction['paper_type']); ?>, <?php echo e($transaction['print_type']); ?>, x<?php echo e($transaction['copies']); ?></p>
-                    <p><strong>Date:</strong> <?php echo !empty($payment_date) ? e(date("M d, Y - g:i A", strtotime($payment_date))) : 'Not available'; ?></p>
-                </article>
-            <?php endforeach; ?>
+            <div class="order-mobile-list transactions-mobile-list">
+                <?php foreach ($transactions as $transaction): ?>
+                    <?php $payment_date = $transaction['created_at'] ?? $transaction['order_created_at'] ?? ''; ?>
+                    <article class="owner-card order-card-mobile">
+                        <div class="card-head">
+                            <h2><?php echo e($transaction['order_code']); ?></h2>
+                            <span class="status-badge <?php echo ownerStatusClass($transaction['payment_status']); ?>">
+                                <?php echo e(ownerStatusLabel($transaction['payment_status'])); ?>
+                            </span>
+                        </div>
+                        <p><strong>Customer:</strong> <?php echo e($transaction['full_name']); ?></p>
+                        <p><strong>Amount:</strong> <?php echo ownerMoney($transaction['amount']); ?></p>
+                        <p><strong>Method:</strong> <?php echo e(strtoupper($transaction['payment_method'] ?? 'GCash')); ?></p>
+                        <p><strong>Details:</strong> <?php echo e($transaction['paper_size']); ?>, <?php echo e($transaction['paper_type']); ?>, <?php echo e($transaction['print_type']); ?>, x<?php echo e($transaction['copies']); ?></p>
+                        <p><strong>Date:</strong> <?php echo !empty($payment_date) ? e(date("Y-m-d", strtotime($payment_date))) : 'Not available'; ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <section class="transactions-total-bar" aria-label="Transaction totals">
+        <div>
+            <span>Total Orders</span>
+            <strong><?php echo (int) $summary['total_transactions']; ?></strong>
+        </div>
+        <div>
+            <span>Total Amount</span>
+            <strong><?php echo ownerMoney($summary['total_revenue']); ?></strong>
+        </div>
+        <div>
+            <span>Average Order</span>
+            <strong><?php echo ownerMoney($summary['average_transaction']); ?></strong>
         </div>
     </section>
-<?php endif; ?>
+</section>
 
 <?php ownerLayoutEnd(); ?>
