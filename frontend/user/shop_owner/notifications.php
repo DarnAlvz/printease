@@ -53,7 +53,12 @@ ownerLayoutStart('notifications', 'Notifications', 'Review recent shop alerts, o
     <?php else: ?>
         <div class="notification-list">
             <?php foreach ($notifications as $note): ?>
-                <article class="notification-item">
+                <?php $notification_href = ownerNotificationUrl($note, $owner_id); ?>
+                <?php if ($notification_href !== ''): ?>
+                    <a class="notification-item notification-item-link" href="<?php echo e($notification_href); ?>">
+                <?php else: ?>
+                    <article class="notification-item">
+                <?php endif; ?>
                     <span class="activity-dot"><?php echo ownerIcon($note['is_read'] == 0 ? 'bell-ring' : 'info', 'icon'); ?></span>
                     <div>
                         <div class="row-actions">
@@ -64,7 +69,11 @@ ownerLayoutStart('notifications', 'Notifications', 'Review recent shop alerts, o
                         </div>
                         <small class="muted"><?php echo e(date("M d, Y - g:i A", strtotime($note['created_at']))); ?></small>
                     </div>
-                </article>
+                <?php if ($notification_href !== ''): ?>
+                    </a>
+                <?php else: ?>
+                    </article>
+                <?php endif; ?>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>

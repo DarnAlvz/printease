@@ -59,17 +59,17 @@ if ($search !== '') {
                         JOIN orders o ON p.order_id = o.order_id
                         JOIN users u ON p.customer_id = u.user_id
                         WHERE o.shop_id = ?
+                        AND p.payment_status = 'paid'
                         AND (
                             o.order_code LIKE ?
                             OR u.full_name LIKE ?
                             OR u.email LIKE ?
                             OR p.payment_method LIKE ?
-                            OR p.payment_status LIKE ?
                         )
                         ORDER BY o.created_at DESC";
     $transaction_stmt = mysqli_prepare($conn, $transaction_sql);
     $like = "%$search%";
-    mysqli_stmt_bind_param($transaction_stmt, "isssss", $shop_id, $like, $like, $like, $like, $like);
+    mysqli_stmt_bind_param($transaction_stmt, "issss", $shop_id, $like, $like, $like, $like);
 } else {
     $transaction_sql = "SELECT p.*, o.order_code, o.paper_size, o.paper_type, o.print_type, o.copies,
                                o.total_amount, o.order_status, o.created_at AS order_created_at,
@@ -78,6 +78,7 @@ if ($search !== '') {
                         JOIN orders o ON p.order_id = o.order_id
                         JOIN users u ON p.customer_id = u.user_id
                         WHERE o.shop_id = ?
+                        AND p.payment_status = 'paid'
                         ORDER BY o.created_at DESC";
     $transaction_stmt = mysqli_prepare($conn, $transaction_sql);
     mysqli_stmt_bind_param($transaction_stmt, "i", $shop_id);
@@ -127,20 +128,13 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop);
         <form method="GET" class="transactions-search-form">
             <label class="transactions-search-box">
                 <?php echo ownerIcon('search', 'icon'); ?>
-                <input type="text" name="q" placeholder="Search by order code, customer, method, or status" value="<?php echo e($search); ?>">
+                <input type="text" name="q" placeholder="Search by order code, customer, or payment method" value="<?php echo e($search); ?>">
             </label>
             <button type="submit" class="transactions-submit-hidden">Search</button>
             <?php if ($search !== ''): ?>
                 <a href="transactions.php" class="transactions-clear-link" aria-label="Clear search"><?php echo ownerIcon('x', 'icon-sm'); ?></a>
             <?php endif; ?>
         </form>
-
-        <div class="transactions-visual-tabs" aria-label="Visual status buttons">
-            <button type="button" class="active">All</button>
-            <button type="button">Processing</button>
-            <button type="button">Ready</button>
-            <button type="button">Completed</button>
-        </div>
     </section>
 
     <?php if (empty($transactions)): ?>
@@ -154,7 +148,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop);
                 <table class="transactions-table">
                     <thead>
                         <tr>
-                            <th>Order ID</th>
+                            <th>Order Code</th>
                             <th>Customer</th>
                             <th>Print Details</th>
                             <th>Payment Method</th>

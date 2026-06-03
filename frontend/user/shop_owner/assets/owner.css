@@ -18,8 +18,8 @@
     --page-x: 34px;
     --page-y: 28px;
     --sidebar-width: 240px;
-    --sidebar-collapsed-width: 84px;
-    --active-sidebar-width: var(--sidebar-width);
+    --sidebar-collapsed-width: 72px;
+    --active-sidebar-width: var(--sidebar-collapsed-width);
     --layout-speed: .22s;
     --layout-ease: ease;
 }
@@ -33,7 +33,10 @@ body.owner-body {
     min-height: 100vh;
     background: linear-gradient(135deg, #e9f8ff 0%, #d8efff 100%);
     color: var(--ink);
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.45;
 }
 
 a {
@@ -44,30 +47,50 @@ a {
 .owner-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
-    width: var(--active-sidebar-width);
+    width: var(--sidebar-collapsed-width);
     background: #fff;
-    border-right: 1px solid #b7efff;
+    border-right: 1px solid #aeeeff;
     display: flex;
     flex-direction: column;
-    z-index: 20;
-    transition: width var(--layout-speed) var(--layout-ease);
+    z-index: 30;
+    transition: width var(--layout-speed) var(--layout-ease), box-shadow var(--layout-speed) var(--layout-ease);
     overflow: hidden;
+    box-shadow: 1px 0 0 rgba(5, 183, 211, .08);
+}
+
+.owner-sidebar:hover,
+.owner-sidebar:focus-within,
+html.owner-sidebar-hovered .owner-sidebar {
+    width: var(--sidebar-width);
+    box-shadow: 12px 0 28px rgba(2, 72, 115, .14);
 }
 
 .owner-brand {
-    min-height: 192px;
-    padding: 28px 24px 24px;
-    background: linear-gradient(180deg, #fff 0%, #eefbff 100%);
-    border-bottom: 1px solid #d8f5ff;
+    height: 76px;
+    min-height: 76px;
+    padding: 0;
+    background: #fff;
+    border-bottom: 1px solid #e8f7fc;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
     transition: min-height var(--layout-speed) var(--layout-ease), padding var(--layout-speed) var(--layout-ease), gap var(--layout-speed) var(--layout-ease), align-items var(--layout-speed) var(--layout-ease);
+}
+
+.owner-sidebar:hover .owner-brand,
+.owner-sidebar:focus-within .owner-brand,
+html.owner-sidebar-hovered .owner-sidebar .owner-brand {
+    height: auto;
+    min-height: 186px;
+    justify-content: flex-start;
 }
 
 .owner-brand-mark {
     width: 48px;
     height: 48px;
+    margin: 0;
     border-radius: 12px;
     display: grid;
     place-items: center;
@@ -75,6 +98,7 @@ a {
     font-weight: 800;
     background: linear-gradient(135deg, #03045e, #00b4d8);
     box-shadow: var(--shadow);
+    transition: width var(--layout-speed) var(--layout-ease), height var(--layout-speed) var(--layout-ease), margin var(--layout-speed) var(--layout-ease), border-radius var(--layout-speed) var(--layout-ease);
 }
 
 .owner-brand-logo,
@@ -88,15 +112,41 @@ a {
 .owner-brand-logo {
     width: 48px;
     height: 48px;
-    border-radius: 13px;
-    box-shadow: var(--shadow);
-    transition: width var(--layout-speed) var(--layout-ease), height var(--layout-speed) var(--layout-ease), border-radius var(--layout-speed) var(--layout-ease);
+    margin: 0;
+    border-radius: 12px;
+    object-fit: contain;
+    box-shadow: 0 6px 12px rgba(2, 72, 115, .14);
+    transition: width var(--layout-speed) var(--layout-ease), height var(--layout-speed) var(--layout-ease), margin var(--layout-speed) var(--layout-ease), border-radius var(--layout-speed) var(--layout-ease);
+}
+
+.owner-sidebar:hover .owner-brand-logo,
+.owner-sidebar:hover .owner-brand-mark,
+.owner-sidebar:focus-within .owner-brand-logo,
+.owner-sidebar:focus-within .owner-brand-mark,
+html.owner-sidebar-hovered .owner-sidebar .owner-brand-logo,
+html.owner-sidebar-hovered .owner-sidebar .owner-brand-mark {
+    width: 38px;
+    height: 38px;
+    margin: 16px 0;
+    border-radius: 10px;
 }
 
 .owner-brand-copy {
+    display: none;
     min-width: 0;
-    max-width: 100%;
+    width: 100%;
+    max-width: none;
+    min-height: 116px;
+    padding: 31px 24px 18px;
+    background: #eefbff;
+    border-top: 1px solid #aeeeff;
     transition: opacity var(--layout-speed) var(--layout-ease), width var(--layout-speed) var(--layout-ease), max-width var(--layout-speed) var(--layout-ease);
+}
+
+.owner-sidebar:hover .owner-brand-copy,
+.owner-sidebar:focus-within .owner-brand-copy,
+html.owner-sidebar-hovered .owner-sidebar .owner-brand-copy {
+    display: block;
 }
 
 .owner-brand span,
@@ -110,7 +160,7 @@ a {
 
 .owner-brand strong {
     display: block;
-    margin: 7px 0 6px;
+    margin: 8px 0 7px;
     font-size: 18px;
     line-height: 1.2;
     overflow-wrap: anywhere;
@@ -123,26 +173,61 @@ a {
 }
 
 .owner-nav {
-    padding: 20px 16px;
+    padding: 14px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    transition: padding var(--layout-speed) var(--layout-ease), gap var(--layout-speed) var(--layout-ease);
+}
+
+.owner-sidebar:hover .owner-nav,
+.owner-sidebar:focus-within .owner-nav,
+html.owner-sidebar-hovered .owner-sidebar .owner-nav {
+    padding: 17px 16px;
     display: grid;
-    gap: 10px;
+    align-items: stretch;
+    gap: 12px;
 }
 
 .owner-nav a,
 .owner-logout {
+    width: 48px;
+    height: 48px;
     min-height: 48px;
-    padding: 0 16px;
+    padding: 0;
     border-radius: 12px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    gap: 0;
     color: #334155;
     font-weight: 700;
     font-size: 15px;
-    transition: color .18s ease, background .18s ease, box-shadow .18s ease, padding var(--layout-speed) var(--layout-ease), gap var(--layout-speed) var(--layout-ease);
+    transition: color .18s ease, background .18s ease, box-shadow .18s ease, padding var(--layout-speed) var(--layout-ease), gap var(--layout-speed) var(--layout-ease), width var(--layout-speed) var(--layout-ease), height var(--layout-speed) var(--layout-ease);
+}
+
+.owner-sidebar:hover .owner-nav a,
+.owner-sidebar:hover .owner-logout,
+.owner-sidebar:focus-within .owner-nav a,
+.owner-sidebar:focus-within .owner-logout,
+html.owner-sidebar-hovered .owner-sidebar .owner-nav a,
+html.owner-sidebar-hovered .owner-sidebar .owner-logout {
+    width: auto;
+    height: auto;
+    padding: 0 17px;
+    justify-content: flex-start;
+    gap: 14px;
 }
 
 .owner-nav-label {
+    max-width: 0;
+    width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -150,16 +235,41 @@ a {
     transition: opacity var(--layout-speed) var(--layout-ease), width var(--layout-speed) var(--layout-ease);
 }
 
+.owner-sidebar:hover .owner-nav-label,
+.owner-sidebar:focus-within .owner-nav-label,
+html.owner-sidebar-hovered .owner-sidebar .owner-nav-label {
+    max-width: 100%;
+    width: auto;
+    min-height: 0;
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .owner-nav a:hover,
 .owner-nav a.active {
     color: #fff;
-    background: linear-gradient(135deg, #0489c9, #06bcd4);
-    box-shadow: 0 10px 20px rgba(0, 139, 196, .24);
+    background: linear-gradient(135deg, #008bc8, #05b7d3);
+    box-shadow: 0 10px 18px rgba(0, 139, 196, .28);
 }
 
 .owner-logout {
-    margin: auto 16px 20px;
+    min-height: 80px;
+    width: 100%;
+    height: 80px;
+    margin: auto 0 0;
+    padding: 0;
+    border-top: 1px solid #edf2f7;
+    border-radius: 0;
     color: #ef233c;
+}
+
+.owner-sidebar:hover .owner-logout,
+.owner-sidebar:focus-within .owner-logout,
+html.owner-sidebar-hovered .owner-sidebar .owner-logout {
+    min-height: 80px;
+    width: 100%;
+    height: 80px;
+    padding: 0 32px;
 }
 
 .owner-shell {
@@ -193,58 +303,13 @@ a {
 }
 
 .topbar-title {
-    gap: 20px;
+    gap: 0;
     font-size: 24px;
     line-height: 1;
 }
 
-.sidebar-toggle {
-    width: 36px;
-    height: 36px;
-    border: 0;
-    border-radius: 10px;
-    color: #334155;
-    background: transparent;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-}
-
-.sidebar-toggle:hover {
-    background: #e7f7ff;
-}
-
 .topbar-title strong {
     color: #064b8e;
-}
-
-.menu-mark,
-.menu-mark::before,
-.menu-mark::after {
-    width: 18px;
-    height: 2px;
-    background: #334155;
-    display: block;
-    border-radius: 2px;
-}
-
-.menu-mark {
-    position: relative;
-}
-
-.menu-mark::before,
-.menu-mark::after {
-    content: "";
-    position: absolute;
-    left: 0;
-}
-
-.menu-mark::before {
-    top: -7px;
-}
-
-.menu-mark::after {
-    top: 7px;
 }
 
 .topbar-actions {
@@ -362,6 +427,10 @@ a {
     display: grid;
     grid-template-columns: 36px minmax(0, 1fr);
     gap: 12px;
+}
+
+.notification-popover-link:hover {
+    background: #f3fbff;
 }
 
 .notification-popover-item:last-child {
@@ -733,6 +802,16 @@ a {
     display: flex;
     gap: 13px;
     align-items: flex-start;
+}
+
+.notification-item-link {
+    transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.notification-item-link:hover {
+    border-color: #9be7ff;
+    background: #f6fcff;
+    box-shadow: var(--shadow-soft);
 }
 
 .activity-item b,
@@ -1198,6 +1277,12 @@ select:focus {
     border-bottom: 0;
 }
 
+.orders-table tr.order-focused td,
+.order-card-mobile.order-focused {
+    background: #f0fbff;
+    box-shadow: inset 4px 0 0 #00a6c8;
+}
+
 .orders-table td small {
     display: block;
     margin-top: 4px;
@@ -1613,56 +1698,6 @@ body.order-modal-open {
     opacity: .72;
     cursor: wait;
     box-shadow: none;
-}
-
-body.owner-sidebar-collapsed {
-    --active-sidebar-width: var(--sidebar-collapsed-width);
-}
-
-body.owner-sidebar-collapsed .owner-brand {
-    min-height: 286px;
-    padding: 26px 10px 0;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0;
-}
-
-body.owner-sidebar-collapsed .owner-brand-logo,
-body.owner-sidebar-collapsed .owner-brand-mark {
-    width: 42px;
-    height: 42px;
-    border-radius: 11px;
-}
-
-body.owner-sidebar-collapsed .owner-brand-copy,
-body.owner-sidebar-collapsed .owner-nav-label {
-    max-width: 0;
-    width: 0;
-    opacity: 0;
-    pointer-events: none;
-}
-
-body.owner-sidebar-collapsed .owner-nav {
-    padding: 28px 10px 0;
-    gap: 14px;
-}
-
-body.owner-sidebar-collapsed .owner-nav a,
-body.owner-sidebar-collapsed .owner-logout {
-    width: 56px;
-    height: 48px;
-    min-height: 48px;
-    justify-content: center;
-    gap: 0;
-    padding: 0;
-    border-radius: 12px;
-    justify-self: center;
-}
-
-body.owner-sidebar-collapsed .owner-logout {
-    margin-right: auto;
-    margin-left: auto;
-    margin-bottom: 20px;
 }
 
 .transactions-ui {
@@ -2972,6 +3007,232 @@ body.owner-sidebar-collapsed .owner-logout {
     transform: rotate(45deg);
 }
 
+/* Reference typography scale inspired by the provided admin mockups. */
+.owner-body h1,
+.owner-body h2,
+.owner-body h3,
+.owner-body strong {
+    color: var(--ink);
+    letter-spacing: 0;
+}
+
+.topbar-title strong {
+    color: var(--ink);
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.owner-user strong {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.owner-user span {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+}
+
+.owner-brand span {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.owner-brand strong {
+    color: var(--ink);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.owner-brand small {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.owner-nav a,
+.owner-logout {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.page-heading h1 {
+    color: var(--ink);
+    font-size: clamp(28px, 2.05vw, 30px);
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.page-heading p {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.45;
+}
+
+.hero-card h2 {
+    font-size: clamp(28px, 2.1vw, 31px);
+    font-weight: 800;
+    line-height: 1.12;
+}
+
+.hero-card p {
+    font-size: 16px;
+    font-weight: 400;
+}
+
+.owner-card h2,
+.table-card h2,
+.card-head h2,
+.orders-summary-card h2,
+.service-header h2,
+.shop-profile-card .card-head h2,
+.shop-details-card .card-head h2,
+.operating-hours-card h2,
+.quick-stats-card h2,
+.dashboard-status-card h2,
+.dashboard-activity-card h2,
+.recent-orders-head h2,
+.order-modal-header h2 {
+    color: var(--ink);
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.metric-card strong,
+.orders-summary-card strong,
+.transactions-stat-card strong,
+.dashboard-stat-card strong,
+.dashboard-sales-card strong,
+.transactions-total-bar strong {
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.metric-card p,
+.orders-summary-card p,
+.dashboard-stat-card p,
+.dashboard-sales-card p,
+.owner-card p,
+.status-row span,
+.form-group label,
+.location-map-label,
+.hours-list span,
+.order-info-list span,
+.order-setting-card span {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.45;
+}
+
+.btn,
+button.btn,
+.file-link,
+.upload-logo-btn,
+.location-map-button,
+.shop-edit-button,
+.order-modal-primary,
+.order-modal-secondary {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.orders-tabs a {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.orders-tabs a span,
+.notification-badge,
+.nav-badge,
+.chip,
+.status-badge,
+.transactions-chip-row span,
+.transactions-method-chip,
+.dashboard-stat-card .status-badge,
+.print-detail-chips span {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.orders-table th,
+.owner-table th,
+.transactions-table th,
+.recent-orders-table th {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.orders-table td,
+.owner-table td,
+.transactions-table td,
+.recent-orders-table td,
+.dashboard-activity-item b,
+.notification-popover-item p,
+.notification-item b {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.orders-table td strong,
+.recent-orders-table a,
+.transactions-order-code,
+.transactions-customer strong,
+.transactions-amount,
+.price-box strong,
+.mini-stat strong,
+.hours-list strong,
+.order-info-list strong,
+.order-setting-card strong {
+    font-weight: 700;
+}
+
+.order-btn-navy,
+.orders-update-form .btn,
+.pagination-btn,
+.pagination-current {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.notification-popover-head strong {
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.notification-popover-head a {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.notification-popover-head span,
+.notification-popover-item time,
+.dashboard-activity-item small,
+.transactions-subtext,
+.orders-table td small {
+    font-size: 12px;
+    font-weight: 400;
+}
+
+input,
+textarea,
+select {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+}
+
 @media (max-width: 1180px) {
     .metric-grid,
     .summary-grid,
@@ -3043,68 +3304,97 @@ body.owner-sidebar-collapsed .owner-logout {
         min-width: 0;
     }
 
-    body.owner-sidebar-collapsed .owner-main {
-        padding-right: 24px;
-        padding-left: 24px;
-    }
 }
 
 @media (max-width: 820px) {
-    body.owner-sidebar-collapsed {
-        --active-sidebar-width: 0px;
-    }
-
-    body.owner-sidebar-collapsed .owner-sidebar {
-        width: auto;
-    }
-
-    body.owner-sidebar-collapsed .owner-shell {
-        width: 100%;
-        margin-left: 0;
-    }
-
-    body.owner-sidebar-collapsed .owner-brand {
-        min-height: auto;
-        padding: 18px;
-        align-items: center;
-        justify-content: flex-start;
-    }
-
-    body.owner-sidebar-collapsed .owner-brand-copy,
-    body.owner-sidebar-collapsed .owner-nav-label {
-        max-width: 100%;
-        width: auto;
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    .owner-sidebar {
+    .owner-sidebar,
+    .owner-sidebar:hover,
+    .owner-sidebar:focus-within,
+    html.owner-sidebar-hovered .owner-sidebar {
         position: static;
         width: auto;
         min-height: auto;
         overflow: visible;
+        box-shadow: none;
     }
 
-    .owner-brand {
+    .owner-brand,
+    .owner-sidebar:hover .owner-brand,
+    .owner-sidebar:focus-within .owner-brand,
+    html.owner-sidebar-hovered .owner-sidebar .owner-brand {
+        height: auto;
         min-height: auto;
         padding: 18px;
         flex-direction: row;
         align-items: center;
+        justify-content: flex-start;
         gap: 14px;
     }
 
-    .owner-nav {
+    .owner-brand-logo,
+    .owner-brand-mark,
+    .owner-sidebar:hover .owner-brand-logo,
+    .owner-sidebar:hover .owner-brand-mark,
+    .owner-sidebar:focus-within .owner-brand-logo,
+    .owner-sidebar:focus-within .owner-brand-mark,
+    html.owner-sidebar-hovered .owner-sidebar .owner-brand-logo,
+    html.owner-sidebar-hovered .owner-sidebar .owner-brand-mark {
+        width: 38px;
+        height: 38px;
+        margin: 0;
+        border-radius: 10px;
+    }
+
+    .owner-brand-copy,
+    .owner-sidebar:hover .owner-brand-copy,
+    .owner-sidebar:focus-within .owner-brand-copy,
+    html.owner-sidebar-hovered .owner-sidebar .owner-brand-copy {
+        display: block;
+        max-width: 100%;
+        width: auto;
+        min-height: auto;
+        padding: 0;
+        background: transparent;
+        border-top: 0;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .owner-nav,
+    .owner-sidebar:hover .owner-nav,
+    .owner-sidebar:focus-within .owner-nav,
+    html.owner-sidebar-hovered .owner-sidebar .owner-nav {
+        display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
         padding: 14px;
         gap: 10px;
     }
 
     .owner-nav a,
-    .owner-logout {
+    .owner-logout,
+    .owner-sidebar:hover .owner-nav a,
+    .owner-sidebar:hover .owner-logout,
+    .owner-sidebar:focus-within .owner-nav a,
+    .owner-sidebar:focus-within .owner-logout,
+    html.owner-sidebar-hovered .owner-sidebar .owner-nav a,
+    html.owner-sidebar-hovered .owner-sidebar .owner-logout {
         width: auto;
         height: auto;
         min-height: 46px;
+        padding: 0 17px;
         justify-content: flex-start;
+        gap: 14px;
+    }
+
+    .owner-nav-label,
+    .owner-sidebar:hover .owner-nav-label,
+    .owner-sidebar:focus-within .owner-nav-label,
+    html.owner-sidebar-hovered .owner-sidebar .owner-nav-label {
+        max-width: 100%;
+        width: auto;
+        opacity: 1;
+        pointer-events: auto;
     }
 
     .owner-logout {

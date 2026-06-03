@@ -47,6 +47,7 @@ if (!$shop) {
 
 $shop_id = (int) $shop['shop_id'];
 $search_code = trim($_GET['order_code'] ?? '');
+$focus_order_id = max(0, (int) ($_GET['focus_order_id'] ?? 0));
 $allowed_filters = ['all', 'pending', 'processing', 'ready_for_pickup', 'completed'];
 $status_filter = $_GET['status'] ?? 'all';
 if (!in_array($status_filter, $allowed_filters, true)) {
@@ -61,7 +62,7 @@ $types = "i";
 $params = [$shop_id];
 
 if ($search_code !== '') {
-    $where .= " AND RIGHT(o.order_code, 4) LIKE ?";
+    $where .= " AND o.order_code LIKE ?";
     $types .= "s";
     $params[] = "%$search_code%";
 }
@@ -91,7 +92,8 @@ $orders_sql = "SELECT o.*, u.full_name, u.email
                FROM orders o
                JOIN users u ON o.customer_id = u.user_id
                $where
-               ORDER BY CASE o.order_status
+               ORDER BY " . ($focus_order_id > 0 ? "CASE WHEN o.order_id = ? THEN 0 ELSE 1 END," : "") . "
+                        CASE o.order_status
                             WHEN 'processing' THEN 1
                             WHEN 'pending' THEN 2
                             WHEN 'ready_for_pickup' THEN 3
@@ -101,8 +103,10 @@ $orders_sql = "SELECT o.*, u.full_name, u.email
                         o.created_at DESC
                LIMIT ? OFFSET ?";
 $orders_stmt = mysqli_prepare($conn, $orders_sql);
-$orders_types = $types . "ii";
-$orders_params = array_merge($params, [$per_page, $offset]);
+$orders_types = ($focus_order_id > 0 ? $types . "i" : $types) . "ii";
+$orders_params = $focus_order_id > 0
+    ? array_merge($params, [$focus_order_id, $per_page, $offset])
+    : array_merge($params, [$per_page, $offset]);
 mysqli_stmt_bind_param($orders_stmt, $orders_types, ...$orders_params);
 mysqli_stmt_execute($orders_stmt);
 $result = mysqli_stmt_get_result($orders_stmt);
@@ -192,7 +196,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
         <input type="hidden" name="status" value="<?php echo e($status_filter); ?>">
         <div class="orders-search-box">
             <?php echo ownerIcon('search', 'icon'); ?>
-            <input type="text" name="order_code" placeholder="Search by order ID..." value="<?php echo e($search_code); ?>">
+            <input type="text" name="order_code" placeholder="Search by order code..." value="<?php echo e($search_code); ?>">
         </div>
         <button type="submit" class="orders-submit-hidden">Search</button>
         <?php if ($search_code !== ''): ?>
@@ -237,7 +241,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                         $first_file = $file_rows[0]['file_name'] ?? 'No uploaded file';
                         $order_files[(int) $order['order_id']] = $file_rows;
                         ?>
-                        <tr data-order-row="<?php echo e($order['order_id']); ?>">
+                        <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
+                        <tr class="<?php echo $is_focused_order ? 'order-focused' : ''; ?>" data-order-row="<?php echo e($order['order_id']); ?>">
                             <td><strong><?php echo e($order['order_code']); ?></strong></td>
                             <td>
                                 <strong><?php echo e($order['full_name']); ?></strong>
@@ -410,7 +415,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                 mysqli_stmt_execute($file_stmt);
                 $files = mysqli_stmt_get_result($file_stmt);
                 ?>
-                <article class="owner-card order-card-mobile" data-order-card="<?php echo e($order['order_id']); ?>">
+                <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
+                <article class="owner-card order-card-mobile <?php echo $is_focused_order ? 'order-focused' : ''; ?>" data-order-card="<?php echo e($order['order_id']); ?>">
                     <div class="card-head">
                         <h2><?php echo e($order['order_code']); ?></h2>
                         <span class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>" data-order-status-badge="<?php echo e($order['order_id']); ?>">
@@ -465,6 +471,13 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
         const openButtons = document.querySelectorAll('[data-order-modal-target]');
         const closeSelector = '[data-order-modal-close]';
         let activeModal = null;
+
+        const focusedOrder = document.querySelector('.order-focused');
+        if (focusedOrder) {
+            window.setTimeout(function () {
+                focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 120);
+        }
 
         function openModal(modal) {
             if (!modal) {

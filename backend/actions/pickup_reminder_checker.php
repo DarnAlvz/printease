@@ -11,7 +11,7 @@ if (isset($_SESSION['user_id']) && $_SESSION['role'] === 'shop_owner') {
     $owner_filter = " AND ps.owner_id = $current_owner_id ";
 }
 
-$sql = "SELECT o.order_id, o.pickup_datetime, ps.owner_id
+$sql = "SELECT o.order_id, o.order_code, o.pickup_datetime, ps.owner_id
         FROM orders o
         JOIN print_shops ps ON o.shop_id = ps.shop_id
         WHERE o.pickup_datetime BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 MINUTE)
@@ -22,10 +22,11 @@ $result = mysqli_query($conn, $sql);
 
 while ($order = mysqli_fetch_assoc($result)) {
     $order_id = $order['order_id'];
+    $order_code = $order['order_code'] ?: $order_id;
     $owner_id = $order['owner_id'];
     $pickup_time = date("g:i A", strtotime($order['pickup_datetime']));
 
-    $message = "Reminder: Order #$order_id is scheduled for pickup at $pickup_time and is not yet ready.";
+    $message = "Reminder: Order #$order_code is scheduled for pickup at $pickup_time and is not yet ready.";
 
     sendNotification($conn, $owner_id, $message);
 

@@ -19,7 +19,8 @@ if (isset($_POST['login'])) {
 
         // Block rejected accounts
         if ($user['account_status'] == 'rejected') {
-            die("Your account has been rejected. Please contact the administrator.");
+            header("Location: ../../frontend/pages/login.php?error=rejected");
+            exit();
         }
 
         if (password_verify($password, $user['password'])) {
@@ -53,14 +54,17 @@ if (isset($_POST['login'])) {
                     break;
 
                 default:
-                    echo "Invalid role. Please contact the administrator.";
+                    header("Location: ../../frontend/pages/login.php?error=invalid_role");
+                    exit();
                     break;
             }
         } else {
-            echo "Incorrect password.";
+            header("Location: ../../frontend/pages/login.php?error=incorrect_password");
+            exit();
         }
     } else {
-        echo "Email not found.";
+        header("Location: ../../frontend/pages/login.php?error=email_not_found");
+        exit();
     }
 }
 ?>

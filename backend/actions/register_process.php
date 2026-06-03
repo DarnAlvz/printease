@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . "../config/db.php";
+require_once __DIR__ . "/../config/db.php";
 
 if (isset($_POST['register'])) {
     $full_name = trim($_POST['full_name']);
@@ -11,7 +11,8 @@ if (isset($_POST['register'])) {
     $allowed_roles = ['customer', 'shop_owner'];
 
     if (!in_array($role, $allowed_roles)) {
-        die("Invalid role selected.");
+        header("Location: ../../frontend/pages/register.php?error=invalid_role");
+        exit();
     }
 
     $account_status = 'incomplete';
@@ -22,7 +23,8 @@ if (isset($_POST['register'])) {
     $stmt = mysqli_prepare($conn, $sql);
 
     if (!$stmt) {
-        die("SQL Error: " . mysqli_error($conn));
+        header("Location: ../../frontend/pages/register.php?error=registration_failed");
+        exit();
     }
 
     mysqli_stmt_bind_param($stmt, "sssss", $full_name, $email, $password, $role, $account_status);
@@ -31,7 +33,9 @@ if (isset($_POST['register'])) {
         header("Location: ../../frontend/pages/login.php?registered=success");
         exit();
     } else {
-        echo "Registration failed. Email may already exist.";
+        $error = mysqli_errno($conn) === 1062 ? 'duplicate_email' : 'registration_failed';
+        header("Location: ../../frontend/pages/register.php?error=" . $error);
+        exit();
     }
 }
 ?>

@@ -46,7 +46,7 @@ if (isset($_POST['update_order'])) {
     }
 
     // Get customer ID for notification
-    $get_customer_sql = "SELECT customer_id FROM orders WHERE order_id = ?";
+    $get_customer_sql = "SELECT customer_id, order_code FROM orders WHERE order_id = ?";
     $get_customer_stmt = mysqli_prepare($conn, $get_customer_sql);
     mysqli_stmt_bind_param($get_customer_stmt, "i", $order_id);
     mysqli_stmt_execute($get_customer_stmt);
@@ -54,12 +54,10 @@ if (isset($_POST['update_order'])) {
     $order = mysqli_fetch_assoc($get_customer_result);
 
     if ($order) {
-        $message = "Your order #$order_id status has been updated to: " . ucfirst(str_replace('_', ' ', $order_status)) . ".";
+        $order_code = $order['order_code'] ?: $order_id;
+        $message = "Your order #$order_code status has been updated to: " . ucfirst(str_replace('_', ' ', $order_status)) . ".";
         sendNotification($conn, $order['customer_id'], $message);
     }
-
-    $order_customer = mysqli_fetch_assoc(mysqli_query($conn, "SELECT customer_id FROM orders WHERE order_id = $order_id"));
-    sendNotification($conn, $order_customer['customer_id'], "Your order #$order_id status updated to $order_status.");
 
     redirect(BASE_URL . "frontend/user/shop_owner/orders.php");
 }

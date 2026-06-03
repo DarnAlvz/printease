@@ -29,6 +29,52 @@ function ownerIcon($name, $class = 'icon') {
     return '<i data-lucide="' . e($name) . '" class="' . e($class) . '" aria-hidden="true"></i>';
 }
 
+function ownerNotificationUrl($notification, $owner_id) {
+    if (!$owner_id || !isset($GLOBALS['conn'])) {
+        return '';
+    }
+
+    $message = $notification['message'] ?? '';
+
+    if (preg_match('/\bPE-\d{8}-[A-Z0-9]+\b/i', $message, $matches)) {
+        $order_code = strtoupper($matches[0]);
+        $sql = "SELECT o.order_id
+                FROM orders o
+                JOIN print_shops ps ON o.shop_id = ps.shop_id
+                WHERE ps.owner_id = ? AND o.order_code = ?
+                LIMIT 1";
+        $stmt = mysqli_prepare($GLOBALS['conn'], $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "is", $owner_id, $order_code);
+            mysqli_stmt_execute($stmt);
+            $order = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+            if ($order) {
+                return 'orders.php?focus_order_id=' . (int) $order['order_id'];
+            }
+        }
+    }
+
+    if (preg_match('/\bOrder\s*#(\d+)\b/i', $message, $matches)) {
+        $order_id = (int) $matches[1];
+        $sql = "SELECT o.order_id
+                FROM orders o
+                JOIN print_shops ps ON o.shop_id = ps.shop_id
+                WHERE ps.owner_id = ? AND o.order_id = ?
+                LIMIT 1";
+        $stmt = mysqli_prepare($GLOBALS['conn'], $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "ii", $owner_id, $order_id);
+            mysqli_stmt_execute($stmt);
+            $order = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+            if ($order) {
+                return 'orders.php?focus_order_id=' . (int) $order['order_id'];
+            }
+        }
+    }
+
+    return '';
+}
+
 function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $shop = null) {
     $shop_name = $shop['shop_name'] ?? 'Print Shop';
     $shop_address = $shop['shop_address'] ?? 'Set up your shop profile';
@@ -81,6 +127,16 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo e($title); ?> - Shop Owner</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        try {
+            if (sessionStorage.getItem('ownerSidebarHold') === '1') {
+                document.documentElement.classList.add('owner-sidebar-hovered');
+            }
+        } catch (error) {}
+    </script>
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>frontend/user/shop_owner/assets/owner.css?v=<?php echo $owner_css_version; ?>">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -117,9 +173,6 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
     <div class="owner-shell">
         <header class="owner-topbar">
             <div class="topbar-title">
-                <button type="button" class="sidebar-toggle" id="ownerSidebarToggle" aria-label="Toggle sidebar" aria-expanded="true">
-                    <span class="menu-mark"></span>
-                </button>
                 <strong>Admin Panel</strong>
             </div>
             <div class="topbar-actions">
@@ -146,13 +199,22 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                         <?php else: ?>
                             <div class="notification-popover-list">
                                 <?php foreach ($recent_notifications as $notification): ?>
-                                    <article class="notification-popover-item">
+                                    <?php $notification_href = ownerNotificationUrl($notification, $owner_id); ?>
+                                    <?php if ($notification_href !== ''): ?>
+                                        <a class="notification-popover-item notification-popover-link" href="<?php echo e($notification_href); ?>">
+                                    <?php else: ?>
+                                        <article class="notification-popover-item">
+                                    <?php endif; ?>
                                         <span class="notification-popover-icon"><?php echo ownerIcon($notification['is_read'] == 0 ? 'bell-ring' : 'info', 'icon-sm'); ?></span>
                                         <div>
                                             <p><?php echo e($notification['message']); ?></p>
                                             <time><?php echo e(date("M d, Y - g:i A", strtotime($notification['created_at']))); ?></time>
                                         </div>
-                                    </article>
+                                    <?php if ($notification_href !== ''): ?>
+                                        </a>
+                                    <?php else: ?>
+                                        </article>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
@@ -194,14 +256,35 @@ function ownerLayoutEnd() {
         }
 
         (function () {
-            const toggle = document.getElementById('ownerSidebarToggle');
-            if (!toggle) {
+            const sidebar = document.querySelector('.owner-sidebar');
+            if (!sidebar || !window.sessionStorage) {
                 return;
             }
 
-            toggle.addEventListener('click', function () {
-                const collapsed = document.body.classList.toggle('owner-sidebar-collapsed');
-                toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            function openSidebar() {
+                document.documentElement.classList.add('owner-sidebar-hovered');
+            }
+
+            function closeSidebar() {
+                document.documentElement.classList.remove('owner-sidebar-hovered');
+                try {
+                    sessionStorage.removeItem('ownerSidebarHold');
+                } catch (error) {}
+            }
+
+            sidebar.addEventListener('pointerenter', openSidebar);
+            sidebar.addEventListener('pointerleave', closeSidebar);
+
+            sidebar.addEventListener('click', function (event) {
+                const link = event.target.closest('a');
+                if (!link) {
+                    return;
+                }
+
+                openSidebar();
+                try {
+                    sessionStorage.setItem('ownerSidebarHold', '1');
+                } catch (error) {}
             });
         })();
 
