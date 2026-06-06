@@ -19,10 +19,26 @@ $shop_id = intval($_POST['shop_id']);
 $service_id = intval($_POST['service_id']);
 $copies = intval($_POST['copies']);
 $instruction = trim($_POST['customer_instruction']);
+
+// Basic validation - cant pick past date and time  
 $pickup_datetime = $_POST['pickup_datetime'];
+date_default_timezone_set('Asia/Manila');
+
+$pickup_timestamp = strtotime($pickup_datetime);
+$current_timestamp = time();
+
+if ($pickup_timestamp === false || $pickup_timestamp < $current_timestamp) {
+    setError("Please select a valid pickup date and time.");
+    redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
+}
 
 if ($copies < 1 || empty($pickup_datetime)) {
     setMessage("Invalid order details.");
+    redirect(BASE_URL . "frontend/user/customer/shops.php");
+}
+
+if ($shop_id <= 0 || $service_id <= 0) {
+    setMessage("Invalid shop or service selected.");
     redirect(BASE_URL . "frontend/user/customer/shops.php");
 }
 
@@ -40,7 +56,7 @@ mysqli_stmt_bind_param($service_stmt, "ii", $service_id, $shop_id);
 mysqli_stmt_execute($service_stmt);
 $service = mysqli_fetch_assoc(mysqli_stmt_get_result($service_stmt));
 
-if (!$service || $service['permit_status'] !== 'verified' || $service['shop_status'] !== 'available') {
+if (!$service || $service['permit_status'] !== 'verified' || $service['shop_status'] === 'not_accepting') {
     setMessage("Selected service is not available.");
     redirect(BASE_URL . "frontend/user/customer/shops.php");
 }

@@ -1,9 +1,11 @@
 <?php
-function ownerStatusLabel($status) {
+function ownerStatusLabel($status)
+{
     return ucwords(str_replace('_', ' ', $status ?? 'pending'));
 }
 
-function ownerStatusClass($status) {
+function ownerStatusClass($status)
+{
     $status = strtolower($status ?? 'pending');
 
     if ($status === 'completed' || $status === 'verified' || $status === 'available' || $status === 'paid') {
@@ -21,15 +23,18 @@ function ownerStatusClass($status) {
     return 'status-warning';
 }
 
-function ownerMoney($amount) {
+function ownerMoney($amount)
+{
     return '&#8369;' . number_format((float) $amount, 2);
 }
 
-function ownerIcon($name, $class = 'icon') {
+function ownerIcon($name, $class = 'icon')
+{
     return '<i data-lucide="' . e($name) . '" class="' . e($class) . '" aria-hidden="true"></i>';
 }
 
-function ownerNotificationUrl($notification, $owner_id) {
+function ownerNotificationUrl($notification, $owner_id)
+{
     if (!$owner_id || !isset($GLOBALS['conn'])) {
         return '';
     }
@@ -75,7 +80,8 @@ function ownerNotificationUrl($notification, $owner_id) {
     return '';
 }
 
-function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $shop = null) {
+function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $shop = null)
+{
     $shop_name = $shop['shop_name'] ?? 'Print Shop';
     $shop_address = $shop['shop_address'] ?? 'Set up your shop profile';
     $shop_logo = $shop['shop_logo'] ?? '';
@@ -119,217 +125,240 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
         ['key' => 'transactions', 'href' => 'transactions.php', 'label' => 'Transactions', 'icon' => 'badge-dollar-sign'],
         ['key' => 'status', 'href' => 'update_status.php', 'label' => 'Shop Status', 'icon' => 'activity'],
     ];
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo e($title); ?> - Shop Owner</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script>
-        try {
-            if (sessionStorage.getItem('ownerSidebarHold') === '1') {
-                document.documentElement.classList.add('owner-sidebar-hovered');
-            }
-        } catch (error) {}
-    </script>
-    <link rel="stylesheet" href="<?php echo BASE_URL; ?>frontend/user/shop_owner/assets/owner.css?v=<?php echo $owner_css_version; ?>">
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body class="owner-body">
-    <aside class="owner-sidebar" aria-label="Shop owner sidebar">
-        <div class="owner-brand">
-            <?php if ($shop_logo_url !== ''): ?>
-                <img src="<?php echo $shop_logo_url; ?>" class="owner-brand-logo" alt="<?php echo e($shop_name); ?> logo">
-            <?php else: ?>
-                <div class="owner-brand-mark">PE</div>
-            <?php endif; ?>
-            <div class="owner-brand-copy">
-                <span>Print Shop</span>
-                <strong><?php echo e($shop_name); ?></strong>
-                <small><?php echo e($shop_address); ?></small>
-            </div>
-        </div>
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
 
-        <nav class="owner-nav" aria-label="Shop owner navigation">
-            <?php foreach ($nav as $item): ?>
-                <a class="<?php echo $active === $item['key'] ? 'active' : ''; ?>" href="<?php echo e($item['href']); ?>" title="<?php echo e($item['label']); ?>" aria-label="<?php echo e($item['label']); ?>">
-                    <?php echo ownerIcon($item['icon'], 'icon nav-icon'); ?>
-                    <span class="owner-nav-label"><?php echo e($item['label']); ?></span>
-                </a>
-            <?php endforeach; ?>
-        </nav>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?php echo e($title); ?> - Shop Owner</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <script>
+            try {
+                if (sessionStorage.getItem('ownerSidebarHold') === '1') {
+                    document.documentElement.classList.add('owner-sidebar-hovered');
+                }
+            } catch (error) { }
+        </script>
+        <link rel="stylesheet"
+            href="<?php echo BASE_URL; ?>frontend/user/shop_owner/assets/owner.css?v=<?php echo $owner_css_version; ?>">
+        <script src="https://unpkg.com/lucide@latest"></script>
+    </head>
 
-        <a class="owner-logout" href="<?php echo BASE_URL; ?>backend/actions/logout.php" title="Logout" aria-label="Logout">
-            <?php echo ownerIcon('log-out', 'icon nav-icon'); ?>
-            <span class="owner-nav-label">Logout</span>
-        </a>
-    </aside>
-
-    <div class="owner-shell">
-        <header class="owner-topbar">
-            <div class="topbar-title">
-                <strong>Admin Panel</strong>
-            </div>
-            <div class="topbar-actions">
-                <div class="notification-popover-wrap">
-                    <button type="button" class="notification-link" id="ownerNotificationToggle" aria-label="Notifications" aria-expanded="false" aria-controls="ownerNotificationPopover">
-                        <?php echo ownerIcon('bell', 'icon'); ?>
-                        <?php if ($notif_count > 0): ?>
-                            <span class="notification-badge"><?php echo (int) $notif_count; ?></span>
-                        <?php endif; ?>
-                    </button>
-                    <section class="notification-popover" id="ownerNotificationPopover" aria-hidden="true">
-                        <header class="notification-popover-head">
-                            <div>
-                                <strong>Notifications</strong>
-                                <span><?php echo (int) $notif_count; ?> unread</span>
-                            </div>
-                            <a href="notifications.php">View all</a>
-                        </header>
-                        <?php if (empty($recent_notifications)): ?>
-                            <div class="notification-popover-empty">
-                                <?php echo ownerIcon('bell', 'icon'); ?>
-                                <p>No notifications yet.</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="notification-popover-list">
-                                <?php foreach ($recent_notifications as $notification): ?>
-                                    <?php $notification_href = ownerNotificationUrl($notification, $owner_id); ?>
-                                    <?php if ($notification_href !== ''): ?>
-                                        <a class="notification-popover-item notification-popover-link" href="<?php echo e($notification_href); ?>">
-                                    <?php else: ?>
-                                        <article class="notification-popover-item">
-                                    <?php endif; ?>
-                                        <span class="notification-popover-icon"><?php echo ownerIcon($notification['is_read'] == 0 ? 'bell-ring' : 'info', 'icon-sm'); ?></span>
-                                        <div>
-                                            <p><?php echo e($notification['message']); ?></p>
-                                            <time><?php echo e(date("M d, Y - g:i A", strtotime($notification['created_at']))); ?></time>
-                                        </div>
-                                    <?php if ($notification_href !== ''): ?>
-                                        </a>
-                                    <?php else: ?>
-                                        </article>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </section>
+    <body class="owner-body">
+        <aside class="owner-sidebar" aria-label="Shop owner sidebar">
+            <div class="owner-brand">
+                <?php if ($shop_logo_url !== ''): ?>
+                    <img src="<?php echo $shop_logo_url; ?>" class="owner-brand-logo" alt="<?php echo e($shop_name); ?> logo">
+                <?php else: ?>
+                    <div class="owner-brand-mark">PE</div>
+                <?php endif; ?>
+                <div class="owner-brand-copy">
+                    <span>Print Shop</span>
+                    <strong><?php echo e($shop_name); ?></strong>
+                    <small><?php echo e($shop_address); ?></small>
                 </div>
-                <div class="owner-user">
-                    <div>
-                        <strong><?php echo e($user_name); ?></strong>
-                        <span>Shop Owner</span>
+            </div>
+
+            <nav class="owner-nav" aria-label="Shop owner navigation">
+                <?php foreach ($nav as $item): ?>
+                    <a class="<?php echo $active === $item['key'] ? 'active' : ''; ?>" href="<?php echo e($item['href']); ?>"
+                        title="<?php echo e($item['label']); ?>" aria-label="<?php echo e($item['label']); ?>">
+                        <?php echo ownerIcon($item['icon'], 'icon nav-icon'); ?>
+                        <span class="owner-nav-label"><?php echo e($item['label']); ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+
+            <a class="owner-logout" href="<?php echo BASE_URL; ?>backend/actions/logout.php" title="Logout"
+                aria-label="Logout">
+                <?php echo ownerIcon('log-out', 'icon nav-icon'); ?>
+                <span class="owner-nav-label">Logout</span>
+            </a>
+        </aside>
+
+        <div class="owner-shell">
+            <header class="owner-topbar">
+                <div class="topbar-title">
+                    <strong>Admin Panel</strong>
+                </div>
+                <div class="topbar-actions">
+                    <div class="notification-popover-wrap">
+                        <button type="button" class="notification-link" id="ownerNotificationToggle"
+                            aria-label="Notifications" aria-expanded="false" aria-controls="ownerNotificationPopover">
+                            <?php echo ownerIcon('bell', 'icon'); ?>
+                            <?php if ($notif_count > 0): ?>
+                                <span class="notification-badge"><?php echo (int) $notif_count; ?></span>
+                            <?php endif; ?>
+                        </button>
+                        <section class="notification-popover" id="ownerNotificationPopover" aria-hidden="true">
+                            <header class="notification-popover-head">
+                                <div>
+                                    <strong>Notifications</strong>
+                                    <span><?php echo (int) $notif_count; ?> unread</span>
+                                </div>
+                                <a href="notifications.php">View all</a>
+                            </header>
+                            <?php if (empty($recent_notifications)): ?>
+                                <div class="notification-popover-empty">
+                                    <?php echo ownerIcon('bell', 'icon'); ?>
+                                    <p>No notifications yet.</p>
+                                </div>
+                            <?php else: ?>
+                                <div class="notification-popover-list">
+                                    <?php foreach ($recent_notifications as $notification): ?>
+                                        <?php $notification_href = ownerNotificationUrl($notification, $owner_id); ?>
+                                        <?php if ($notification_href !== ''): ?>
+                                            <a class="notification-popover-item notification-popover-link"
+                                                href="<?php echo e($notification_href); ?>">
+                                            <?php else: ?>
+                                                <article class="notification-popover-item">
+                                                <?php endif; ?>
+                                                <span
+                                                    class="notification-popover-icon"><?php echo ownerIcon($notification['is_read'] == 0 ? 'bell-ring' : 'info', 'icon-sm'); ?></span>
+                                                <div>
+                                                    <p><?php echo e($notification['message']); ?></p>
+                                                    <time><?php echo e(date("M d, Y - g:i A", strtotime($notification['created_at']))); ?></time>
+                                                </div>
+                                                <?php if ($notification_href !== ''): ?>
+                                            </a>
+                                        <?php else: ?>
+                                            </article>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </section>
                     </div>
-                    <?php if ($shop_logo_url !== ''): ?>
-                        <img src="<?php echo $shop_logo_url; ?>" class="owner-user-logo" alt="<?php echo e($shop_name); ?> logo">
-                    <?php else: ?>
-                        <b><?php echo e($initials); ?></b>
-                    <?php endif; ?>
+                    <div class="owner-user">
+                        <div>
+                            <strong><?php echo e($user_name); ?></strong>
+                            <span>Shop Owner</span>
+                        </div>
+                        <?php if ($shop_logo_url !== ''): ?>
+                            <img src="<?php echo $shop_logo_url; ?>" class="owner-user-logo"
+                                alt="<?php echo e($shop_name); ?> logo">
+                        <?php else: ?>
+                            <b><?php echo e($initials); ?></b>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            </div>
-        </header>
+            </header>
 
-        <main class="owner-main">
-            <div class="page-heading">
-                <div>
-                    <h1><?php echo e($title); ?></h1>
-                    <?php if ($subtitle !== ''): ?>
-                        <p><?php echo e($subtitle); ?></p>
-                    <?php endif; ?>
+            <main class="owner-main">
+                <div class="page-heading">
+                    <div>
+                        <h1><?php echo e($title); ?></h1>
+                        <?php if ($subtitle !== ''): ?>
+                            <p><?php echo e($subtitle); ?></p>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            </div>
-<?php
+                <?php
 }
 
-function ownerLayoutEnd() {
-?>
-        </main>
-    </div>
-    <script>
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
-
-        (function () {
-            const sidebar = document.querySelector('.owner-sidebar');
-            if (!sidebar || !window.sessionStorage) {
-                return;
+function ownerLayoutEnd()
+{
+    ?>
+            </main>
+        </div>
+        <script>
+            if (window.lucide) {
+                window.lucide.createIcons();
             }
 
-            function openSidebar() {
-                document.documentElement.classList.add('owner-sidebar-hovered');
-            }
 
-            function closeSidebar() {
-                document.documentElement.classList.remove('owner-sidebar-hovered');
+            (function () {
+                const sidebar = document.querySelector('.owner-sidebar');
+                const expandedClass = 'owner-sidebar-hovered';
+                const storageKey = 'ownerSidebarHold';
+
+                if (!sidebar) return;
+
+                function setStoredHoverState(isHovered) {
+                    try {
+                        if (isHovered) {
+                            sessionStorage.setItem(storageKey, '1');
+                        } else {
+                            sessionStorage.removeItem(storageKey);
+                        }
+                    } catch (error) { }
+                }
+
+                function openSidebar() {
+                    document.documentElement.classList.add(expandedClass);
+                    setStoredHoverState(true);
+                }
+
+                function closeSidebar() {
+                    document.documentElement.classList.remove(expandedClass);
+                    setStoredHoverState(false);
+                }
+
                 try {
-                    sessionStorage.removeItem('ownerSidebarHold');
-                } catch (error) {}
-            }
+                    if (sessionStorage.getItem(storageKey) === '1') {
+                        document.documentElement.classList.add(expandedClass);
+                    }
+                } catch (error) { }
 
-            sidebar.addEventListener('pointerenter', openSidebar);
-            sidebar.addEventListener('pointerleave', closeSidebar);
+                sidebar.addEventListener('pointerenter', openSidebar);
+                sidebar.addEventListener('pointerleave', closeSidebar);
 
-            sidebar.addEventListener('click', function (event) {
-                const link = event.target.closest('a');
-                if (!link) {
+                sidebar.addEventListener('click', function (event) {
+                    if (event.target.closest('a')) {
+                        openSidebar();
+                    }
+                });
+            })();
+
+
+            (function () {
+                const toggle = document.getElementById('ownerNotificationToggle');
+                const popover = document.getElementById('ownerNotificationPopover');
+                if (!toggle || !popover) {
                     return;
                 }
 
-                openSidebar();
-                try {
-                    sessionStorage.setItem('ownerSidebarHold', '1');
-                } catch (error) {}
-            });
-        })();
-
-        (function () {
-            const toggle = document.getElementById('ownerNotificationToggle');
-            const popover = document.getElementById('ownerNotificationPopover');
-            if (!toggle || !popover) {
-                return;
-            }
-
-            function closePopover() {
-                popover.classList.remove('is-open');
-                popover.setAttribute('aria-hidden', 'true');
-                toggle.setAttribute('aria-expanded', 'false');
-            }
-
-            function openPopover() {
-                popover.classList.add('is-open');
-                popover.setAttribute('aria-hidden', 'false');
-                toggle.setAttribute('aria-expanded', 'true');
-            }
-
-            toggle.addEventListener('click', function (event) {
-                event.stopPropagation();
-                if (popover.classList.contains('is-open')) {
-                    closePopover();
-                } else {
-                    openPopover();
+                function closePopover() {
+                    popover.classList.remove('is-open');
+                    popover.setAttribute('aria-hidden', 'true');
+                    toggle.setAttribute('aria-expanded', 'false');
                 }
-            });
 
-            popover.addEventListener('click', function (event) {
-                event.stopPropagation();
-            });
-
-            document.addEventListener('click', closePopover);
-            document.addEventListener('keydown', function (event) {
-                if (event.key === 'Escape') {
-                    closePopover();
+                function openPopover() {
+                    popover.classList.add('is-open');
+                    popover.setAttribute('aria-hidden', 'false');
+                    toggle.setAttribute('aria-expanded', 'true');
                 }
-            });
-        })();
-    </script>
-</body>
-</html>
-<?php
+
+                toggle.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    if (popover.classList.contains('is-open')) {
+                        closePopover();
+                    } else {
+                        openPopover();
+                    }
+                });
+
+                popover.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                });
+
+                document.addEventListener('click', closePopover);
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape') {
+                        closePopover();
+                    }
+                });
+            })();
+        </script>
+    </body>
+
+    </html>
+    <?php
 }
 ?>

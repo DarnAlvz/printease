@@ -1,51 +1,67 @@
 <?php
-require_once __DIR__ . "../config/db.php";
-require_once __DIR__ . "../config/app.php";
-require_once __DIR__ . "../includes/auth.php";
-require_once __DIR__ . "../includes/functions.php";
+require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/app.php";
+require_once __DIR__ . "/../includes/auth.php";
+require_once __DIR__ . "/../includes/functions.php";
 
 checkRole("customer");
 
 $customer_id = $_SESSION['user_id'];
 
-if(isset($_POST['save_profile'])) {
+if (isset($_POST['save_profile'])) {
     $phone = trim($_POST['phone_number']);
     $address = trim($_POST['address']);
 
-    // Profile Picture upload
-    $profile_picture_path = null;
-    if(isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] == 0){
-        $file_tmp = $_FILES['profile_picture']['tmp_name'];
+    $current_sql = "SELECT profile_picture, valid_id_file, account_status FROM users WHERE user_id = ? LIMIT 1";
+    $current_stmt = mysqli_prepare($conn, $current_sql);
+    mysqli_stmt_bind_param($current_stmt, "i", $customer_id);
+    mysqli_stmt_execute($current_stmt);
+    $current_user = mysqli_fetch_assoc(mysqli_stmt_get_result($current_stmt));
+
+    $profile_picture_path = $current_user['profile_picture'] ?? null;
+    $valid_id_path = $current_user['valid_id_file'] ?? null;
+    $current_status = $current_user['account_status'] ?? 'incomplete';
+
+    $upload_dir = "../../uploads/customers/";
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+    }
+
+    if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] == 0) {
         $file_name = time() . "_" . basename($_FILES['profile_picture']['name']);
-        $upload_path = "../../uploads/customers/" . $file_name;
-        move_uploaded_file($file_tmp, $upload_path);
+        move_uploaded_file($_FILES['profile_picture']['tmp_name'], $upload_dir . $file_name);
         $profile_picture_path = "uploads/customers/" . $file_name;
     }
 
-    // Valid ID upload
-    $valid_id_path = null;
-    if(isset($_FILES['valid_id_file']) && $_FILES['valid_id_file']['error'] == 0){
-        $file_tmp = $_FILES['valid_id_file']['tmp_name'];
+    if (isset($_FILES['valid_id_file']) && $_FILES['valid_id_file']['error'] == 0) {
         $file_name = time() . "_id_" . basename($_FILES['valid_id_file']['name']);
-        $upload_path = "../../uploads/customers/" . $file_name;
-        move_uploaded_file($file_tmp, $upload_path);
+        move_uploaded_file($_FILES['valid_id_file']['tmp_name'], $upload_dir . $file_name);
         $valid_id_path = "uploads/customers/" . $file_name;
     }
 
-    // Update users table; do NOT auto-verify
+    if ($current_status === 'verified') {
+        $new_status = 'verified';
+    } elseif (!empty($phone) && !empty($address) && !empty($valid_id_path)) {
+        $new_status = 'pending';
+    } else {
+        $new_status = 'incomplete';
+    }
+
     $sql = "UPDATE users SET 
-            phone_number=?, 
-            address=?, 
-            profile_picture=COALESCE(?, profile_picture), 
-            valid_id_file=COALESCE(?, valid_id_file), 
-            account_status='pending'
-            WHERE user_id=?";
+            phone_number = ?, 
+            address = ?, 
+            profile_picture = ?, 
+            valid_id_file = ?, 
+            account_status = ?
+            WHERE user_id = ?";
+
     $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, "ssssi", $phone, $address, $profile_picture_path, $valid_id_path, $customer_id);
+    mysqli_stmt_bind_param($stmt, "sssssi", $phone, $address, $profile_picture_path, $valid_id_path, $new_status, $customer_id);
     mysqli_stmt_execute($stmt);
 
-    logActivity($conn, $customer_id, "Updated customer profile and uploaded ID (pending verification)", "Customer Profile");
-    setMessage("Profile saved. Pending verification by Super Admin.");
+    logActivity($conn, $customer_id, "Updated customer profile", "Customer Profile");
+
+    setMessage($new_status === 'verified' ? "Profile updated successfully." : "Profile saved. Pending verification by Super Admin.");
     redirect(BASE_URL . "frontend/user/customer/profile.php");
 }
 ?>

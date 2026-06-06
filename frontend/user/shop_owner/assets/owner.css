@@ -3737,3 +3737,18 @@ select {
         font-size: 30px;
     }
 }
+
+.payment-action-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.payment-reject-textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 12px;
+    border: 1px solid #bdefff;
+    border-radius: 12px;
+}

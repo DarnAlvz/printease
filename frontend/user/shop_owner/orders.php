@@ -13,7 +13,8 @@ require_once __DIR__ . "/includes/owner_layout.php";
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
-function orderPageUrl($page, $search_code, $status_filter) {
+function orderPageUrl($page, $search_code, $status_filter)
+{
     $params = ['page' => max(1, (int) $page)];
     if ($search_code !== '') {
         $params['order_code'] = $search_code;
@@ -88,9 +89,11 @@ if ($page > $total_pages) {
 }
 $offset = ($page - 1) * $per_page;
 
-$orders_sql = "SELECT o.*, u.full_name, u.email
+$orders_sql = "SELECT o.*, u.full_name, u.email, p.payment_id, p.payment_status, p.verification_status, p.proof_of_payment_file, p.rejection_reason, p.created_at 
+                AS payment_submitted_at
                FROM orders o
                JOIN users u ON o.customer_id = u.user_id
+               LEFT JOIN payments p ON o.order_id = p.order_id
                $where
                ORDER BY " . ($focus_order_id > 0 ? "CASE WHEN o.order_id = ? THEN 0 ELSE 1 END," : "") . "
                         CASE o.order_status
@@ -139,6 +142,19 @@ $counts = array_merge($counts, mysqli_fetch_assoc(mysqli_stmt_get_result($count_
 $showing_start = $filtered_total > 0 ? $offset + 1 : 0;
 $showing_end = min($offset + count($orders), $filtered_total);
 
+// Helper function to determine payment status label
+function paymentStatusLabel($payment_status, $verification_status)
+{
+    if ($payment_status === 'paid' && $verification_status === 'verified') {
+        return 'Paid';
+    } elseif ($verification_status === 'pending') {
+        return 'Pending Verification';
+    } elseif ($verification_status === 'rejected') {
+        return 'Rejected';
+    }
+    return 'Unpaid';
+}
+
 ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
 ?>
 
@@ -155,7 +171,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
     ];
     foreach ($tabs as $key => $tab):
         $tab_url = orderPageUrl(1, $search_code, $key);
-    ?>
+        ?>
         <a class="<?php echo $status_filter === $key ? 'active' : ''; ?>" href="<?php echo e($tab_url); ?>">
             <?php echo ownerIcon($tab['icon'], 'icon-sm'); ?>
             <?php echo e($tab['label']); ?>
@@ -196,11 +212,13 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
         <input type="hidden" name="status" value="<?php echo e($status_filter); ?>">
         <div class="orders-search-box">
             <?php echo ownerIcon('search', 'icon'); ?>
-            <input type="text" name="order_code" placeholder="Search by order code..." value="<?php echo e($search_code); ?>">
+            <input type="text" name="order_code" placeholder="Search by order code..."
+                value="<?php echo e($search_code); ?>">
         </div>
         <button type="submit" class="orders-submit-hidden">Search</button>
         <?php if ($search_code !== ''): ?>
-            <a href="orders.php<?php echo $status_filter !== 'all' ? '?status=' . e($status_filter) : ''; ?>" class="orders-clear-search" aria-label="Clear search"><?php echo ownerIcon('x', 'icon-sm'); ?></a>
+            <a href="orders.php<?php echo $status_filter !== 'all' ? '?status=' . e($status_filter) : ''; ?>"
+                class="orders-clear-search" aria-label="Clear search"><?php echo ownerIcon('x', 'icon-sm'); ?></a>
         <?php endif; ?>
     </form>
 </section>
@@ -242,7 +260,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                         $order_files[(int) $order['order_id']] = $file_rows;
                         ?>
                         <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
-                        <tr class="<?php echo $is_focused_order ? 'order-focused' : ''; ?>" data-order-row="<?php echo e($order['order_id']); ?>">
+                        <tr class="<?php echo $is_focused_order ? 'order-focused' : ''; ?>"
+                            data-order-row="<?php echo e($order['order_id']); ?>">
                             <td><strong><?php echo e($order['order_code']); ?></strong></td>
                             <td>
                                 <strong><?php echo e($order['full_name']); ?></strong>
@@ -265,26 +284,34 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <span class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>" data-order-status-badge="<?php echo e($order['order_id']); ?>">
+                                <span
+                                    class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>"
+                                    data-order-status-badge="<?php echo e($order['order_id']); ?>">
                                     <?php echo ownerIcon($order['order_status'] === 'completed' ? 'circle-check' : ($order['order_status'] === 'processing' ? 'trending-up' : ($order['order_status'] === 'ready_for_pickup' ? 'package' : 'clock')), 'icon-sm'); ?>
                                     <?php echo e(ownerStatusLabel($order['order_status'])); ?>
                                 </span>
                             </td>
                             <td>
                                 <div class="orders-actions">
-                                    <button type="button" class="btn order-btn-navy" data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View Details</button>
+                                    <button type="button" class="btn order-btn-navy"
+                                        data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View
+                                        Details</button>
 
                                     <?php if ($order['order_status'] === 'processing'): ?>
-                                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST" class="orders-update-form orders-status-action">
+                                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
+                                            class="orders-update-form orders-status-action">
                                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                             <input type="hidden" name="order_status" value="ready_for_pickup">
-                                            <button type="submit" name="update_order" class="btn order-btn-ready">Mark as Ready</button>
+                                            <button type="submit" name="update_order" class="btn order-btn-ready">Mark as
+                                                Ready</button>
                                         </form>
                                     <?php elseif ($order['order_status'] === 'ready_for_pickup'): ?>
-                                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST" class="orders-update-form orders-status-action">
+                                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
+                                            class="orders-update-form orders-status-action">
                                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                             <input type="hidden" name="order_status" value="completed">
-                                            <button type="submit" name="update_order" class="btn order-btn-completed">Mark as Completed</button>
+                                            <button type="submit" name="update_order" class="btn order-btn-completed">Mark as
+                                                Completed</button>
                                         </form>
                                     <?php endif; ?>
                                 </div>
@@ -299,7 +326,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
             <?php $file_rows = $order_files[(int) $order['order_id']] ?? []; ?>
             <div class="order-modal" id="order-modal-<?php echo e($order['order_id']); ?>" aria-hidden="true">
                 <div class="order-modal-backdrop" data-order-modal-close></div>
-                <section class="order-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="order-modal-title-<?php echo e($order['order_id']); ?>">
+                <section class="order-modal-dialog" role="dialog" aria-modal="true"
+                    aria-labelledby="order-modal-title-<?php echo e($order['order_id']); ?>">
                     <header class="order-modal-header">
                         <h2 id="order-modal-title-<?php echo e($order['order_id']); ?>">Order Details</h2>
                         <button type="button" class="order-modal-close" data-order-modal-close aria-label="Close order details">
@@ -326,7 +354,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                                 <?php else: ?>
                                     <strong><?php echo e(count($file_rows) > 1 ? count($file_rows) . ' Uploaded Files' : 'PDF Document'); ?></strong>
                                     <?php foreach ($file_rows as $file): ?>
-                                        <a href="<?php echo BASE_URL . e($file['file_path']); ?>" target="_blank"><?php echo e($file['file_name']); ?></a>
+                                        <a href="<?php echo BASE_URL . e($file['file_path']); ?>"
+                                            target="_blank"><?php echo e($file['file_name']); ?></a>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
@@ -375,12 +404,98 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                                 </div>
                                 <div>
                                     <span>Status</span>
-                                    <strong><span class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>" data-order-status-badge="<?php echo e($order['order_id']); ?>"><?php echo ownerIcon($order['order_status'] === 'completed' ? 'circle-check' : ($order['order_status'] === 'processing' ? 'trending-up' : ($order['order_status'] === 'ready_for_pickup' ? 'package' : 'clock')), 'icon-sm'); ?><?php echo e(ownerStatusLabel($order['order_status'])); ?></span></strong>
+                                    <strong><span
+                                            class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>"
+                                            data-order-status-badge="<?php echo e($order['order_id']); ?>"><?php echo ownerIcon($order['order_status'] === 'completed' ? 'circle-check' : ($order['order_status'] === 'processing' ? 'trending-up' : ($order['order_status'] === 'ready_for_pickup' ? 'package' : 'clock')), 'icon-sm'); ?><?php echo e(ownerStatusLabel($order['order_status'])); ?></span></strong>
                                 </div>
                                 <div>
                                     <span>Payment Status</span>
-                                    <strong><span class="status-badge status-success">PAID</span></strong>
+                                    <strong>
+                                        <span class="status-badge">
+                                            <?php echo e(paymentStatusLabel($order['payment_status'] ?? '', $order['verification_status'] ?? '')); ?>
+                                        </span>
+                                    </strong>
                                 </div>
+
+                                <div>
+                                    <span>Verification Status</span>
+                                    <strong>
+                                        <?php
+                                        if (empty($order['payment_id'])) {
+                                            echo "No Payment Submitted";
+                                        } elseif (($order['verification_status'] ?? '') === 'verified') {
+                                            echo "Verified";
+                                        } elseif (($order['verification_status'] ?? '') === 'pending') {
+                                            echo "Pending Verification";
+                                        } elseif (($order['verification_status'] ?? '') === 'rejected') {
+                                            echo "Rejected";
+                                        } else {
+                                            echo "Unverified";
+                                        }
+                                        ?>
+                                    </strong>
+                                </div>
+
+                                <div>
+                                    <span>Proof of Payment</span>
+                                    <strong>
+                                        <?php if (!empty($order['proof_of_payment_file'])): ?>
+                                            <button type="button" class="text-blue-700 font-semibold hover:underline proof-toggle"
+                                                data-target="proof-preview-<?php echo e($order['payment_id']); ?>">
+                                                View Proof
+                                            </button>
+
+                                            <div id="proof-preview-<?php echo e($order['payment_id']); ?>" class="hidden mt-3">
+                                                <?php
+                                                $proof = BASE_URL . e($order['proof_of_payment_file']);
+                                                $ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION));
+                                                ?>
+
+                                                <?php if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])): ?>
+                                                    <img src="<?php echo $proof; ?>"
+                                                        class="w-full max-h-96 object-contain rounded-xl border">
+                                                <?php else: ?>
+                                                    <iframe src="<?php echo $proof; ?>" class="w-full h-96 rounded-xl border"></iframe>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            No proof uploaded
+                                        <?php endif; ?>
+                                    </strong>
+                                </div>
+
+                                <?php if (!empty($order['payment_id']) && ($order['verification_status'] ?? '') === 'pending'): ?>
+                                    <div>
+                                        <span>Payment Action</span>
+                                        <strong class="payment-action-group">
+                                            <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
+                                                class="orders-update-form">
+                                                <input type="hidden" name="payment_id"
+                                                    value="<?php echo e($order['payment_id']); ?>">
+                                                <button type="submit" name="verify_payment" class="btn order-btn-ready">
+                                                    Verify Payment
+                                                </button>
+                                            </form>
+
+                                            <button type="button" class="btn order-btn-danger reject-toggle"
+                                                data-target="reject-box-<?php echo e($order['payment_id']); ?>">
+                                                Reject Payment
+                                            </button>
+
+                                            <form id="reject-box-<?php echo e($order['payment_id']); ?>"
+                                                action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
+                                                class="orders-update-form" hidden>
+                                                <input type="hidden" name="payment_id"
+                                                    value="<?php echo e($order['payment_id']); ?>">
+                                                <textarea name="rejection_reason" placeholder="Enter rejection reason"
+                                                    class="payment-reject-textarea" required></textarea>
+                                                <button type="submit" name="reject_payment" class="btn order-btn-danger">
+                                                    Confirm Reject
+                                                </button>
+                                            </form>
+                                        </strong>
+                                    </div>
+                                <?php endif; ?>
                                 <div>
                                     <span>Total Amount</span>
                                     <strong><?php echo ownerMoney($order['total_amount']); ?></strong>
@@ -392,13 +507,16 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                     <footer class="order-modal-footer">
                         <button type="button" class="btn order-modal-secondary" data-order-modal-close>Close</button>
                         <?php if ($order['order_status'] === 'pending'): ?>
-                            <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST" class="orders-update-form orders-status-action" data-accept-download-form data-order-id="<?php echo e($order['order_id']); ?>">
+                            <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
+                                class="orders-update-form orders-status-action" data-accept-download-form
+                                data-order-id="<?php echo e($order['order_id']); ?>">
                                 <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                 <input type="hidden" name="order_status" value="processing">
                                 <?php foreach ($file_rows as $file): ?>
                                     <input type="hidden" data-download-url value="<?php echo BASE_URL . e($file['file_path']); ?>">
                                 <?php endforeach; ?>
-                                <button type="submit" name="update_order" class="btn order-modal-primary">Accept &amp; Download Order</button>
+                                <button type="submit" name="update_order" class="btn order-modal-primary">Accept &amp; Download
+                                    Order</button>
                             </form>
                         <?php endif; ?>
                     </footer>
@@ -416,28 +534,36 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                 $files = mysqli_stmt_get_result($file_stmt);
                 ?>
                 <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
-                <article class="owner-card order-card-mobile <?php echo $is_focused_order ? 'order-focused' : ''; ?>" data-order-card="<?php echo e($order['order_id']); ?>">
+                <article class="owner-card order-card-mobile <?php echo $is_focused_order ? 'order-focused' : ''; ?>"
+                    data-order-card="<?php echo e($order['order_id']); ?>">
                     <div class="card-head">
                         <h2><?php echo e($order['order_code']); ?></h2>
-                        <span class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>" data-order-status-badge="<?php echo e($order['order_id']); ?>">
+                        <span
+                            class="status-badge order-status-badge order-status-<?php echo e($order['order_status']); ?> <?php echo ownerStatusClass($order['order_status']); ?>"
+                            data-order-status-badge="<?php echo e($order['order_id']); ?>">
                             <?php echo e(ownerStatusLabel($order['order_status'])); ?>
                         </span>
                     </div>
                     <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
-                    <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>, <?php echo e($order['print_type']); ?>, x<?php echo e($order['copies']); ?></p>
+                    <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>,
+                        <?php echo e($order['print_type']); ?>, x<?php echo e($order['copies']); ?>
+                    </p>
                     <p><strong>Total:</strong> <?php echo ownerMoney($order['total_amount']); ?></p>
                     <p><strong>Instruction:</strong> <?php echo e($order['customer_instruction'] ?: 'No instruction'); ?></p>
                     <div class="row-actions">
-                        <button type="button" class="btn order-btn-navy" data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View Details</button>
+                        <button type="button" class="btn order-btn-navy"
+                            data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View Details</button>
                     </div>
                     <?php if ($order['order_status'] === 'processing'): ?>
-                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST" class="orders-update-form orders-status-action mobile">
+                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
+                            class="orders-update-form orders-status-action mobile">
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                             <input type="hidden" name="order_status" value="ready_for_pickup">
                             <button type="submit" name="update_order" class="btn order-btn-ready">Mark as Ready</button>
                         </form>
                     <?php elseif ($order['order_status'] === 'ready_for_pickup'): ?>
-                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST" class="orders-update-form orders-status-action mobile">
+                        <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
+                            class="orders-update-form orders-status-action mobile">
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                             <input type="hidden" name="order_status" value="completed">
                             <button type="submit" name="update_order" class="btn order-btn-completed">Mark as Completed</button>
@@ -448,16 +574,20 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
         </div>
 
         <footer class="orders-pagination">
-            <p>Showing <strong><?php echo (int) $showing_start; ?>-<?php echo (int) $showing_end; ?></strong> of <?php echo (int) $filtered_total; ?> orders</p>
+            <p>Showing <strong><?php echo (int) $showing_start; ?>-<?php echo (int) $showing_end; ?></strong> of
+                <?php echo (int) $filtered_total; ?> orders
+            </p>
             <div>
                 <?php if ($page > 1): ?>
-                    <a class="pagination-btn" href="<?php echo e(orderPageUrl($page - 1, $search_code, $status_filter)); ?>"><?php echo ownerIcon('chevron-left', 'icon-sm'); ?>Previous</a>
+                    <a class="pagination-btn"
+                        href="<?php echo e(orderPageUrl($page - 1, $search_code, $status_filter)); ?>"><?php echo ownerIcon('chevron-left', 'icon-sm'); ?>Previous</a>
                 <?php else: ?>
                     <span class="pagination-btn disabled"><?php echo ownerIcon('chevron-left', 'icon-sm'); ?>Previous</span>
                 <?php endif; ?>
                 <span class="pagination-current"><?php echo (int) $page; ?> of <?php echo (int) $total_pages; ?></span>
                 <?php if ($page < $total_pages): ?>
-                    <a class="pagination-btn" href="<?php echo e(orderPageUrl($page + 1, $search_code, $status_filter)); ?>">Next<?php echo ownerIcon('chevron-right', 'icon-sm'); ?></a>
+                    <a class="pagination-btn"
+                        href="<?php echo e(orderPageUrl($page + 1, $search_code, $status_filter)); ?>">Next<?php echo ownerIcon('chevron-right', 'icon-sm'); ?></a>
                 <?php else: ?>
                     <span class="pagination-btn disabled">Next<?php echo ownerIcon('chevron-right', 'icon-sm'); ?></span>
                 <?php endif; ?>
@@ -607,7 +737,22 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                 }, Math.max(450, urls.length * 180));
             });
         });
+
+        document.querySelectorAll('.reject-toggle').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const target = document.getElementById(button.dataset.target);
+                if (target) target.hidden = !target.hidden;
+            });
+        });
     })();
+
+    document.querySelectorAll('.proof-toggle').forEach(function (button) {
+    button.addEventListener('click', function () {
+        const target = document.getElementById(button.dataset.target);
+        if (target) target.classList.toggle('hidden');
+    });
+});
+
 </script>
 
 <?php ownerLayoutEnd(); ?>

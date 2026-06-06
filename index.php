@@ -444,7 +444,7 @@
                 </p>
 
                 <div class="hero-actions">
-                    <a class="btn btn-primary" href="frontend/pages/register.php">Get Started</a>
+                    <a class="btn btn-primary" href="frontend/pages/login.php">Get Started</a>
                     <a class="btn btn-cyan" href="frontend/pages/register.php">Register Now</a>
                 </div>
 
