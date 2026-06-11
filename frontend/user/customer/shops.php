@@ -110,9 +110,10 @@ $shops = mysqli_stmt_get_result($stmt);
                                     </button>
                                 <?php endif; ?>
 
-                                <button type="button" class="px-4 py-3 rounded-xl border text-gray-600">
+                                <a href="<?php echo BASE_URL; ?>frontend/user/customer/shopLocation.php?shop_id=<?php echo e($shop['shop_id']); ?>"
+                                    class="px-4 py-3 rounded-xl border text-gray-600">
                                     Map
-                                </button>
+                                </a>
                             </div>
                         </div>
                     <?php endwhile; ?>
@@ -126,7 +127,7 @@ $shops = mysqli_stmt_get_result($stmt);
         <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
             <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
             <a href="shops.php" class="py-3 text-blue-700 font-bold">Shops</a>
-            <a href="place_order.php" class="py-3 text-gray-600">Order</a>
+            <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
             <a href="orders.php" class="py-3 text-gray-600">Track</a>
             <a href="profile.php" class="py-3 text-gray-600">Profile</a>
         </div>

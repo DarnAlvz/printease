@@ -9,8 +9,9 @@ require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 require_once __DIR__ . "/../../../backend/includes/shop_guard.php";
 require_once __DIR__ . "/includes/owner_layout.php";
 
-requireVerifiedStatus($conn);
-requireVerifiedShop($conn);
+$owner_access = requireVerifiedStatus($conn, true);
+$owner_is_verified = !empty($owner_access['allowed']);
+$owner_toast = $owner_is_verified ? null : $owner_access;
 
 $owner_id = $_SESSION['user_id'];
 
@@ -36,7 +37,7 @@ mysqli_stmt_bind_param($stmt, "i", $shop['shop_id']);
 mysqli_stmt_execute($payments = $stmt);
 $payments = mysqli_stmt_get_result($stmt);
 
-ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment proofs.', $notif_count, $shop);
+ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment proofs.', $notif_count, $shop, $owner_toast);
 ?>
 
 <?php showMessage(); ?>
@@ -59,7 +60,7 @@ ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment pr
                     <a href="<?php echo BASE_URL . e($payment['proof_of_payment_file']); ?>" target="_blank">View Proof</a>
                 <?php endif; ?>
 
-                <?php if (($payment['verification_status'] ?? '') === 'pending'): ?>
+                <?php if ($owner_is_verified && ($payment['verification_status'] ?? '') === 'pending'): ?>
                     <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST" style="margin-top:12px;">
                         <input type="hidden" name="payment_id" value="<?php echo e($payment['payment_id']); ?>">
 

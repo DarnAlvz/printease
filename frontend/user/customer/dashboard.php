@@ -30,6 +30,58 @@ function countCustomerOrders($conn, $customer_id, $status = null) {
     return mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['total'] ?? 0;
 }
 
+function dashboardOrderStatusLabel($status) {
+    return match ($status) {
+        'pending' => 'Pending',
+        'accepted' => 'Accepted',
+        'processing' => 'Processing',
+        'ready_for_pickup' => 'Ready for Pickup',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        default => ucwords(str_replace('_', ' ', $status ?? 'Pending'))
+    };
+}
+
+function dashboardOrderBadge($status) {
+    return match ($status) {
+        'pending' => 'bg-yellow-100 text-yellow-700',
+        'accepted' => 'bg-blue-100 text-blue-700',
+        'processing' => 'bg-purple-100 text-purple-700',
+        'ready_for_pickup' => 'bg-green-100 text-green-700',
+        'completed' => 'bg-gray-200 text-gray-700',
+        'cancelled' => 'bg-red-100 text-red-700',
+        default => 'bg-gray-100 text-gray-700'
+    };
+}
+
+function dashboardPaymentLabel($payment_status, $verification_status) {
+    if ($payment_status === 'paid' && $verification_status === 'verified') {
+        return 'Paid';
+    }
+
+    if ($verification_status === 'pending') {
+        return 'Pending Verification';
+    }
+
+    if ($verification_status === 'rejected') {
+        return 'Rejected';
+    }
+
+    return 'Unpaid';
+}
+
+function dashboardFormatDate($datetime) {
+    if (empty($datetime)) {
+        return 'Not set';
+    }
+
+    return date("M d, Y - g:i A", strtotime($datetime));
+}
+
+function dashboardMoney($amount) {
+    return '₱' . number_format((float) $amount, 2);
+}
+
 $total_orders = countCustomerOrders($conn, $customer_id);
 $pending_orders = countCustomerOrders($conn, $customer_id, 'pending');
 $ready_orders = countCustomerOrders($conn, $customer_id, 'ready_for_pickup');
@@ -37,7 +89,9 @@ $ready_orders = countCustomerOrders($conn, $customer_id, 'ready_for_pickup');
 $paid_orders_sql = "SELECT COUNT(DISTINCT o.order_id) AS total 
                     FROM orders o
                     JOIN payments p ON o.order_id = p.order_id
-                    WHERE o.customer_id = ? AND p.payment_status = 'paid'";
+                    WHERE o.customer_id = ? 
+                    AND p.payment_status = 'paid'
+                    AND p.verification_status = 'verified'";
 $paid_orders_stmt = mysqli_prepare($conn, $paid_orders_sql);
 mysqli_stmt_bind_param($paid_orders_stmt, "i", $customer_id);
 mysqli_stmt_execute($paid_orders_stmt);
@@ -49,10 +103,27 @@ mysqli_stmt_execute($notif_stmt);
 $notif_count = mysqli_fetch_assoc(mysqli_stmt_get_result($notif_stmt))['total'] ?? 0;
 
 $latest_order = null;
-$latest_stmt = mysqli_prepare($conn, "SELECT order_id, order_status, created_at FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1");
+$latest_sql = "SELECT o.order_id, o.order_code, o.order_status, o.created_at,
+                      o.paper_size, o.paper_type, o.print_type, o.copies,
+                      o.pickup_datetime, o.total_amount, ps.shop_name,
+                      p.payment_status, p.verification_status
+               FROM orders o
+               JOIN print_shops ps ON o.shop_id = ps.shop_id
+               LEFT JOIN payments p ON p.payment_id = (
+                   SELECT p2.payment_id
+                   FROM payments p2
+                   WHERE p2.order_id = o.order_id
+                   ORDER BY p2.created_at DESC, p2.payment_id DESC
+                   LIMIT 1
+               )
+               WHERE o.customer_id = ?
+               ORDER BY o.created_at DESC
+               LIMIT 1";
+$latest_stmt = mysqli_prepare($conn, $latest_sql);
 mysqli_stmt_bind_param($latest_stmt, "i", $customer_id);
 mysqli_stmt_execute($latest_stmt);
 $latest_order = mysqli_fetch_assoc(mysqli_stmt_get_result($latest_stmt));
+$latest_order_tab = ($latest_order && ($latest_order['order_status'] ?? '') === 'completed') ? 'completed' : 'active';
 ?>
 
 <!DOCTYPE html>
@@ -144,10 +215,10 @@ $latest_order = mysqli_fetch_assoc(mysqli_stmt_get_result($latest_stmt));
                 <h2 class="font-bold text-gray-800 mb-3">Quick Actions</h2>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <a href="shops.php" class="bg-blue-600 text-white text-center py-3 rounded-xl font-semibold">
+                    <a href="shopLocation.php" class="bg-blue-600 text-white text-center py-3 rounded-xl font-semibold">
                         Find Shops
                     </a>
-                    <a href="place_order.php" class="bg-green-600 text-white text-center py-3 rounded-xl font-semibold">
+                    <a href="order.php" class="bg-green-600 text-white text-center py-3 rounded-xl font-semibold">
                         Place Order
                     </a>
                     <a href="orders.php" class="bg-gray-800 text-white text-center py-3 rounded-xl font-semibold">
@@ -160,14 +231,43 @@ $latest_order = mysqli_fetch_assoc(mysqli_stmt_get_result($latest_stmt));
             </section>
 
             <section class="bg-white mt-5 p-4 rounded-2xl shadow">
-                <h2 class="font-bold text-gray-800">Latest Order</h2>
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h2 class="font-bold text-gray-800">Latest Order</h2>
+                    <?php if ($latest_order): ?>
+                        <span class="text-xs text-gray-400">Tap to view</span>
+                    <?php endif; ?>
+                </div>
 
                 <?php if ($latest_order): ?>
-                    <p class="text-sm text-gray-500 mt-2">Order #<?php echo e($latest_order['order_id']); ?></p>
-                    <p class="text-lg font-bold capitalize text-blue-700">
-                        <?php echo e($latest_order['order_status']); ?>
-                    </p>
-                    <p class="text-xs text-gray-400"><?php echo e($latest_order['created_at']); ?></p>
+                    <a href="orders.php?status=<?php echo e($latest_order_tab); ?>&focus_order_code=<?php echo urlencode($latest_order['order_code']); ?>"
+                        class="block border rounded-2xl p-4 hover:border-blue-300 hover:bg-blue-50/40 transition">
+                        <div class="flex justify-between items-start gap-3">
+                            <div class="min-w-0">
+                                <p class="text-xs uppercase tracking-wide text-gray-400">Order Code</p>
+                                <h3 class="font-bold text-lg text-blue-700 break-words">
+                                    #<?php echo e($latest_order['order_code']); ?>
+                                </h3>
+                                <p class="text-sm text-gray-500 mt-1"><?php echo e($latest_order['shop_name']); ?></p>
+                            </div>
+
+                            <span class="shrink-0 text-xs px-3 py-1 rounded-full <?php echo dashboardOrderBadge($latest_order['order_status']); ?>">
+                                <?php echo e(dashboardOrderStatusLabel($latest_order['order_status'])); ?>
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
+                            <p><strong>Paper:</strong> <?php echo e($latest_order['paper_size']); ?>, <?php echo e($latest_order['paper_type']); ?></p>
+                            <p><strong>Print:</strong> <?php echo e($latest_order['print_type']); ?></p>
+                            <p><strong>Copies:</strong> <?php echo e($latest_order['copies']); ?></p>
+                            <p><strong>Total:</strong> <?php echo e(dashboardMoney($latest_order['total_amount'])); ?></p>
+                            <p><strong>Pickup:</strong> <?php echo e(dashboardFormatDate($latest_order['pickup_datetime'])); ?></p>
+                            <p><strong>Payment:</strong> <?php echo e(dashboardPaymentLabel($latest_order['payment_status'] ?? '', $latest_order['verification_status'] ?? '')); ?></p>
+                        </div>
+
+                        <p class="text-xs text-gray-400 mt-4">
+                            Submitted <?php echo e(dashboardFormatDate($latest_order['created_at'])); ?>
+                        </p>
+                    </a>
                 <?php else: ?>
                     <p class="text-sm text-gray-500 mt-2">No orders yet. Start by choosing a print shop.</p>
                 <?php endif; ?>
@@ -186,7 +286,7 @@ $latest_order = mysqli_fetch_assoc(mysqli_stmt_get_result($latest_stmt));
     <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
         <a href="dashboard.php" class="py-3 text-blue-700 font-bold">Home</a>
         <a href="shops.php" class="py-3 text-gray-600">Shops</a>
-        <a href="place_order.php" class="py-3 text-gray-600">Order</a>
+        <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
         <a href="orders.php" class="py-3 text-gray-600">Track</a>
         <a href="profile.php" class="py-3 text-gray-600">Profile</a>
     </div>

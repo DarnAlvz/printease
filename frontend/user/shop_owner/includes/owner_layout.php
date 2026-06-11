@@ -80,7 +80,7 @@ function ownerNotificationUrl($notification, $owner_id)
     return '';
 }
 
-function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $shop = null)
+function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $shop = null, $floating_toast = null)
 {
     $shop_name = $shop['shop_name'] ?? 'Print Shop';
     $shop_address = $shop['shop_address'] ?? 'Set up your shop profile';
@@ -90,7 +90,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
     $owner_id = $_SESSION['user_id'] ?? 0;
     $recent_notifications = [];
     if ($owner_id && isset($GLOBALS['conn'])) {
-        $notification_sql = "SELECT message, created_at, is_read
+        $notification_sql = "SELECT notification_id, message, created_at, is_read
                              FROM notifications
                              WHERE user_id = ?
                              ORDER BY created_at DESC
@@ -160,7 +160,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                 <div class="owner-brand-copy">
                     <span>Print Shop</span>
                     <strong><?php echo e($shop_name); ?></strong>
-                    <small><?php echo e($shop_address); ?></small>
+                    <small title="<?php echo e($shop_address); ?>"><?php echo e($shop_address); ?></small>
                 </div>
             </div>
 
@@ -192,14 +192,14 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                             aria-label="Notifications" aria-expanded="false" aria-controls="ownerNotificationPopover">
                             <?php echo ownerIcon('bell', 'icon'); ?>
                             <?php if ($notif_count > 0): ?>
-                                <span class="notification-badge"><?php echo (int) $notif_count; ?></span>
+                                <span class="notification-badge" id="ownerNotificationBadge"><?php echo (int) $notif_count; ?></span>
                             <?php endif; ?>
                         </button>
                         <section class="notification-popover" id="ownerNotificationPopover" aria-hidden="true">
                             <header class="notification-popover-head">
                                 <div>
                                     <strong>Notifications</strong>
-                                    <span><?php echo (int) $notif_count; ?> unread</span>
+                                    <span id="ownerNotificationUnreadText"><?php echo (int) $notif_count; ?> unread</span>
                                 </div>
                                 <a href="notifications.php">View all</a>
                             </header>
@@ -214,9 +214,13 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                                         <?php $notification_href = ownerNotificationUrl($notification, $owner_id); ?>
                                         <?php if ($notification_href !== ''): ?>
                                             <a class="notification-popover-item notification-popover-link"
-                                                href="<?php echo e($notification_href); ?>">
+                                                href="<?php echo e($notification_href); ?>"
+                                                data-notification-id="<?php echo (int) $notification['notification_id']; ?>"
+                                                data-is-read="<?php echo (int) $notification['is_read']; ?>">
                                             <?php else: ?>
-                                                <article class="notification-popover-item">
+                                                <article class="notification-popover-item"
+                                                    data-notification-id="<?php echo (int) $notification['notification_id']; ?>"
+                                                    data-is-read="<?php echo (int) $notification['is_read']; ?>">
                                                 <?php endif; ?>
                                                 <span
                                                     class="notification-popover-icon"><?php echo ownerIcon($notification['is_read'] == 0 ? 'bell-ring' : 'info', 'icon-sm'); ?></span>
@@ -248,6 +252,18 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                     </div>
                 </div>
             </header>
+
+            <?php if (!empty($floating_toast['message'])): ?>
+                <div id="ownerFloatingToast"
+                    class="owner-floating-toast <?php echo e($floating_toast['status'] ?? 'pending'); ?>"
+                    role="status" aria-live="polite">
+                    <?php echo ownerIcon(($floating_toast['status'] ?? 'pending') === 'rejected' ? 'triangle-alert' : 'clock', 'icon'); ?>
+                    <span><?php echo e($floating_toast['message']); ?></span>
+                    <button type="button" aria-label="Dismiss notification" data-owner-toast-close>
+                        <?php echo ownerIcon('x', 'icon-sm'); ?>
+                    </button>
+                </div>
+            <?php endif; ?>
 
             <main class="owner-main">
                 <div class="page-heading">
@@ -353,6 +369,126 @@ function ownerLayoutEnd()
                     if (event.key === 'Escape') {
                         closePopover();
                     }
+                });
+            })();
+
+            (function () {
+                const toast = document.getElementById('ownerFloatingToast');
+                if (!toast) {
+                    return;
+                }
+
+                requestAnimationFrame(function () {
+                    toast.classList.add('is-visible');
+                });
+
+                const closeButton = toast.querySelector('[data-owner-toast-close]');
+                function closeToast() {
+                    toast.classList.remove('is-visible');
+                    window.setTimeout(function () {
+                        toast.remove();
+                    }, 250);
+                }
+
+                if (closeButton) {
+                    closeButton.addEventListener('click', closeToast);
+                }
+
+                window.setTimeout(closeToast, 5000);
+            })();
+
+            (function () {
+                const markReadUrl = '<?php echo BASE_URL; ?>backend/actions/mark_notification_read.php';
+                const badge = document.getElementById('ownerNotificationBadge');
+                const unreadText = document.getElementById('ownerNotificationUnreadText');
+                const pageUnreadBadge = document.getElementById('unread-badge');
+
+                function setUnreadCount(count) {
+                    const nextCount = Math.max(0, count);
+                    if (badge) {
+                        badge.textContent = nextCount;
+                        badge.hidden = nextCount === 0;
+                    }
+                    if (unreadText) {
+                        unreadText.textContent = nextCount + ' unread';
+                    }
+                    if (pageUnreadBadge) {
+                        pageUnreadBadge.textContent = nextCount + ' unread';
+                    }
+                }
+
+                function markItemVisualRead(item) {
+                    const selector = '[data-notification-id="' + item.dataset.notificationId + '"]';
+                    document.querySelectorAll(selector).forEach(function (matchingItem) {
+                        matchingItem.dataset.isRead = '1';
+
+                        const newBadge = matchingItem.querySelector('.status-badge');
+                        if (newBadge && newBadge.textContent.trim().toLowerCase() === 'new') {
+                            newBadge.remove();
+                        }
+
+                        const icon = matchingItem.querySelector('[data-lucide="bell-ring"]');
+                        if (icon) {
+                            icon.setAttribute('data-lucide', 'info');
+                        }
+                    });
+
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    }
+                }
+
+                function markNotificationRead(item, callback) {
+                    const notificationId = item.dataset.notificationId;
+                    if (!notificationId) {
+                        callback(false, null);
+                        return;
+                    }
+
+                    fetch(markReadUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: 'notification_id=' + encodeURIComponent(notificationId)
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data && data.success) {
+                                setUnreadCount(data.unread_count || 0);
+                                if (data.updated || item.dataset.isRead === '0') {
+                                    markItemVisualRead(item);
+                                }
+                                callback(true, data);
+                                return;
+                            }
+
+                            callback(false, data || null);
+                        })
+                        .catch(() => callback(false, null));
+                }
+
+                document.querySelectorAll('[data-notification-id]').forEach(function (item) {
+                    item.addEventListener('click', function (event) {
+                        const href = item.getAttribute('href');
+                        const isUnread = item.dataset.isRead === '0';
+
+                        if (!isUnread) {
+                            return;
+                        }
+
+                        if (href) {
+                            event.preventDefault();
+                        }
+
+                        markNotificationRead(item, function () {
+                            if (href) {
+                                window.location.href = href;
+                            }
+                        });
+                    });
                 });
             })();
         </script>

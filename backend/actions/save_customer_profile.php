@@ -47,16 +47,21 @@ if (isset($_POST['save_profile'])) {
         $new_status = 'incomplete';
     }
 
+    $lat = $_POST['latitude'] ?? null;
+    $lng = $_POST['longitude'] ?? null;
+
     $sql = "UPDATE users SET 
-            phone_number = ?, 
-            address = ?, 
-            profile_picture = ?, 
-            valid_id_file = ?, 
-            account_status = ?
-            WHERE user_id = ?";
+        phone_number = ?, 
+        address = ?, 
+        profile_picture = ?, 
+        valid_id_file = ?, 
+        latitude = ?, 
+        longitude = ?, 
+        account_status = ?
+        WHERE user_id = ?";
 
     $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, "sssssi", $phone, $address, $profile_picture_path, $valid_id_path, $new_status, $customer_id);
+    mysqli_stmt_bind_param($stmt, "ssssddsi", $phone, $address, $profile_picture_path, $valid_id_path, $lng, $lat, $new_status, $customer_id);
     mysqli_stmt_execute($stmt);
 
     logActivity($conn, $customer_id, "Updated customer profile", "Customer Profile");

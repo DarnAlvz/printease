@@ -26,6 +26,9 @@ $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
 ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit, and operating availability.', $notif_count, $shop);
 ?>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <?php showMessage(); ?>
 
 <?php if ($permit_status === 'verified'): ?>
@@ -45,7 +48,13 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     </div>
 <?php endif; ?>
 
-<form action="../../../backend/actions/save_shop_profile.php" method="POST" enctype="multipart/form-data" class="shop-management-form is-locked" id="shopProfileForm">
+<form action="../../../backend/actions/save_shop_profile.php" method="POST" enctype="multipart/form-data"
+    class="shop-management-form is-locked" id="shopProfileForm">
+    <input type="hidden" name="latitude" id="shopLatitude" value="<?php echo e($shop['latitude'] ?? ''); ?>"
+        data-editable disabled>
+    <input type="hidden" name="longitude" id="shopLongitude" value="<?php echo e($shop['longitude'] ?? ''); ?>"
+        data-editable disabled>
+
     <div class="shop-management-grid">
         <section class="owner-card shop-profile-card">
             <div class="card-head">
@@ -62,7 +71,8 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
             <div class="shop-logo-upload-row">
                 <div class="shop-logo-frame">
                     <?php if (!empty($shop['shop_logo'])): ?>
-                        <img src="<?php echo SHOP_LOGOS_URL . e($shop['shop_logo']); ?>" class="shop-logo-profile" alt="<?php echo e($shop['shop_name']); ?> logo">
+                        <img src="<?php echo SHOP_LOGOS_URL . e($shop['shop_logo']); ?>" class="shop-logo-profile"
+                            alt="<?php echo e($shop['shop_name']); ?> logo">
                     <?php else: ?>
                         <div class="shop-logo-empty"><?php echo ownerIcon('store', 'icon-xl'); ?></div>
                     <?php endif; ?>
@@ -72,7 +82,8 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                         <?php echo ownerIcon('upload', 'icon'); ?>
                         Upload Logo
                     </label>
-                    <input id="shop_logo" class="file-input-hidden" type="file" name="shop_logo" accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
+                    <input id="shop_logo" class="file-input-hidden" type="file" name="shop_logo"
+                        accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
                     <p class="card-note">Recommended: 500x500px, PNG or JPG</p>
                 </div>
             </div>
@@ -83,18 +94,25 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                     <?php echo ownerIcon('map-pin', 'icon'); ?>
                     <span><?php echo e($shop['shop_address'] ?? 'Enter your shop address'); ?></span>
                 </div>
-                <button type="button" class="location-map-button" data-editable disabled>Set Location on Map</button>
-                <div class="location-map-preview">
-                    <?php echo ownerIcon('map-pin', 'location-pin-icon'); ?>
-                    <strong><?php echo e($shop['shop_name'] ?? 'Print Shop'); ?></strong>
-                    <span><?php echo e($shop['shop_address'] ?? 'Shop location'); ?></span>
+                <button type="button" class="location-map-button" id="setShopLocation" data-editable disabled>
+                    Set Location on Map
+                </button>
+                <div class="location-map-preview owner-location-map" id="ownerShopMap" aria-label="Shop map picker">
+                </div>
+                <div class="location-coordinate-note" id="shopCoordinateNote">
+                    <?php if (!empty($shop['latitude']) && !empty($shop['longitude'])): ?>
+                        Pin saved at <?php echo e($shop['latitude']); ?>, <?php echo e($shop['longitude']); ?>
+                    <?php else: ?>
+                        No exact shop pin saved yet.
+                    <?php endif; ?>
                 </div>
             </div>
 
             <?php if (!empty($shop['business_permit_file'])): ?>
                 <div class="permit-preview-block">
                     <p class="card-note">Business Permit</p>
-                    <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview" alt="Business permit">
+                    <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview"
+                        alt="Business permit">
                 </div>
             <?php endif; ?>
         </section>
@@ -115,25 +133,34 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                 <div class="shop-details-fields">
                     <div class="field full">
                         <label for="shop_name">Shop Name</label>
-                        <input id="shop_name" type="text" name="shop_name" value="<?php echo e($shop['shop_name'] ?? ''); ?>" placeholder="Shop Name" required data-editable disabled>
+                        <input id="shop_name" type="text" name="shop_name"
+                            value="<?php echo e($shop['shop_name'] ?? ''); ?>" placeholder="Shop Name" required
+                            data-editable disabled>
                     </div>
 
-                    <div class="field full">
-                        <label for="shop_address">Address</label>
-                        <textarea id="shop_address" name="shop_address" placeholder="Shop Address" required data-editable disabled><?php echo e($shop['shop_address'] ?? ''); ?></textarea>
-                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold mb-1">Shop Address</label>
+                        <textarea id="shop_address" name="shop_address" rows="3" class="w-full border rounded-xl p-3"
+                            required><?php echo e($shop['shop_address'] ?? ''); ?></textarea>
+
 
                     <div class="field full">
                         <label for="contact_number">Phone</label>
-                        <input id="contact_number" type="text" name="contact_number" value="<?php echo e($shop['contact_number'] ?? ''); ?>" placeholder="+63 912 345 6789" required data-editable disabled>
+                        <input id="contact_number" type="text" name="contact_number"
+                            value="<?php echo e($shop['contact_number'] ?? ''); ?>" placeholder="+63 912 345 6789"
+                            required data-editable disabled>
                     </div>
 
                     <div class="field full">
                         <label for="shop_status">Shop Status</label>
                         <select id="shop_status" name="shop_status" required data-editable disabled>
-                            <option value="available" <?php if (($shop['shop_status'] ?? '') == 'available') echo 'selected'; ?>>Available</option>
-                            <option value="busy" <?php if (($shop['shop_status'] ?? '') == 'busy') echo 'selected'; ?>>Busy</option>
-                            <option value="not_accepting" <?php if (($shop['shop_status'] ?? '') == 'not_accepting') echo 'selected'; ?>>Not Accepting Orders</option>
+                            <option value="available" <?php if (($shop['shop_status'] ?? '') == 'available')
+                                echo 'selected'; ?>>Available</option>
+                            <option value="busy" <?php if (($shop['shop_status'] ?? '') == 'busy')
+                                echo 'selected'; ?>>
+                                Busy</option>
+                            <option value="not_accepting" <?php if (($shop['shop_status'] ?? '') == 'not_accepting')
+                                echo 'selected'; ?>>Not Accepting Orders</option>
                         </select>
                     </div>
 
@@ -173,32 +200,7 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     </div>
 </form>
 
-<script>
-    (function () {
-        const form = document.getElementById('shopProfileForm');
-        const editButton = document.getElementById('editShopProfile');
-        const saveButton = document.getElementById('saveShopProfile');
-        const editables = form ? form.querySelectorAll('[data-editable]') : [];
-        const editControls = form ? form.querySelectorAll('[data-edit-control]') : [];
+<script src="assets/js/shopLocation.js"></script>
 
-        if (!form || !editButton || !saveButton) {
-            return;
-        }
-
-        editButton.addEventListener('click', function () {
-            form.classList.remove('is-locked');
-            form.classList.add('is-editing');
-            editables.forEach(function (field) {
-                field.disabled = false;
-            });
-            editControls.forEach(function (control) {
-                control.classList.remove('is-disabled');
-            });
-            saveButton.disabled = false;
-            editButton.disabled = true;
-            editButton.classList.add('is-disabled');
-        });
-    })();
-</script>
 
 <?php ownerLayoutEnd(); ?>

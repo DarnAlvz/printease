@@ -10,7 +10,9 @@ require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 require_once __DIR__ . "/includes/owner_layout.php";
 
 requireCompleteShopProfile($conn);
-requireVerifiedStatus($conn);
+$owner_access = requireVerifiedStatus($conn, true);
+$owner_is_verified = !empty($owner_access['allowed']);
+$owner_toast = $owner_is_verified ? null : $owner_access;
 
 $owner_id = $_SESSION['user_id'];
 
@@ -51,7 +53,7 @@ if (!empty($paper_counts)) {
 }
 $most_used_paper = $total_services > 0 ? array_key_first($paper_counts) : 'No services yet';
 
-ownerLayoutStart('services', 'Paper Pricing Management', 'Manage paper types, sizes, print types, and pricing for your print shop.', $notif_count, $shop);
+ownerLayoutStart('services', 'Paper Pricing Management', 'Manage paper types, sizes, print types, and pricing for your print shop.', $notif_count, $shop, $owner_toast);
 ?>
 
 <?php showMessage(); ?>
@@ -91,22 +93,22 @@ ownerLayoutStart('services', 'Paper Pricing Management', 'Manage paper types, si
     <form action="../../../backend/actions/add_service.php" method="POST" class="form-grid" style="margin-top:18px;">
         <div class="field">
             <label for="paper_size">Paper Size</label>
-            <input id="paper_size" type="text" name="paper_size" placeholder="A4, Letter, Legal" required>
+            <input id="paper_size" type="text" name="paper_size" placeholder="A4, Letter, Legal" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
         </div>
         <div class="field">
             <label for="paper_type">Paper Type</label>
-            <input id="paper_type" type="text" name="paper_type" placeholder="Glossy, Matte, Bond Paper" required>
+            <input id="paper_type" type="text" name="paper_type" placeholder="Glossy, Matte, Bond Paper" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
         </div>
         <div class="field">
             <label for="print_type">Print Type</label>
-            <input id="print_type" type="text" name="print_type" placeholder="Black & White or Color" required>
+            <input id="print_type" type="text" name="print_type" placeholder="Black & White or Color" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
         </div>
         <div class="field">
             <label for="price_per_page">Price Per Page</label>
-            <input id="price_per_page" type="number" step="0.01" min="0.01" name="price_per_page" placeholder="16.00" required>
+            <input id="price_per_page" type="number" step="0.01" min="0.01" name="price_per_page" placeholder="16.00" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
         </div>
         <div class="field full">
-            <button type="submit" name="add_service" class="btn btn-primary"><?php echo ownerIcon('plus', 'icon'); ?>Add Paper Category</button>
+            <button type="submit" name="add_service" class="btn btn-primary" <?php echo $owner_is_verified ? '' : 'disabled'; ?>><?php echo ownerIcon('plus', 'icon'); ?>Add Paper Category</button>
         </div>
     </form>
 </section>

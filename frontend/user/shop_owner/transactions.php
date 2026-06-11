@@ -10,7 +10,9 @@ require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 require_once __DIR__ . "/includes/owner_layout.php";
 
 requireCompleteShopProfile($conn);
-requireVerifiedStatus($conn);
+$owner_access = requireVerifiedStatus($conn, true);
+$owner_is_verified = !empty($owner_access['allowed']);
+$owner_toast = $owner_is_verified ? null : $owner_access;
 
 $owner_id = $_SESSION['user_id'];
 $search = trim($_GET['q'] ?? '');
@@ -91,7 +93,7 @@ while ($transaction = mysqli_fetch_assoc($transaction_result)) {
     $transactions[] = $transaction;
 }
 
-ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop);
+ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner_toast);
 ?>
 
 <section class="transactions-ui">

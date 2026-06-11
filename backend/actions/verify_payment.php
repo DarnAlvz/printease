@@ -3,8 +3,12 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/profile_guard.php";
+require_once __DIR__ . "/../includes/status_guard.php";
 
 checkRole("shop_owner");
+requireCompleteShopProfile($conn);
+requireVerifiedStatus($conn);
 
 $owner_id = $_SESSION['user_id'];
 $payment_id = intval($_POST['payment_id'] ?? 0);

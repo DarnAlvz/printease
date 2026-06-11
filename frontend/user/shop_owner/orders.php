@@ -11,7 +11,9 @@ require_once __DIR__ . "/../../../backend/actions/pickup_reminder_checker.php";
 require_once __DIR__ . "/includes/owner_layout.php";
 
 requireCompleteShopProfile($conn);
-requireVerifiedStatus($conn);
+$owner_access = requireVerifiedStatus($conn, true);
+$owner_is_verified = !empty($owner_access['allowed']);
+$owner_toast = $owner_is_verified ? null : $owner_access;
 
 function orderPageUrl($page, $search_code, $status_filter)
 {
@@ -155,7 +157,7 @@ function paymentStatusLabel($payment_status, $verification_status)
     return 'Unpaid';
 }
 
-ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
+ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_toast);
 ?>
 
 <?php showMessage(); ?>
@@ -297,7 +299,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                                         data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View
                                         Details</button>
 
-                                    <?php if ($order['order_status'] === 'processing'): ?>
+                                    <?php if ($owner_is_verified && $order['order_status'] === 'processing'): ?>
                                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                                             class="orders-update-form orders-status-action">
                                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
@@ -305,7 +307,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                                             <button type="submit" name="update_order" class="btn order-btn-ready">Mark as
                                                 Ready</button>
                                         </form>
-                                    <?php elseif ($order['order_status'] === 'ready_for_pickup'): ?>
+                                    <?php elseif ($owner_is_verified && $order['order_status'] === 'ready_for_pickup'): ?>
                                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                                             class="orders-update-form orders-status-action">
                                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
@@ -506,7 +508,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
 
                     <footer class="order-modal-footer">
                         <button type="button" class="btn order-modal-secondary" data-order-modal-close>Close</button>
-                        <?php if ($order['order_status'] === 'pending'): ?>
+                        <?php if ($owner_is_verified && $order['order_status'] === 'pending'): ?>
                             <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                                 class="orders-update-form orders-status-action" data-accept-download-form
                                 data-order-id="<?php echo e($order['order_id']); ?>">
@@ -554,14 +556,14 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
                         <button type="button" class="btn order-btn-navy"
                             data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View Details</button>
                     </div>
-                    <?php if ($order['order_status'] === 'processing'): ?>
+                    <?php if ($owner_is_verified && $order['order_status'] === 'processing'): ?>
                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                             class="orders-update-form orders-status-action mobile">
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                             <input type="hidden" name="order_status" value="ready_for_pickup">
                             <button type="submit" name="update_order" class="btn order-btn-ready">Mark as Ready</button>
                         </form>
-                    <?php elseif ($order['order_status'] === 'ready_for_pickup'): ?>
+                    <?php elseif ($owner_is_verified && $order['order_status'] === 'ready_for_pickup'): ?>
                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                             class="orders-update-form orders-status-action mobile">
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
@@ -747,11 +749,11 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop);
     })();
 
     document.querySelectorAll('.proof-toggle').forEach(function (button) {
-    button.addEventListener('click', function () {
-        const target = document.getElementById(button.dataset.target);
-        if (target) target.classList.toggle('hidden');
+        button.addEventListener('click', function () {
+            const target = document.getElementById(button.dataset.target);
+            if (target) target.classList.toggle('hidden');
+        });
     });
-});
 
 </script>
 

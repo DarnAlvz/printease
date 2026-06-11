@@ -11,6 +11,28 @@ if (isset($_POST['save_profile'])) {
     $shop_address = trim($_POST['shop_address']);
     $contact_number = trim($_POST['contact_number']);
     $shop_status = $_POST['shop_status'];
+    $latitude_raw = trim($_POST['latitude'] ?? '');
+    $longitude_raw = trim($_POST['longitude'] ?? '');
+
+    $latitude = null;
+    $longitude = null;
+
+    if ($latitude_raw !== '' || $longitude_raw !== '') {
+        if ($latitude_raw === '' || $longitude_raw === '' || !is_numeric($latitude_raw) || !is_numeric($longitude_raw)) {
+            setMessage("Please choose a valid shop location on the map.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+
+        $latitude = (float) $latitude_raw;
+        $longitude = (float) $longitude_raw;
+
+        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            setMessage("Please choose a valid shop location on the map.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+    }
 
     $check_sql = "SELECT shop_id, permit_status, business_permit_file, shop_logo FROM print_shops WHERE owner_id = ? LIMIT 1";
     $check_stmt = mysqli_prepare($conn, $check_sql);
@@ -81,45 +103,45 @@ if (isset($_POST['save_profile'])) {
             if ($has_new_logo) {
                 $sql = "UPDATE print_shops SET 
                         shop_name=?, shop_address=?, contact_number=?, 
-                        shop_status=?, business_permit_file=?, shop_logo=?, permit_status='pending'
+                        shop_status=?, business_permit_file=?, shop_logo=?, latitude=?, longitude=?, permit_status='pending'
                         WHERE shop_id=? AND owner_id=?";
                 $stmt = mysqli_prepare($conn, $sql);
-                mysqli_stmt_bind_param($stmt, "ssssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $new_logo_name, $shop_id, $owner_id);
+                mysqli_stmt_bind_param($stmt, "ssssssddii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $new_logo_name, $latitude, $longitude, $shop_id, $owner_id);
             } else {
                 $sql = "UPDATE print_shops SET 
                         shop_name=?, shop_address=?, contact_number=?, 
-                        shop_status=?, business_permit_file=?, permit_status='pending'
+                        shop_status=?, business_permit_file=?, latitude=?, longitude=?, permit_status='pending'
                         WHERE shop_id=? AND owner_id=?";
                 $stmt = mysqli_prepare($conn, $sql);
-                mysqli_stmt_bind_param($stmt, "sssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $shop_id, $owner_id);
+                mysqli_stmt_bind_param($stmt, "sssssddii", $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $latitude, $longitude, $shop_id, $owner_id);
             }
             $message = "Shop profile saved. Your new permit is pending verification by Admin.";
             $activity = "Saved shop profile with new permit (pending verification)";
         } else {
             if ($has_new_logo) {
                 $sql = "UPDATE print_shops SET 
-                        shop_name=?, shop_address=?, contact_number=?, shop_status=?, shop_logo=?
+                        shop_name=?, shop_address=?, contact_number=?, shop_status=?, shop_logo=?, latitude=?, longitude=?
                         WHERE shop_id=? AND owner_id=?";
                 $stmt = mysqli_prepare($conn, $sql);
-                mysqli_stmt_bind_param($stmt, "sssssii", $shop_name, $shop_address, $contact_number, $shop_status, $new_logo_name, $shop_id, $owner_id);
+                mysqli_stmt_bind_param($stmt, "sssssddii", $shop_name, $shop_address, $contact_number, $shop_status, $new_logo_name, $latitude, $longitude, $shop_id, $owner_id);
                 $message = "Shop profile and logo saved.";
                 $activity = "Saved shop profile with logo";
             } else {
                 $sql = "UPDATE print_shops SET 
-                        shop_name=?, shop_address=?, contact_number=?, shop_status=?
+                        shop_name=?, shop_address=?, contact_number=?, shop_status=?, latitude=?, longitude=?
                         WHERE shop_id=? AND owner_id=?";
                 $stmt = mysqli_prepare($conn, $sql);
-                mysqli_stmt_bind_param($stmt, "ssssii", $shop_name, $shop_address, $contact_number, $shop_status, $shop_id, $owner_id);
+                mysqli_stmt_bind_param($stmt, "ssssddii", $shop_name, $shop_address, $contact_number, $shop_status, $latitude, $longitude, $shop_id, $owner_id);
                 $message = "Shop profile saved.";
                 $activity = "Saved shop profile";
             }
         }
     } else {
         $sql = "INSERT INTO print_shops 
-                (owner_id, shop_name, shop_address, contact_number, shop_status, business_permit_file, shop_logo, permit_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')";
+                (owner_id, shop_name, shop_address, latitude, longitude, contact_number, shop_status, business_permit_file, shop_logo, permit_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
         $stmt = mysqli_prepare($conn, $sql);
-        mysqli_stmt_bind_param($stmt, "issssss", $owner_id, $shop_name, $shop_address, $contact_number, $shop_status, $new_name, $new_logo_name);
+        mysqli_stmt_bind_param($stmt, "issddssss", $owner_id, $shop_name, $shop_address, $latitude, $longitude, $contact_number, $shop_status, $new_name, $new_logo_name);
         $message = "Shop profile saved. Your permit is pending verification by Admin.";
         $activity = "Saved shop profile (pending verification)";
     }
@@ -131,26 +153,15 @@ if (isset($_POST['save_profile'])) {
     if (mysqli_stmt_execute($stmt)) {
 
         // After completing shop profile, set account status to pending
-        $pending_user_sql = "UPDATE users 
+        if (!$existing || $has_new_permit) {
+            $pending_user_sql = "UPDATE users 
                          SET account_status = 'pending' 
                          WHERE user_id = ? 
-                         AND role = 'shop_owner'
-                         AND account_status IN ('incomplete', 'rejected')";
+                         AND role = 'shop_owner'";
 
-        $pending_user_stmt = mysqli_prepare($conn, $pending_user_sql);
-        mysqli_stmt_bind_param($pending_user_stmt, "i", $owner_id);
-        mysqli_stmt_execute($pending_user_stmt);
-
-        // If new permit uploaded, force account back to pending for review
-        if ($has_new_permit) {
-            $review_sql = "UPDATE users 
-                       SET account_status = 'pending' 
-                       WHERE user_id = ? 
-                       AND role = 'shop_owner'";
-
-            $review_stmt = mysqli_prepare($conn, $review_sql);
-            mysqli_stmt_bind_param($review_stmt, "i", $owner_id);
-            mysqli_stmt_execute($review_stmt);
+            $pending_user_stmt = mysqli_prepare($conn, $pending_user_sql);
+            mysqli_stmt_bind_param($pending_user_stmt, "i", $owner_id);
+            mysqli_stmt_execute($pending_user_stmt);
         }
 
         logActivity($conn, $owner_id, $activity, "Shop Profile");

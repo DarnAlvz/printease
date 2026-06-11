@@ -11,6 +11,46 @@ requireVerifiedStatus($conn);
 
 $customer_id = $_SESSION['user_id'];
 $search = trim($_GET['order_code'] ?? '');
+$focus_order_code = trim($_GET['focus_order_code'] ?? '');
+$allowed_tabs = ['active', 'completed'];
+$status_tab = $_GET['status'] ?? 'active';
+if (!in_array($status_tab, $allowed_tabs, true)) {
+    $status_tab = 'active';
+}
+
+function customerOrdersUrl($status_tab, $search = '')
+{
+    $params = [];
+    $params['status'] = $status_tab;
+    if ($search !== '') {
+        $params['order_code'] = $search;
+    }
+
+    return 'orders.php' . (!empty($params) ? '?' . http_build_query($params) : '');
+}
+
+function countCustomerOrdersByTab($conn, $customer_id, $status_tab)
+{
+    $sql = "SELECT COUNT(*) AS total FROM orders WHERE customer_id = ?";
+
+    if ($status_tab === 'active') {
+        $sql .= " AND order_status <> 'completed'";
+    } else {
+        $sql .= " AND order_status = 'completed'";
+    }
+
+    $stmt = mysqli_prepare($conn, $sql);
+    mysqli_stmt_bind_param($stmt, "i", $customer_id);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+    return (int) ($row['total'] ?? 0);
+}
+
+$tab_counts = [
+    'active' => countCustomerOrdersByTab($conn, $customer_id, 'active'),
+    'completed' => countCustomerOrdersByTab($conn, $customer_id, 'completed'),
+];
 
 $sql = "SELECT o.*, ps.shop_name, 
                p.payment_status, 
@@ -27,6 +67,12 @@ $sql = "SELECT o.*, ps.shop_name,
             LIMIT 1
         )
         WHERE o.customer_id = ?";
+
+if ($status_tab === 'active') {
+    $sql .= " AND o.order_status <> 'completed'";
+} else {
+    $sql .= " AND o.order_status = 'completed'";
+}
 
 if ($search !== '') {
     $sql .= " AND o.order_code LIKE ?";
@@ -106,31 +152,58 @@ function formatDateTime12Hour($datetime)
                 <?php showMessage(); ?>
 
                 <form method="GET" class="flex gap-2 mb-4">
+                    <input type="hidden" name="status" value="<?php echo e($status_tab); ?>">
                     <input type="text" name="order_code" value="<?php echo e($search); ?>"
                         placeholder="Search order code" class="flex-1 border rounded-xl p-3">
                     <button class="bg-blue-600 text-white px-4 rounded-xl">Search</button>
                 </form>
 
+                <nav class="grid grid-cols-2 gap-2 mb-4" aria-label="Order filters">
+                    <?php
+                    $order_tabs = [
+                        'active' => 'Active',
+                        'completed' => 'Completed',
+                    ];
+                    foreach ($order_tabs as $tab_key => $tab_label):
+                        $is_active_tab = $status_tab === $tab_key;
+                    ?>
+                        <a href="<?php echo e(customerOrdersUrl($tab_key, $search)); ?>"
+                            class="rounded-xl border px-3 py-3 text-center text-sm font-semibold <?php echo $is_active_tab ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-200'; ?>">
+                            <?php echo e($tab_label); ?>
+                            <span class="<?php echo $is_active_tab ? 'text-blue-100' : 'text-gray-400'; ?>">
+                                (<?php echo (int) $tab_counts[$tab_key]; ?>)
+                            </span>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+
                 <?php if (mysqli_num_rows($result) == 0): ?>
                     <div class="bg-white p-5 rounded-2xl shadow text-center">
                         <p class="text-gray-500">No orders found.</p>
-                        <a href="shops.php" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Order
+                        <a href="order.php" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Order
                             Now</a>
                     </div>
                 <?php else: ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <?php while ($order = mysqli_fetch_assoc($result)): ?>
                             <?php
+                            $is_focused_order = $focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0;
                             $file_stmt = mysqli_prepare($conn, "SELECT * FROM uploaded_files WHERE order_id = ? LIMIT 1");
                             mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                             mysqli_stmt_execute($file_stmt);
                             $file = mysqli_fetch_assoc(mysqli_stmt_get_result($file_stmt));
                             ?>
 
-                            <div class="bg-white p-5 rounded-2xl shadow">
+                            <div <?php echo $is_focused_order ? 'id="focused-order"' : ''; ?>
+                                class="bg-white p-5 rounded-2xl shadow <?php echo $is_focused_order ? 'ring-2 ring-blue-500 border border-blue-300' : ''; ?>">
                                 <div class="flex justify-between items-start gap-3">
                                     <div>
-                                        <h2 class="font-bold text-lg"><?php echo e($order['order_code']); ?></h2>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <h2 class="font-bold text-lg"><?php echo e($order['order_code']); ?></h2>
+                                            <?php if ($is_focused_order): ?>
+                                                <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">Selected</span>
+                                            <?php endif; ?>
+                                        </div>
                                         <p class="text-sm text-gray-500"><?php echo e($order['shop_name']); ?></p>
                                     </div>
 
@@ -153,11 +226,12 @@ function formatDateTime12Hour($datetime)
                                     </p>
                                     <p><strong>Print:</strong> <?php echo e($order['print_type']); ?></p>
                                     <p><strong>Copies:</strong> <?php echo e($order['copies']); ?></p>
-                                    <p><strong>Pickup:</strong> <?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></p>
+                                    <p><strong>Pickup:</strong>
+                                        <?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></p>
                                     <p><strong>Total:</strong> ₱<?php echo e(number_format($order['total_amount'], 2)); ?></p>
                                     <p><strong>Payment:</strong>
                                         <?php
-                                        if (($order['payment_status'] ?? '') === 'paid') {
+                                        if (($order['payment_status'] ?? '') === 'paid' && ($order['verification_status'] ?? '') === 'verified') {
                                             echo "Paid";
                                         } elseif (($order['verification_status'] ?? '') === 'pending') {
                                             echo "Pending Verification";
@@ -177,19 +251,41 @@ function formatDateTime12Hour($datetime)
                                     </button>
                                 <?php endif; ?>
 
-                                <?php if (empty($order['payment_status']) || $order['payment_status'] === 'unpaid'): ?>
+                                <?php if (($order['verification_status'] ?? '') === 'rejected'): ?>
+                                    <div class="mt-4 bg-red-100 text-red-700 p-3 rounded-xl text-sm">
+                                        <p class="font-semibold">Payment proof rejected.</p>
+
+                                        <?php if (!empty($order['rejection_reason'])): ?>
+                                            <p class="mt-1">
+                                                <strong>Reason:</strong> <?php echo e($order['rejection_reason']); ?>
+                                            </p>
+                                        <?php else: ?>
+                                            <p class="mt-1">
+                                                <strong>Reason:</strong> No reason provided.
+                                            </p>
+                                        <?php endif; ?>
+                                    </div>
+
                                     <a href="payment.php?order_id=<?php echo e($order['order_id']); ?>"
                                         class="block text-center w-full bg-green-600 text-white py-3 rounded-xl font-semibold mt-4">
-                                        Pay Now
+                                        Submit New Proof
                                     </a>
+
                                 <?php elseif (($order['verification_status'] ?? '') === 'pending'): ?>
                                     <p class="mt-4 bg-yellow-100 text-yellow-700 p-3 rounded-xl text-sm">
                                         Payment proof submitted. Waiting for shop verification.
                                     </p>
-                                <?php elseif ($order['payment_status'] === 'paid'): ?>
+
+                                <?php elseif (($order['payment_status'] ?? '') === 'paid'): ?>
                                     <p class="mt-4 bg-green-100 text-green-700 p-3 rounded-xl text-sm">
                                         Payment verified.
                                     </p>
+
+                                <?php else: ?>
+                                    <a href="payment.php?order_id=<?php echo e($order['order_id']); ?>"
+                                        class="block text-center w-full bg-green-600 text-white py-3 rounded-xl font-semibold mt-4">
+                                        Pay Now
+                                    </a>
                                 <?php endif; ?>
                             </div>
                         <?php endwhile; ?>
@@ -198,48 +294,59 @@ function formatDateTime12Hour($datetime)
             </main>
         </div>
 
-        <nav
-            class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
-            <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
-                <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
-                <a href="shops.php" class="py-3 text-gray-600">Shops</a>
-                <a href="shops.php" class="py-3 text-gray-600">Order</a>
-                <a href="orders.php" class="py-3 text-blue-700 font-bold">Track</a>
-                <a href="profile.php" class="py-3 text-gray-600">Profile</a>
-            </div>
-        </nav>
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
+        <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
+            <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
+            <a href="shops.php" class="py-3 text-blue-700 font-bold">Shops</a>
+            <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
+            <a href="orders.php" class="py-3 text-gray-600">Track</a>
+            <a href="profile.php" class="py-3 text-gray-600">Profile</a>
+        </div>
+    </nav>
 
-        <div id="proofModal" class="hidden fixed inset-0 bg-black/60 z-50 items-center justify-center p-4">
+        <div id="proofModal"
+            class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 p-4 overflow-auto">
             <div class="bg-white rounded-2xl max-w-3xl w-full p-4">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="font-bold text-lg">Payment Proof</h2>
                     <button id="closeProofModal" class="text-red-600 font-bold">Close</button>
                 </div>
-
-                <img id="proofImage" src="" class="w-full max-h-[70vh] object-contain rounded-xl border">
+                <div class="max-h-[70vh] overflow-auto">
+                    <img id="proofImage" class="w-full object-contain rounded-xl border hidden">
+                    <iframe id="proofIframe" class="w-full h-[60vh] hidden rounded-xl border"></iframe>
+                </div>
             </div>
         </div>
 
         <script>
-            document.querySelectorAll('.proof-view-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    document.getElementById('proofImage').src = button.dataset.proof;
+            document.querySelectorAll('.proof-view-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const file = btn.dataset.proof + "&t=" + new Date().getTime(); // extra cache-busting
+                    const ext = file.split('.').pop().toLowerCase();
+                    document.getElementById('proofImage').classList.add('hidden');
+                    document.getElementById('proofIframe').classList.add('hidden');
+
+                    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+                        document.getElementById('proofImage').src = file;
+                        document.getElementById('proofImage').classList.remove('hidden');
+                    } else {
+                        document.getElementById('proofIframe').src = file;
+                        document.getElementById('proofIframe').classList.remove('hidden');
+                    }
+
                     document.getElementById('proofModal').classList.remove('hidden');
                     document.getElementById('proofModal').classList.add('flex');
                 });
             });
-
             document.getElementById('closeProofModal').addEventListener('click', () => {
                 document.getElementById('proofModal').classList.add('hidden');
                 document.getElementById('proofModal').classList.remove('flex');
             });
 
-            document.getElementById('proofModal').addEventListener('click', function (e) {
-                if (e.target === this) {
-                    this.classList.add('hidden');
-                    this.classList.remove('flex');
-                }
-            });
+            const focusedOrder = document.getElementById('focused-order');
+            if (focusedOrder) {
+                focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         </script>
 
 </body>

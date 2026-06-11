@@ -61,15 +61,15 @@ mysqli_stmt_execute($read_stmt);
     </main>
 </div>
 
-<nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
-    <div class="max-w-md md:max-w-5xl mx-auto grid grid-cols-5 text-center text-xs">
-        <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
-        <a href="shops.php" class="py-3 text-gray-600">Shops</a>
-        <a href="shops.php" class="py-3 text-gray-600">Order</a>
-        <a href="orders.php" class="py-3 text-gray-600">Track</a>
-        <a href="profile.php" class="py-3 text-gray-600">Profile</a>
-    </div>
-</nav>
+ <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
+        <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
+            <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
+            <a href="shops.php" class="py-3 text-blue-700 font-bold">Shops</a>
+            <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
+            <a href="orders.php" class="py-3 text-gray-600">Track</a>
+            <a href="profile.php" class="py-3 text-gray-600">Profile</a>
+        </div>
+    </nav>
 
 </body>
 </html>

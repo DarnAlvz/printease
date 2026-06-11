@@ -8,11 +8,13 @@ require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/../../../backend/actions/pickup_reminder_checker.php";
 require_once __DIR__ . "/includes/owner_layout.php";
 
-function dashboardMoney($amount) {
+function dashboardMoney($amount)
+{
     return '&#8369;' . number_format((float) $amount, 0);
 }
 
-function dashboardInitials($name) {
+function dashboardInitials($name)
+{
     $initials = '';
     foreach (explode(' ', trim($name ?? '')) as $part) {
         if ($part !== '') {
@@ -174,23 +176,13 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
 <?php elseif ($permit_status === 'pending'): ?>
     <section class="hero-card">
         <div>
-            <h2><?php echo e($shop['shop_name']); ?> is under review</h2>
+            <h2 ><?php echo e($shop['shop_name']); ?> is under review</h2>
             <p>Your business permit is pending Super Admin verification.</p>
         </div>
         <span class="status-badge status-warning">Pending Verification</span>
     </section>
 
-    <div class="content-grid" style="margin-top:22px;">
-        <section class="owner-card">
-            <h2>Submitted Shop Details</h2>
-            <p><strong>Address:</strong> <?php echo e($shop['shop_address']); ?></p>
-            <p><strong>Contact:</strong> <?php echo e($shop['contact_number']); ?></p>
-            <?php if (!empty($shop['business_permit_file'])): ?>
-                <p class="card-note">Business permit preview</p>
-                <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview" alt="Business permit">
-            <?php endif; ?>
-        </section>
-
+        <div class="content-grid" style="margin-top:22px;"></div>
         <section class="owner-card">
             <h2>Recent Activity</h2>
             <div class="activity-list">
@@ -202,7 +194,8 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                             <span class="activity-dot"><?php echo ownerIcon('bell-ring', 'icon'); ?></span>
                             <div>
                                 <b><?php echo e($note['message']); ?></b>
-                                <small class="muted"><?php echo e(date("M d, Y - g:i A", strtotime($note['created_at']))); ?></small>
+                                <small
+                                    class="muted"><?php echo e(date("M d, Y - g:i A", strtotime($note['created_at']))); ?></small>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -268,7 +261,8 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                     <strong><?php echo dashboardMoney($stats['today_revenue'] > 0 ? $stats['today_revenue'] : $stats['revenue']); ?></strong>
                     <p>Today's Sales</p>
                     <svg viewBox="0 0 220 45" class="mini-sparkline" aria-hidden="true">
-                        <polyline points="4,34 55,32 102,25 150,30 216,16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline points="4,34 55,32 102,25 150,30 216,16" fill="none" stroke="currentColor"
+                            stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </article>
             </section>
@@ -280,19 +274,24 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                         <span class="muted">Last 7 days</span>
                     </div>
                     <div class="chart-wrap">
-                        <svg viewBox="0 0 710 270" preserveAspectRatio="none" class="sales-chart-svg" aria-label="Sales this week chart">
+                        <svg viewBox="0 0 710 270" preserveAspectRatio="none" class="sales-chart-svg"
+                            aria-label="Sales this week chart">
                             <?php foreach ([40, 90, 140, 190, 240] as $line_y): ?>
-                                <line x1="42" y1="<?php echo $line_y; ?>" x2="690" y2="<?php echo $line_y; ?>" class="chart-grid-line"/>
+                                <line x1="42" y1="<?php echo $line_y; ?>" x2="690" y2="<?php echo $line_y; ?>"
+                                    class="chart-grid-line" />
                             <?php endforeach; ?>
-                            <polyline points="<?php echo e($chart_polyline); ?>" class="chart-line" fill="none"/>
+                            <polyline points="<?php echo e($chart_polyline); ?>" class="chart-line" fill="none" />
                             <?php foreach ($chart_circles as $point): ?>
-                                <circle cx="<?php echo $point['x']; ?>" cy="<?php echo $point['y']; ?>" r="6" class="chart-point"/>
+                                <circle cx="<?php echo $point['x']; ?>" cy="<?php echo $point['y']; ?>" r="6"
+                                    class="chart-point" />
                             <?php endforeach; ?>
                             <?php foreach (['0', '1500', '3000', '4500', '6000'] as $i => $label): ?>
-                                <text x="8" y="<?php echo 238 - ($i * 50); ?>" class="chart-label"><?php echo e($label); ?></text>
+                                <text x="8" y="<?php echo 238 - ($i * 50); ?>"
+                                    class="chart-label"><?php echo e($label); ?></text>
                             <?php endforeach; ?>
                             <?php foreach (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as $i => $day): ?>
-                                <text x="<?php echo 34 + ($i * 103); ?>" y="260" class="chart-label"><?php echo e($day); ?></text>
+                                <text x="<?php echo 34 + ($i * 103); ?>" y="260"
+                                    class="chart-label"><?php echo e($day); ?></text>
                             <?php endforeach; ?>
                         </svg>
                     </div>
@@ -309,13 +308,15 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                         ];
                         foreach ($status_rows as $row):
                             $width = min(100, round(($row['count'] / $max_status) * 100));
-                        ?>
+                            ?>
                             <div>
                                 <div class="status-row">
                                     <span><?php echo e($row['label']); ?></span>
                                     <strong><?php echo (int) $row['count']; ?></strong>
                                 </div>
-                                <div class="progress"><b style="width:<?php echo max(25, $width); ?>%; background:<?php echo e($row['color']); ?>"></b></div>
+                                <div class="progress"><b
+                                        style="width:<?php echo max(25, $width); ?>%; background:<?php echo e($row['color']); ?>"></b>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -353,15 +354,18 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                                 $avatar_classes = ['avatar-blue', 'avatar-purple', 'avatar-pink', 'avatar-green'];
                                 foreach ($recent_orders as $index => $order):
                                     $avatar_class = $avatar_classes[$index % count($avatar_classes)];
-                                ?>
+                                    ?>
                                     <tr>
                                         <td>
                                             <div class="recent-customer">
-                                                <span class="customer-avatar <?php echo e($avatar_class); ?>"><?php echo e(dashboardInitials($order['full_name'])); ?></span>
+                                                <span
+                                                    class="customer-avatar <?php echo e($avatar_class); ?>"><?php echo e(dashboardInitials($order['full_name'])); ?></span>
                                                 <strong><?php echo e($order['full_name']); ?></strong>
                                             </div>
                                         </td>
-                                        <td><a href="orders.php?order_code=<?php echo e(substr($order['order_code'], -4)); ?>"><?php echo e($order['order_code']); ?></a></td>
+                                        <td><a
+                                                href="orders.php?order_code=<?php echo e(substr($order['order_code'], -4)); ?>"><?php echo e($order['order_code']); ?></a>
+                                        </td>
                                         <td><?php echo e($order['file_name'] ?: 'No uploaded file'); ?></td>
                                         <td><strong><?php echo dashboardMoney($order['total_amount']); ?></strong></td>
                                         <td>
@@ -380,7 +384,8 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                             <article class="owner-card order-card-mobile">
                                 <div class="card-head">
                                     <h2><?php echo e($order['order_code']); ?></h2>
-                                    <span class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>"><?php echo e(ownerStatusLabel($order['order_status'])); ?></span>
+                                    <span
+                                        class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>"><?php echo e(ownerStatusLabel($order['order_status'])); ?></span>
                                 </div>
                                 <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
                                 <p><strong>File:</strong> <?php echo e($order['file_name'] ?: 'No uploaded file'); ?></p>
@@ -419,7 +424,9 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
 
             <section class="owner-card quick-stats-card">
                 <h2>Quick Stats</h2>
-                <p>Today's Revenue <strong><?php echo dashboardMoney($stats['today_revenue'] > 0 ? $stats['today_revenue'] : $stats['revenue']); ?></strong></p>
+                <p>Today's Revenue
+                    <strong><?php echo dashboardMoney($stats['today_revenue'] > 0 ? $stats['today_revenue'] : $stats['revenue']); ?></strong>
+                </p>
                 <p>Active Customers <strong><?php echo (int) $stats['active_customers']; ?></strong></p>
                 <p>Ready Orders <strong><?php echo (int) $stats['ready_for_pickup']; ?></strong></p>
             </section>
