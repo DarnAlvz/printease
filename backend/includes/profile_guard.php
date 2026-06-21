@@ -26,8 +26,11 @@ function requireCompleteShopProfile($conn) {
         empty($shop['contact_number']) ||
         empty($shop['business_permit_file'])
     ) {
-        setMessage("Please complete your shop profile first.");
-        header("Location: ../../../frontend/user/shop_owner/shop_profile.php");
+        $_SESSION['owner_toast'] = [
+            'status' => 'incomplete',
+            'message' => 'Please complete your shop profile before accessing this feature.',
+        ];
+        header("Location: " . BASE_URL . "frontend/user/shop_owner/shop_profile.php");
         exit();
     }
 }
@@ -63,7 +66,7 @@ function requireCompleteCustomerProfile($conn) {
         empty($customer['address']) ||
         empty($customer['valid_id_file'])
     ) {
-        setMessage("Please complete your customer profile first.");
+        setToast("Please complete your customer profile first.", "warning");
         header("Location: ../../../frontend/user/customer/profile.php");
         exit();
     }

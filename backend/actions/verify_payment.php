@@ -38,7 +38,11 @@ if (isset($_POST['verify_payment'])) {
     mysqli_stmt_bind_param($stmt, "ii", $owner_id, $payment_id);
     mysqli_stmt_execute($stmt);
 
-    sendNotification($conn, $payment['customer_id'], "Your payment for order #" . $payment['order_code'] . " has been verified.");
+    sendNotification($conn, $payment['customer_id'], "Your payment for order #" . $payment['order_code'] . " has been verified.", [
+        'type' => 'payment_verified', 'title' => 'Payment verified',
+        'target_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . (int) $payment['order_id'],
+        'metadata' => ['order_id' => (int) $payment['order_id'], 'order_code' => $payment['order_code']],
+    ]);
     setMessage("Payment verified successfully.");
 }
 
@@ -54,8 +58,12 @@ if (isset($_POST['reject_payment'])) {
     mysqli_stmt_bind_param($stmt, "si", $reason, $payment_id);
     mysqli_stmt_execute($stmt);
 
-    sendNotification($conn, $payment['customer_id'], "Your payment proof for order #" . $payment['order_code'] . " was rejected.");
-    setMessage("Payment proof rejected.");
+    sendNotification($conn, $payment['customer_id'], "Your payment proof for order #" . $payment['order_code'] . " was rejected.", [
+        'type' => 'payment_rejected', 'title' => 'Payment proof rejected',
+        'target_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . (int) $payment['order_id'],
+        'metadata' => ['order_id' => (int) $payment['order_id'], 'order_code' => $payment['order_code']],
+    ]);
+    setToast("Payment proof rejected.", "warning");
 }
 
 redirect(BASE_URL . "frontend/user/shop_owner/orders.php");

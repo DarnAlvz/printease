@@ -1,3 +1,0 @@
-ALTER TABLE print_shops
-ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,8) NULL AFTER shop_address,
-ADD COLUMN IF NOT EXISTS longitude DECIMAL(11,8) NULL AFTER latitude;

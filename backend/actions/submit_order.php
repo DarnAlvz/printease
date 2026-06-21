@@ -11,7 +11,7 @@ requireCompleteCustomerProfile($conn);
 requireVerifiedStatus($conn);
 
 if (!isset($_POST['submit_order'])) {
-    redirect(BASE_URL . "frontend/user/customer/shops.php");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
 $customer_id = $_SESSION['user_id'];
@@ -33,13 +33,13 @@ if ($pickup_timestamp === false || $pickup_timestamp < $current_timestamp) {
 }
 
 if ($copies < 1 || empty($pickup_datetime)) {
-    setMessage("Invalid order details.");
-    redirect(BASE_URL . "frontend/user/customer/shops.php");
+    setError("Invalid order details.");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
 if ($shop_id <= 0 || $service_id <= 0) {
-    setMessage("Invalid shop or service selected.");
-    redirect(BASE_URL . "frontend/user/customer/shops.php");
+    setError("Invalid shop or service selected.");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
 // Fetch service and shop info
@@ -57,21 +57,20 @@ mysqli_stmt_execute($service_stmt);
 $service = mysqli_fetch_assoc(mysqli_stmt_get_result($service_stmt));
 
 if (!$service || $service['permit_status'] !== 'verified' || $service['shop_status'] === 'not_accepting') {
-    setMessage("Selected service is not available.");
-    redirect(BASE_URL . "frontend/user/customer/shops.php");
+    setToast("Selected service is not available.", "warning");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
 if (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UPLOAD_ERR_OK) {
-    setMessage("Please upload a valid document.");
+    setError("Please upload a document file.");
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
 $total_amount = $service['price_per_page'] * $copies;
-
-// File upload
 $upload_dir = "../../uploads/orders/";
-if (!is_dir($upload_dir))
+if (!is_dir($upload_dir)) {
     mkdir($upload_dir, 0777, true);
+}
 
 $original_name = basename($_FILES['document_file']['name']);
 $file_type = pathinfo($original_name, PATHINFO_EXTENSION);
@@ -83,7 +82,7 @@ mysqli_begin_transaction($conn);
 
 try {
     if (!move_uploaded_file($_FILES['document_file']['tmp_name'], $target_path)) {
-        throw new Exception("File upload failed.");
+        throw new Exception("Failed to upload document.");
     }
 
 
@@ -136,16 +135,23 @@ try {
     mysqli_stmt_execute($file_stmt);
 
     // Notify shop owner
-    sendNotification($conn, $service['owner_id'], "New print order received. Order #$order_code.");
+    sendNotification($conn, $service['owner_id'], "New print order received. Order #$order_code.", [
+        'type' => 'order_new', 'title' => 'New print order',
+        'target_url' => BASE_URL . "frontend/user/shop_owner/orders.php?focus_order_id=$order_id",
+        'metadata' => ['order_id' => $order_id, 'order_code' => $order_code],
+    ]);
 
     mysqli_commit($conn);
 
-    setMessage("Order submitted successfully. Your Order # is " . $order_code . ".");
+    setMessage("Order submitted successfully. Your Order # is " . $order_code . ".", [
+        'title' => 'Order submitted', 'action_label' => 'View order',
+        'action_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . $order_id,
+    ]);
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 
 } catch (Exception $e) {
     mysqli_rollback($conn);
-    setMessage("Order failed: " . $e->getMessage());
+    setError("Order failed: " . $e->getMessage());
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 ?>

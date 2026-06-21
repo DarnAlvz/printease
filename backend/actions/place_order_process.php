@@ -1,10 +1,10 @@
 <?php
-require_once __DIR__ . "../config/db.php";
-require_once __DIR__ . "../config/app.php";
-require_once __DIR__ . "../includes/auth.php";
-require_once __DIR__ . "../includes/functions.php";
-require_once __DIR__ . "../includes/status_guard.php";
-require_once __DIR__ . "../includes/profile_guard.php";
+require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/app.php";
+require_once __DIR__ . "/../includes/auth.php";
+require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/profile_guard.php";
 
 checkRole("customer");
 requireVerifiedStatus($conn);
@@ -19,21 +19,16 @@ if (isset($_POST['place_order'])) {
     $copies = intval($_POST['copies']);
     $total_amount = floatval($_POST['total_amount']);
 
-    // File upload validation
-    if (!isset($_FILES['order_file']) || $_FILES['order_file']['error'] !== 0) {
-        setMessage("Please upload a valid file.");
-        redirect(BASE_URL . "frontend/pages/place_order.php");
+    // File upload
+    $upload_dir = "../../uploads/orders/";
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
     }
 
-    $file_name = $_FILES['order_file']['name'];
-    $file_tmp = $_FILES['order_file']['tmp_name'];
-    $new_name = time() . "_" . basename($file_name);
-    $upload_path = "../../uploads/orders/" . $new_name;
-
-    if (!move_uploaded_file($file_tmp, $upload_path)) {
-        setMessage("File upload failed.");
-        redirect(BASE_URL . "frontend/pages/place_order.php");
-    }
+    $file_name = time() . "_" . basename($_FILES['order_file']['name']);
+    $target_path = $upload_dir . $file_name;
+    move_uploaded_file($_FILES['order_file']['tmp_name'], $target_path);
+    $file_path_db = "uploads/orders/" . $file_name;
 
     // Prepare SQL variables
     $customer_id_var = $customer_id;
@@ -54,7 +49,6 @@ if (isset($_POST['place_order'])) {
     // Insert uploaded file record
     $file_sql = "INSERT INTO uploaded_files (order_id, file_name, file_path) VALUES (?, ?, ?)";
     $file_stmt = mysqli_prepare($conn, $file_sql);
-    $file_path_db = "uploads/orders/" . $new_name;
     mysqli_stmt_bind_param($file_stmt, "iss", $order_id, $file_name, $file_path_db);
     mysqli_stmt_execute($file_stmt);
 
@@ -66,7 +60,11 @@ if (isset($_POST['place_order'])) {
     $shop_result = mysqli_stmt_get_result($shop_stmt);
     $shop = mysqli_fetch_assoc($shop_result);
 
-    sendNotification($conn, $shop['owner_id'], "New order #$order_id has been placed.");
+    sendNotification($conn, $shop['owner_id'], "New order #$order_id has been placed.", [
+        'type' => 'order_new', 'title' => 'New order',
+        'target_url' => BASE_URL . "frontend/user/shop_owner/orders.php?focus_order_id=$order_id",
+        'metadata' => ['order_id' => $order_id],
+    ]);
 
     // Log activity
     logActivity($conn, $customer_id, "Placed order #$order_id", "Order Placement");

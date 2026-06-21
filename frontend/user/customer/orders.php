@@ -5,6 +5,9 @@ checkRole("customer");
 require_once __DIR__ . "/../../../backend/config/db.php";
 require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../components/head.php";
+require_once __DIR__ . "/../../components/customer_layout.php";
+require_once __DIR__ . "/../../components/customer_toasts.php";
 require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 
 requireVerifiedStatus($conn);
@@ -55,6 +58,7 @@ $tab_counts = [
 $sql = "SELECT o.*, ps.shop_name, 
                p.payment_status, 
                p.verification_status,
+               p.reference_number,
                p.proof_of_payment_file,
                p.rejection_reason
         FROM orders o
@@ -134,23 +138,19 @@ function formatDateTime12Hour($datetime)
 
 <head>
     <title>My Orders</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php renderCustomerHead(); ?>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-gray-100 min-h-screen pb-24">
+<body class="customer-body bg-gray-100 min-h-screen pb-24">
+    <?php customerToastRender(); ?>
 
     <div class="max-w-md md:max-w-6xl mx-auto min-h-screen">
 
         <div class="max-w-md md:max-w-6xl mx-auto min-h-screen">
-            <header class="bg-blue-700 text-white p-5 rounded-b-3xl shadow">
-                <h1 class="text-2xl font-bold">My Orders</h1>
-                <p class="text-sm opacity-90 mt-1">Track your print requests and payments.</p>
-            </header>
+            <?php renderCustomerLayout(['title' => 'My Orders', 'subtitle' => 'Track your print requests and payments.']); ?>
 
             <main class="p-4 md:p-6">
-                <?php showMessage(); ?>
-
                 <form method="GET" class="flex gap-2 mb-4">
                     <input type="hidden" name="status" value="<?php echo e($status_tab); ?>">
                     <input type="text" name="order_code" value="<?php echo e($search); ?>"
@@ -180,7 +180,7 @@ function formatDateTime12Hour($datetime)
                 <?php if (mysqli_num_rows($result) == 0): ?>
                     <div class="bg-white p-5 rounded-2xl shadow text-center">
                         <p class="text-gray-500">No orders found.</p>
-                        <a href="order.php" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Order
+                        <a href="explore.php?view=all" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Order
                             Now</a>
                     </div>
                 <?php else: ?>
@@ -238,10 +238,13 @@ function formatDateTime12Hour($datetime)
                                         } elseif (($order['verification_status'] ?? '') === 'rejected') {
                                             echo "Rejected";
                                         } else {
-                                            echo "Unpaid";
+                                            echo "Waiting for Payment";
                                         }
                                         ?>
                                     </p>
+                                    <?php if (!empty($order['reference_number'])): ?>
+                                        <p><strong>GCash Ref:</strong> <?php echo e($order['reference_number']); ?></p>
+                                    <?php endif; ?>
                                 </div>
 
                                 <?php if (!empty($order['proof_of_payment_file'])): ?>
@@ -294,15 +297,7 @@ function formatDateTime12Hour($datetime)
             </main>
         </div>
 
-        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
-        <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
-            <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
-            <a href="shops.php" class="py-3 text-blue-700 font-bold">Shops</a>
-            <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
-            <a href="orders.php" class="py-3 text-gray-600">Track</a>
-            <a href="profile.php" class="py-3 text-gray-600">Profile</a>
-        </div>
-    </nav>
+        <?php renderCustomerLayoutEnd('orders'); ?>
 
         <div id="proofModal"
             class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 p-4 overflow-auto">

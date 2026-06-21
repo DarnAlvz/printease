@@ -5,106 +5,454 @@ checkRole("super_admin");
 require_once __DIR__ . "/../../../backend/config/db.php";
 require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/includes/admin_layout.php";
 
-$sql = "SELECT u.*, ps.business_permit_file, ps.permit_status 
-        FROM users u 
-        LEFT JOIN print_shops ps ON u.user_id = ps.owner_id 
-        WHERE u.role != 'super_admin' 
-        ORDER BY u.created_at DESC";
-$result = mysqli_query($conn, $sql);
+if (empty($_SESSION['admin_user_status_csrf'])) {
+    $_SESSION['admin_user_status_csrf'] = bin2hex(random_bytes(32));
+}
+
+function manageUserStatusLabel($status)
+{
+    return match ((string) $status) {
+        'verified' => 'Active',
+        'rejected' => 'Rejected',
+        'inactive' => 'Inactive',
+        'incomplete' => 'Pending',
+        default => 'Pending',
+    };
+}
+
+function manageUserStatusClass($status)
+{
+    return match ((string) $status) {
+        'verified' => 'admin-user-status admin-user-status-active',
+        'rejected' => 'admin-user-status admin-user-status-rejected',
+        'inactive' => 'admin-user-status admin-user-status-inactive',
+        default => 'admin-user-status admin-user-status-pending',
+    };
+}
+
+function manageUserInitial($name)
+{
+    $name = trim((string) $name);
+    return strtoupper(substr($name !== '' ? $name : 'U', 0, 1));
+}
+
+function manageUserRelativeTime($datetime)
+{
+    if (empty($datetime)) {
+        return 'N/A';
+    }
+
+    $timestamp = strtotime($datetime);
+    if (!$timestamp) {
+        return 'N/A';
+    }
+
+    $diff = max(0, time() - $timestamp);
+    if ($diff < 60) return 'Just now';
+    if ($diff < 3600) {
+        $minutes = (int) floor($diff / 60);
+        return $minutes . ' minute' . ($minutes === 1 ? '' : 's') . ' ago';
+    }
+    if ($diff < 86400) {
+        $hours = (int) floor($diff / 3600);
+        return $hours . ' hour' . ($hours === 1 ? '' : 's') . ' ago';
+    }
+
+    $days = (int) floor($diff / 86400);
+    return $days . ' day' . ($days === 1 ? '' : 's') . ' ago';
+}
+
+function manageUserBindParams($stmt, $types, array $params)
+{
+    $bind = [$types];
+    foreach ($params as $key => $value) {
+        $bind[] = &$params[$key];
+    }
+    return call_user_func_array([$stmt, 'bind_param'], $bind);
+}
+
+$search = trim((string) ($_GET['search'] ?? ''));
+$filter = strtolower(trim((string) ($_GET['status'] ?? 'all')));
+$allowed_filters = ['all', 'verified', 'pending', 'rejected', 'inactive'];
+if (!in_array($filter, $allowed_filters, true)) {
+    $filter = 'all';
+}
+
+$summary = [
+    'total' => 0,
+    'verified' => 0,
+    'pending' => 0,
+    'rejected' => 0,
+    'inactive' => 0,
+];
+
+$summary_result = mysqli_query($conn, "
+    SELECT COALESCE(account_status, 'pending') AS account_status, COUNT(*) AS total
+    FROM users
+    WHERE role != 'super_admin'
+    GROUP BY COALESCE(account_status, 'pending')
+");
+if ($summary_result) {
+    while ($row = mysqli_fetch_assoc($summary_result)) {
+        $status = (string) ($row['account_status'] ?? 'pending');
+        $count = (int) ($row['total'] ?? 0);
+        $summary['total'] += $count;
+
+        if ($status === 'incomplete') {
+            $summary['pending'] += $count;
+        } elseif (array_key_exists($status, $summary)) {
+            $summary[$status] += $count;
+        }
+    }
+}
+
+$where = ["u.role != 'super_admin'"];
+$types = '';
+$params = [];
+
+if ($filter === 'pending') {
+    $where[] = "COALESCE(u.account_status, 'pending') IN ('pending', 'incomplete')";
+} elseif ($filter !== 'all') {
+    $where[] = "COALESCE(u.account_status, 'pending') = ?";
+    $types .= 's';
+    $params[] = $filter;
+}
+
+if ($search !== '') {
+    $where[] = "(u.full_name LIKE ? OR u.email LIKE ?)";
+    $types .= 'ss';
+    $like = '%' . $search . '%';
+    $params[] = $like;
+    $params[] = $like;
+}
+
+$sql = "
+    SELECT
+        u.user_id,
+        u.full_name,
+        u.email,
+        u.role,
+        u.account_status,
+        u.valid_id_file,
+        u.created_at,
+        ps.shop_id,
+        ps.shop_name,
+        ps.business_permit_file,
+        ps.permit_status,
+        (
+            SELECT COUNT(*)
+            FROM orders o
+            WHERE o.customer_id = u.user_id
+        ) AS customer_order_count,
+        (
+            SELECT COUNT(*)
+            FROM orders o
+            JOIN print_shops ops ON ops.shop_id = o.shop_id
+            WHERE ops.owner_id = u.user_id
+        ) AS owner_order_count,
+        (
+            SELECT MAX(al.created_at)
+            FROM activity_logs al
+            WHERE al.user_id = u.user_id
+        ) AS last_activity_at
+    FROM users u
+    LEFT JOIN print_shops ps ON ps.owner_id = u.user_id
+    WHERE " . implode(' AND ', $where) . "
+    ORDER BY u.created_at DESC, u.full_name ASC
+";
+
+$stmt = mysqli_prepare($conn, $sql);
+if ($stmt && $types !== '') {
+    manageUserBindParams($stmt, $types, $params);
+}
+if ($stmt) {
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+} else {
+    $result = false;
+}
+
+$users = [];
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $users[] = $row;
+    }
+}
+
+$filters = [
+    'all' => ['label' => 'All', 'count' => $summary['total'], 'icon' => 'users'],
+    'verified' => ['label' => 'Active', 'count' => $summary['verified'], 'icon' => 'check'],
+    'pending' => ['label' => 'Pending', 'count' => $summary['pending'], 'icon' => 'clock'],
+    'rejected' => ['label' => 'Rejected', 'count' => $summary['rejected'], 'icon' => 'x'],
+    'inactive' => ['label' => 'Inactive', 'count' => $summary['inactive'], 'icon' => 'shield'],
+];
+
+adminLayoutStart('users', 'User Management', 'Review, approve, and manage customer and shop owner accounts.');
 ?>
+<section class="admin-user-manager">
+    <form class="admin-user-toolbar" method="GET" action="manage_users.php">
+        <label class="admin-user-search" aria-label="Search users">
+            <?php echo adminIcon('search'); ?>
+            <input type="search" name="search" value="<?php echo e($search); ?>" placeholder="Search by name or email...">
+        </label>
+        <input type="hidden" name="status" value="<?php echo e($filter); ?>">
+        <button class="admin-user-search-button" type="submit">Search</button>
+    </form>
 
-<!DOCTYPE html>
-<html>
+    <nav class="admin-user-filters" aria-label="User status filters">
+        <?php foreach ($filters as $key => $item): ?>
+            <?php
+                $query = [];
+                if ($search !== '') $query['search'] = $search;
+                if ($key !== 'all') $query['status'] = $key;
+                $href = 'manage_users.php' . (!empty($query) ? '?' . http_build_query($query) : '');
+            ?>
+            <a class="<?php echo $filter === $key ? 'is-active' : ''; ?>" href="<?php echo e($href); ?>" <?php echo $filter === $key ? 'aria-current="page"' : ''; ?>>
+                <?php echo adminIcon($item['icon']); ?>
+                <span><?php echo e($item['label']); ?></span>
+                <strong><?php echo (int) $item['count']; ?></strong>
+            </a>
+        <?php endforeach; ?>
+    </nav>
 
-<head>
-    <title>Manage Users</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
+    <section class="admin-user-stats" aria-label="User management summary">
+        <article class="admin-user-stat admin-user-stat-total">
+            <span><?php echo adminIcon('users'); ?></span>
+            <strong><?php echo (int) $summary['total']; ?></strong>
+            <p>Total Users</p>
+        </article>
+        <article class="admin-user-stat admin-user-stat-active">
+            <span><?php echo adminIcon('check'); ?></span>
+            <strong><?php echo (int) $summary['verified']; ?></strong>
+            <p>Active Users</p>
+        </article>
+        <article class="admin-user-stat admin-user-stat-pending">
+            <span><?php echo adminIcon('clock'); ?></span>
+            <strong><?php echo (int) $summary['pending']; ?></strong>
+            <p>Pending Users</p>
+        </article>
+        <article class="admin-user-stat admin-user-stat-rejected">
+            <span><?php echo adminIcon('x'); ?></span>
+            <strong><?php echo (int) $summary['rejected']; ?></strong>
+            <p>Rejected Users</p>
+        </article>
+        <article class="admin-user-stat admin-user-stat-inactive">
+            <span><?php echo adminIcon('shield'); ?></span>
+            <strong><?php echo (int) $summary['inactive']; ?></strong>
+            <p>Inactive Users</p>
+        </article>
+    </section>
 
-<body class="bg-gray-100 p-6">
-
-    <h1 class="text-2xl font-bold mb-4">Manage Users</h1>
-    <?php showMessage(); ?>
-
-    <div class="bg-white p-5 rounded shadow overflow-x-auto">
-        <table class="w-full border-collapse border">
-            <thead>
-                <tr class="bg-gray-200">
-                    <th class="border p-2 text-left">Name</th>
-                    <th class="border p-2 text-left">Email</th>
-                    <th class="border p-2 text-left">Role</th>
-                    <th class="border p-2 text-left">Status</th>
-                    <th class="border p-2 text-left">Documents</th>
-                    <th class="border p-2 text-left">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php while ($user = mysqli_fetch_assoc($result)): ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="border p-2"><?php echo e($user['full_name']); ?></td>
-                        <td class="border p-2"><?php echo e($user['email']); ?></td>
-                        <td class="border p-2"><?php echo e(ucfirst(str_replace('_', ' ', $user['role']))); ?></td>
-                        <td class="border p-2">
-                            <?php
-                            $status = $user['account_status'] ?? 'pending';
-                            $badge_color = match ($status) {
-                                'verified' => 'bg-green-100 text-green-800',
-                                'pending' => 'bg-blue-100 text-blue-800',
-                                'rejected' => 'bg-red-100 text-red-800',
-                                default => 'bg-gray-100 text-gray-800'
-                            };
-                            ?>
-                            <span class="px-2 py-1 rounded text-sm font-medium <?php echo $badge_color; ?>">
-                                <?php echo e(ucfirst($status)); ?>
-                            </span>
-                        </td>
-                        <td class="border p-2">
-                            <?php if ($user['role'] === 'customer' && !empty($user['valid_id_file'])): ?>
-                                <a href="<?php echo BASE_URL . e($user['valid_id_file']); ?>" target="_blank"
-                                    class="text-blue-600 underline text-sm">View Valid ID</a>
-                            <?php elseif ($user['role'] === 'shop_owner'): ?>
-                                <?php if (!empty($user['business_permit_file'])): ?>
-                                    <a href="<?php echo PERMITS_URL . e($user['business_permit_file']); ?>" target="_blank"
-                                        class="text-blue-600 underline text-sm">View Permit</a>
-                                <?php else: ?>
-                                    <span class="text-gray-400 text-sm">No permit uploaded</span>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <span class="text-gray-400 text-sm">No documents</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="border p-2">
-                            <form action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" method="POST"
-                                class="flex items-center gap-2">
-                                <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-
-                                <select name="account_status" class="border rounded px-2 py-1 text-sm">
-                                    <option value="pending" <?php if ($status === 'pending')
-                                        echo 'selected'; ?>>Pending
-                                    </option>
-                                    <option value="verified" <?php if ($status === 'verified')
-                                        echo 'selected'; ?>>Verified
-                                    </option>
-                                    <option value="rejected" <?php if ($status === 'rejected')
-                                        echo 'selected'; ?>>Rejected
-                                    </option>
-                                </select>
-
-                                <button type="submit" name="update_user_status"
-                                    class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Update</button>
-                            </form>
-                        </td>
+    <section class="admin-user-table-card">
+        <div class="admin-user-table-wrap">
+            <table class="admin-user-table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" aria-label="Select all users" data-admin-user-select-all></th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Last Activity</th>
+                        <th>Orders</th>
+                        <th>Actions</th>
                     </tr>
-                <?php endwhile; ?>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <?php if (empty($users)): ?>
+                        <tr>
+                            <td colspan="7"><div class="admin-empty compact">No users match this view.</div></td>
+                        </tr>
+                    <?php endif; ?>
+
+                    <?php foreach ($users as $user): ?>
+                        <?php
+                            $status = (string) ($user['account_status'] ?? 'pending');
+                            $status = $status !== '' ? $status : 'pending';
+                            $role_label = ucfirst(str_replace('_', ' ', (string) $user['role']));
+                            $orders_count = $user['role'] === 'shop_owner'
+                                ? (int) ($user['owner_order_count'] ?? 0)
+                                : (int) ($user['customer_order_count'] ?? 0);
+                            $last_activity_source = $user['last_activity_at'] ?: ($user['created_at'] ?? '');
+                            $last_activity = manageUserRelativeTime($last_activity_source);
+                            $created_at = !empty($user['created_at']) ? date('Y-m-d', strtotime($user['created_at'])) : 'N/A';
+                            $document_url = '';
+                            $document_label = 'No document uploaded';
+                            if ($user['role'] === 'customer' && !empty($user['valid_id_file'])) {
+                                $document_url = BASE_URL . $user['valid_id_file'];
+                                $document_label = 'View Valid ID';
+                            } elseif ($user['role'] === 'shop_owner' && !empty($user['business_permit_file'])) {
+                                $document_url = PERMITS_URL . $user['business_permit_file'];
+                                $document_label = 'View Permit';
+                            }
+                        ?>
+                        <tr>
+                            <td><input type="checkbox" aria-label="Select <?php echo e($user['full_name']); ?>"></td>
+                            <td>
+                                <div class="admin-user-name">
+                                    <span><?php echo e(manageUserInitial($user['full_name'])); ?></span>
+                                    <div>
+                                        <strong><?php echo e($user['full_name']); ?></strong>
+                                        <small><?php echo e($role_label); ?><?php echo !empty($user['shop_name']) ? ' - ' . e($user['shop_name']) : ''; ?></small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><?php echo e($user['email']); ?></td>
+                            <td><span class="<?php echo e(manageUserStatusClass($status)); ?>"><?php echo e(manageUserStatusLabel($status)); ?></span></td>
+                            <td><?php echo e($last_activity); ?></td>
+                            <td><strong><?php echo (int) $orders_count; ?></strong></td>
+                            <td>
+                                <div class="admin-user-actions">
+                                    <button
+                                        type="button"
+                                        class="admin-user-action admin-user-action-view"
+                                        data-user-view
+                                        data-name="<?php echo e($user['full_name']); ?>"
+                                        data-email="<?php echo e($user['email']); ?>"
+                                        data-role="<?php echo e($role_label); ?>"
+                                        data-status="<?php echo e(manageUserStatusLabel($status)); ?>"
+                                        data-orders="<?php echo (int) $orders_count; ?>"
+                                        data-last-activity="<?php echo e($last_activity); ?>"
+                                        data-created="<?php echo e($created_at); ?>"
+                                        data-document-url="<?php echo e($document_url); ?>"
+                                        data-document-label="<?php echo e($document_label); ?>"
+                                    >
+                                        <?php echo adminIcon('search'); ?>View
+                                    </button>
+
+                                    <?php if ($status === 'verified'): ?>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" data-confirm-action="Deactivate this user? They will no longer be able to access their account.">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
+                                            <input type="hidden" name="account_status" value="inactive">
+                                            <button class="admin-user-action admin-user-action-disable" type="submit" name="update_user_status"><?php echo adminIcon('shield'); ?>Deactivate</button>
+                                        </form>
+                                    <?php elseif ($status === 'inactive'): ?>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
+                                            <input type="hidden" name="account_status" value="verified">
+                                            <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
+                                        </form>
+                                    <?php elseif ($status === 'pending' || $status === 'incomplete'): ?>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
+                                            <input type="hidden" name="account_status" value="verified">
+                                            <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
+                                        </form>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" data-confirm-action="Reject this user account?">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
+                                            <input type="hidden" name="account_status" value="rejected">
+                                            <button class="admin-user-action admin-user-action-reject" type="submit" name="update_user_status"><?php echo adminIcon('x'); ?>Reject</button>
+                                        </form>
+                                    <?php elseif ($status === 'rejected'): ?>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" data-confirm-action="Activate this rejected user?">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
+                                            <input type="hidden" name="account_status" value="verified">
+                                            <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</section>
+
+<div class="admin-user-modal" id="adminUserModal" aria-hidden="true">
+    <div class="admin-user-modal__panel" role="dialog" aria-modal="true" aria-labelledby="adminUserModalTitle">
+        <button class="admin-user-modal__close" type="button" data-user-modal-close aria-label="Close user details">&times;</button>
+        <span class="admin-user-modal__eyebrow">Account Details</span>
+        <h2 id="adminUserModalTitle">User Details</h2>
+        <dl>
+            <div><dt>Email</dt><dd data-user-modal-email></dd></div>
+            <div><dt>Role</dt><dd data-user-modal-role></dd></div>
+            <div><dt>Status</dt><dd data-user-modal-status></dd></div>
+            <div><dt>Orders</dt><dd data-user-modal-orders></dd></div>
+            <div><dt>Last Activity</dt><dd data-user-modal-last-activity></dd></div>
+            <div><dt>Date Registered</dt><dd data-user-modal-created></dd></div>
+        </dl>
+        <a class="admin-user-modal__document" href="#" target="_blank" rel="noopener" data-user-modal-document>View Document</a>
     </div>
+</div>
 
-    <div class="mt-6">
-        <a href="dashboard.php" class="bg-gray-700 text-white px-4 py-2 rounded">Back to Dashboard</a>
-    </div>
+<script>
+    (function () {
+        const selectAll = document.querySelector('[data-admin-user-select-all]');
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                document.querySelectorAll('.admin-user-table tbody input[type="checkbox"]').forEach(function (box) {
+                    box.checked = selectAll.checked;
+                });
+            });
+        }
 
-</body>
+        document.querySelectorAll('[data-confirm-action]').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                if (!window.confirm(form.dataset.confirmAction)) {
+                    event.preventDefault();
+                }
+            });
+        });
 
-</html>
+        const modal = document.getElementById('adminUserModal');
+        if (!modal) return;
+
+        const fields = {
+            title: modal.querySelector('#adminUserModalTitle'),
+            email: modal.querySelector('[data-user-modal-email]'),
+            role: modal.querySelector('[data-user-modal-role]'),
+            status: modal.querySelector('[data-user-modal-status]'),
+            orders: modal.querySelector('[data-user-modal-orders]'),
+            lastActivity: modal.querySelector('[data-user-modal-last-activity]'),
+            created: modal.querySelector('[data-user-modal-created]'),
+            document: modal.querySelector('[data-user-modal-document]')
+        };
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        document.querySelectorAll('[data-user-view]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                fields.title.textContent = button.dataset.name || 'User Details';
+                fields.email.textContent = button.dataset.email || 'N/A';
+                fields.role.textContent = button.dataset.role || 'N/A';
+                fields.status.textContent = button.dataset.status || 'Pending';
+                fields.orders.textContent = button.dataset.orders || '0';
+                fields.lastActivity.textContent = button.dataset.lastActivity || 'N/A';
+                fields.created.textContent = button.dataset.created || 'N/A';
+
+                if (button.dataset.documentUrl) {
+                    fields.document.href = button.dataset.documentUrl;
+                    fields.document.textContent = button.dataset.documentLabel || 'View Document';
+                    fields.document.classList.remove('is-disabled');
+                } else {
+                    fields.document.href = '#';
+                    fields.document.textContent = button.dataset.documentLabel || 'No document uploaded';
+                    fields.document.classList.add('is-disabled');
+                }
+
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+            });
+        });
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal || event.target.matches('[data-user-modal-close]')) closeModal();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') closeModal();
+        });
+    })();
+</script>
+
+<?php adminLayoutEnd(); ?>

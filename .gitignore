@@ -1,5 +1,8 @@
-#database connection
-backend/config/db.php
-
 #user uploads
 uploads/
+
+vendor/
+
+NEED TO DOWNLOAD.txt
+
+.env

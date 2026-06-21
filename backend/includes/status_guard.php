@@ -16,7 +16,7 @@ function shopOwnerVerificationResult($conn)
             'allowed' => false,
             'status' => 'incomplete',
             'message' => 'Please complete your shop profile before accessing this feature.',
-            'redirect' => '../../frontend/user/shop_owner/shop_profile.php',
+            'redirect' => BASE_URL . 'frontend/user/shop_owner/shop_profile.php',
         ];
     }
 
@@ -29,12 +29,16 @@ function shopOwnerVerificationResult($conn)
         ];
     }
 
+    $message = match ($permit_status) {
+        'pending' => 'Your business permit is pending verification by the Admin.',
+        'disabled' => 'Your print shop has been disabled by the Admin. Please contact support for assistance.',
+        default => 'Your business permit has been rejected. Please contact the administrator.',
+    };
+
     return [
         'allowed' => false,
         'status' => $permit_status,
-        'message' => $permit_status === 'pending'
-            ? 'Your business permit is pending verification by the Admin.'
-            : 'Your business permit has been rejected. Please contact the administrator.',
+        'message' => $message,
         'redirect' => '',
     ];
 }
@@ -67,13 +71,13 @@ function requireVerifiedStatus($conn, $soft = false)
         if ($status === 'verified')
             return true;
 
-        showToast(
-            $status === 'pending'
-            ? "Your account is pending verification by the Admin."
-            : "Your account has been rejected. Please contact support.",
-            $status,
-            "dashboard.php"
-        );
+        $message = match ($status) {
+            'pending' => 'Your account is pending verification by the Admin.',
+            'inactive' => 'Your account has been deactivated by the Admin. Please contact support.',
+            default => 'Your account has been rejected. Please contact support.',
+        };
+
+        showToast($message, $status, "dashboard.php");
     }
 
     // ------------------ SHOP OWNER ------------------
@@ -82,7 +86,10 @@ function requireVerifiedStatus($conn, $soft = false)
 
         if ($soft) {
             if ($verification['redirect'] !== '') {
-                $_SESSION['message'] = $verification['message'];
+                $_SESSION['owner_toast'] = [
+                    'status' => $verification['status'],
+                    'message' => $verification['message'],
+                ];
                 header("Location: " . $verification['redirect']);
                 exit();
             }
@@ -91,7 +98,10 @@ function requireVerifiedStatus($conn, $soft = false)
         }
 
         if ($verification['redirect'] !== '') {
-            $_SESSION['message'] = $verification['message'];
+            $_SESSION['owner_toast'] = [
+                'status' => $verification['status'],
+                'message' => $verification['message'],
+            ];
             header("Location: " . $verification['redirect']);
             exit();
         }
@@ -140,6 +150,14 @@ function showToast($message, $type = 'pending', $redirect = '')
         }
         .toast.rejected {
             background: linear-gradient(90deg,#ef4444,#dc2626);
+            color: #ffffff;
+        }
+        .toast.inactive {
+            background: linear-gradient(90deg,#475569,#1e293b);
+            color: #ffffff;
+        }
+        .toast.disabled {
+            background: linear-gradient(90deg,#475569,#1e293b);
             color: #ffffff;
         }
 

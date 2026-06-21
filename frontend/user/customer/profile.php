@@ -5,6 +5,9 @@ checkRole("customer");
 require_once __DIR__ . "/../../../backend/config/db.php";
 require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../components/head.php";
+require_once __DIR__ . "/../../components/customer_layout.php";
+require_once __DIR__ . "/../../components/customer_toasts.php";
 
 $customer_id = $_SESSION['user_id'];
 
@@ -16,6 +19,14 @@ $result = mysqli_stmt_get_result($stmt);
 $user = mysqli_fetch_assoc($result);
 
 $account_status = $user['account_status'] ?? 'incomplete';
+
+if (empty($_SESSION['customer_password_csrf'])) {
+    $_SESSION['customer_password_csrf'] = bin2hex(random_bytes(32));
+}
+
+$reopen_password_modal = !empty($_SESSION['reopen_customer_password_modal']);
+unset($_SESSION['reopen_customer_password_modal']);
+$uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 ?>
 
 <!DOCTYPE html>
@@ -23,21 +34,61 @@ $account_status = $user['account_status'] ?? 'incomplete';
 
 <head>
     <title>Customer Profile</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php renderCustomerHead(); ?>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .customer-modal[hidden] {
+            display: none;
+        }
+
+        .customer-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            background: rgba(15, 23, 42, .62);
+            opacity: 0;
+            transition: opacity .2s ease;
+        }
+
+        .customer-modal.is-visible {
+            opacity: 1;
+        }
+
+        .customer-modal-panel {
+            width: min(100%, 460px);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            transform: translateY(12px) scale(.98);
+            transition: transform .2s ease;
+        }
+
+        .customer-modal.is-visible .customer-modal-panel {
+            transform: translateY(0) scale(1);
+        }
+
+        body.customer-modal-open {
+            overflow: hidden;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .customer-modal,
+            .customer-modal-panel {
+                transition-duration: .01ms;
+            }
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen pb-24">
+<body class="customer-body bg-gray-100 min-h-screen pb-24">
+    <?php customerToastRender(); ?>
 
     <div class="max-w-md md:max-w-5xl mx-auto min-h-screen">
-        <header class="bg-blue-700 text-white p-5 rounded-b-3xl shadow">
-            <h1 class="text-2xl font-bold">Customer Profile</h1>
-            <p class="text-sm opacity-90 mt-1">Manage your account details and verification files.</p>
-        </header>
+        <?php renderCustomerLayout(['title' => 'Customer Profile', 'subtitle' => 'Manage your account details and verification files.']); ?>
 
         <main class="p-4 md:p-6">
-            <?php showMessage(); ?>
-
             <?php
             $statusClass = match ($account_status) {
                 'verified' => 'bg-green-100 border-green-500 text-green-800',
@@ -102,7 +153,7 @@ $account_status = $user['account_status'] ?? 'incomplete';
 
                 <div>
                     <label class="block text-sm font-semibold mb-1">Valid ID</label>
-                    <input type="file" name="valid_id_file" class="w-full border rounded-xl p-3">
+                            <input type="file" name="valid_id_file" class="w-full border rounded-xl p-3">
                     <?php if (!empty($user['valid_id_file'])): ?>
                         <a href="<?php echo BASE_URL . e($user['valid_id_file']); ?>" target="_blank"
                             class="inline-block mt-2 text-blue-600 font-semibold">
@@ -116,21 +167,227 @@ $account_status = $user['account_status'] ?? 'incomplete';
                     Save Profile
                 </button>
             </form>
+
+            <section class="bg-white p-5 md:p-6 rounded-2xl shadow mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                aria-labelledby="accountSecurityTitle">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900" id="accountSecurityTitle">Account Security</h2>
+                    <p class="text-sm text-gray-600 mt-1">Update the password used to access your PrintEase account.</p>
+                </div>
+                <button type="button" id="customerChangePasswordTrigger"
+                    class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-3 rounded-xl font-semibold whitespace-nowrap focus:outline-none focus:ring-4 focus:ring-blue-200"
+                    aria-haspopup="dialog" aria-controls="customerChangePasswordModal">
+                    Change Password
+                </button>
+            </section>
+
+            <section class="customer-profile-session bg-white p-5 md:p-6 rounded-2xl shadow mt-5"
+                aria-labelledby="customerSessionTitle">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900" id="customerSessionTitle">Account Session</h2>
+                    <p class="text-sm text-gray-600 mt-1">End your current PrintEase session on this device.</p>
+                </div>
+
+                <div class="customer-profile-actions">
+                    <a class="customer-profile-logout" href="<?php echo BASE_URL; ?>backend/actions/logout.php">
+                        <span class="customer-profile-action-icon"><?php echo customerIcon('logout'); ?></span>
+                        <span>
+                            <strong>Logout</strong>
+                            <small>End your current session</small>
+                        </span>
+                    </a>
+                </div>
+            </section>
         </main>
     </div>
 
-    <nav
-        class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
-        <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
-            <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
-            <a href="shops.php" class="py-3 text-blue-700 font-bold">Shops</a>
-            <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
-            <a href="orders.php" class="py-3 text-gray-600">Track</a>
-            <a href="profile.php" class="py-3 text-gray-600">Profile</a>
-        </div>
-    </nav>
+    <div class="customer-modal" id="customerChangePasswordModal" role="dialog" aria-modal="true"
+        aria-labelledby="customerChangePasswordTitle" data-reopen="<?php echo $reopen_password_modal ? 'true' : 'false'; ?>"
+        hidden>
+        <section class="customer-modal-panel bg-white rounded-2xl shadow-2xl p-5 md:p-6" tabindex="-1">
+            <header class="flex items-start justify-between gap-4 mb-5">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900" id="customerChangePasswordTitle">Change Password</h2>
+                    <p class="text-sm text-gray-600 mt-1">Update the password used for standard email sign-in.</p>
+                </div>
+                <button type="button" data-password-modal-close
+                    class="w-10 h-10 rounded-full text-gray-600 hover:bg-gray-100 text-2xl leading-none focus:outline-none focus:ring-4 focus:ring-blue-100"
+                    aria-label="Close change password dialog">&times;</button>
+            </header>
+
+            <form action="../../../backend/actions/change_customer_password.php" method="POST"
+                id="customerChangePasswordForm" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['customer_password_csrf']); ?>">
+
+                <?php if (!$uses_google_session): ?>
+                    <div>
+                        <label for="customer_current_password" class="block text-sm font-semibold mb-1">Current Password</label>
+                        <div class="flex rounded-xl border bg-white focus-within:ring-2 focus-within:ring-blue-200 focus-within:border-blue-600">
+                            <input id="customer_current_password" type="password" name="current_password"
+                                autocomplete="current-password" required
+                                class="min-w-0 flex-1 rounded-l-xl p-3 outline-none">
+                            <button type="button" data-password-toggle="customer_current_password"
+                                class="customer-password-toggle" aria-label="Show current password"
+                                aria-pressed="false"><span data-show-icon><?php echo customerIcon('eye'); ?></span><span data-hide-icon hidden><?php echo customerIcon('eye-off'); ?></span></button>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <p class="bg-blue-50 text-blue-800 p-3 rounded-xl text-sm">You signed in with Google, so your active Google session verifies this password change.</p>
+                <?php endif; ?>
+
+                <div>
+                    <label for="customer_new_password" class="block text-sm font-semibold mb-1">New Password</label>
+                    <div class="flex rounded-xl border bg-white focus-within:ring-2 focus-within:ring-blue-200 focus-within:border-blue-600">
+                        <input id="customer_new_password" type="password" name="new_password" minlength="8"
+                            autocomplete="new-password" required aria-describedby="customerNewPasswordHelp"
+                            class="min-w-0 flex-1 rounded-l-xl p-3 outline-none">
+                        <button type="button" data-password-toggle="customer_new_password"
+                            class="customer-password-toggle" aria-label="Show new password"
+                            aria-pressed="false"><span data-show-icon><?php echo customerIcon('eye'); ?></span><span data-hide-icon hidden><?php echo customerIcon('eye-off'); ?></span></button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1" id="customerNewPasswordHelp">Minimum of 8 characters.</p>
+                </div>
+
+                <div>
+                    <label for="customer_confirm_password" class="block text-sm font-semibold mb-1">Confirm New Password</label>
+                    <div class="flex rounded-xl border bg-white focus-within:ring-2 focus-within:ring-blue-200 focus-within:border-blue-600">
+                        <input id="customer_confirm_password" type="password" name="confirm_password" minlength="8"
+                            autocomplete="new-password" required
+                            class="min-w-0 flex-1 rounded-l-xl p-3 outline-none">
+                        <button type="button" data-password-toggle="customer_confirm_password"
+                            class="customer-password-toggle" aria-label="Show password confirmation"
+                            aria-pressed="false"><span data-show-icon><?php echo customerIcon('eye'); ?></span><span data-hide-icon hidden><?php echo customerIcon('eye-off'); ?></span></button>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" data-password-modal-close
+                        class="px-5 py-3 rounded-xl font-semibold border text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="submit" name="change_password"
+                        class="px-5 py-3 rounded-xl font-semibold bg-blue-700 text-white hover:bg-blue-800">Update Password</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <?php renderCustomerLayoutEnd('profile'); ?>
 
     <script src="assets/js/location.js"></script>
+    <script>
+        (function () {
+            const trigger = document.getElementById('customerChangePasswordTrigger');
+            const modal = document.getElementById('customerChangePasswordModal');
+            const panel = modal ? modal.querySelector('.customer-modal-panel') : null;
+            const form = document.getElementById('customerChangePasswordForm');
+            const newPassword = document.getElementById('customer_new_password');
+            const confirmation = document.getElementById('customer_confirm_password');
+            let previousFocus = null;
+
+            if (!trigger || !modal || !panel || !form || !newPassword || !confirmation) {
+                return;
+            }
+
+            function focusableElements() {
+                return Array.from(modal.querySelectorAll(
+                    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]'
+                )).filter(function (element) {
+                    return !element.hidden;
+                });
+            }
+
+            function openModal() {
+                previousFocus = document.activeElement;
+                modal.hidden = false;
+                document.body.classList.add('customer-modal-open');
+                window.requestAnimationFrame(function () {
+                    modal.classList.add('is-visible');
+                    const firstInput = modal.querySelector('input[type="password"]');
+                    (firstInput || panel).focus();
+                });
+            }
+
+            function closeModal() {
+                modal.classList.remove('is-visible');
+                document.body.classList.remove('customer-modal-open');
+                window.setTimeout(function () {
+                    modal.hidden = true;
+                    form.reset();
+                    confirmation.setCustomValidity('');
+                    if (previousFocus && typeof previousFocus.focus === 'function') {
+                        previousFocus.focus();
+                    } else {
+                        trigger.focus();
+                    }
+                }, 200);
+            }
+
+            function validateConfirmation() {
+                confirmation.setCustomValidity(
+                    confirmation.value !== newPassword.value ? 'The new passwords do not match.' : ''
+                );
+            }
+
+            trigger.addEventListener('click', openModal);
+            modal.querySelectorAll('[data-password-modal-close]').forEach(function (button) {
+                button.addEventListener('click', closeModal);
+            });
+
+            modal.querySelectorAll('[data-password-toggle]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const input = document.getElementById(button.dataset.passwordToggle);
+                    if (!input) return;
+                    const showPassword = input.type === 'password';
+                    input.type = showPassword ? 'text' : 'password';
+                    const showIcon = button.querySelector('[data-show-icon]');
+                    const hideIcon = button.querySelector('[data-hide-icon]');
+                    if (showIcon) showIcon.hidden = showPassword;
+                    if (hideIcon) hideIcon.hidden = !showPassword;
+                    button.setAttribute('aria-pressed', showPassword ? 'true' : 'false');
+                    button.setAttribute('aria-label', (showPassword ? 'Hide ' : 'Show ') + input.name.replaceAll('_', ' '));
+                });
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+
+            modal.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeModal();
+                    return;
+                }
+
+                if (event.key !== 'Tab') return;
+                const focusable = focusableElements();
+                if (focusable.length === 0) {
+                    event.preventDefault();
+                    panel.focus();
+                    return;
+                }
+
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            });
+
+            newPassword.addEventListener('input', validateConfirmation);
+            confirmation.addEventListener('input', validateConfirmation);
+            form.addEventListener('submit', validateConfirmation);
+
+            if (modal.dataset.reopen === 'true') {
+                openModal();
+            }
+        })();
+    </script>
 </body>
 
 </html>

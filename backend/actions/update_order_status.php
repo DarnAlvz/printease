@@ -50,7 +50,11 @@ if (mysqli_stmt_execute($update_stmt)) {
     $status_label = ucfirst(str_replace('_', ' ', $order_status));
     $order_code = $order['order_code'] ?: $order_id;
 
-    sendNotification($conn, $order['customer_id'], "Your order #$order_code is now $status_label.");
+    sendNotification($conn, $order['customer_id'], "Your order #$order_code is now $status_label.", [
+        'type' => 'order_status', 'title' => 'Order status updated',
+        'target_url' => BASE_URL . "frontend/user/customer/orders.php?focus_order_id=$order_id",
+        'metadata' => ['order_id' => $order_id, 'order_code' => $order_code, 'status' => $order_status],
+    ]);
 
     logActivity($conn, $owner_id, "Updated order #$order_code status to $status_label", "Order Management");
 

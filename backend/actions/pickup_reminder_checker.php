@@ -28,7 +28,11 @@ while ($order = mysqli_fetch_assoc($result)) {
 
     $message = "Reminder: Order #$order_code is scheduled for pickup at $pickup_time and is not yet ready.";
 
-    sendNotification($conn, $owner_id, $message);
+    sendNotification($conn, $owner_id, $message, [
+        'type' => 'pickup_reminder', 'title' => 'Pickup reminder',
+        'target_url' => BASE_URL . "frontend/user/shop_owner/orders.php?focus_order_id=$order_id",
+        'metadata' => ['order_id' => $order_id, 'order_code' => $order_code],
+    ]);
 
     $update_sql = "UPDATE orders 
                    SET pickup_reminder_sent = 1 

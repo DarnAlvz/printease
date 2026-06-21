@@ -5,6 +5,9 @@ checkRole("customer");
 require_once __DIR__ . "/../../../backend/config/db.php";
 require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../components/head.php";
+require_once __DIR__ . "/../../components/customer_layout.php";
+require_once __DIR__ . "/../../components/customer_toasts.php";
 require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 
 requireVerifiedStatus($conn);
@@ -12,7 +15,7 @@ requireVerifiedStatus($conn);
 $customer_id = $_SESSION['user_id'];
 $order_id = intval($_GET['order_id'] ?? 0);
 
-$sql = "SELECT o.*, ps.shop_name
+$sql = "SELECT o.*, ps.shop_name, ps.gcash_name, ps.gcash_number, ps.gcash_qr_file
         FROM orders o
         JOIN print_shops ps ON o.shop_id = ps.shop_id
         WHERE o.order_id = ? AND o.customer_id = ?
@@ -27,52 +30,83 @@ if (!$order) {
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 }
 
-/* Replace this with your real GCash/Maya merchant link */
-$merchant_link = "https://gcash.com";
+$gcash_ready = !empty($order['gcash_name']) && !empty($order['gcash_number']) && !empty($order['gcash_qr_file']);
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
     <title>Payment</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php renderCustomerHead(); ?>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-gray-100 min-h-screen pb-24">
-<div class="max-w-md md:max-w-3xl mx-auto min-h-screen">
-    <header class="bg-blue-700 text-white p-5 rounded-b-3xl shadow">
-        <h1 class="text-2xl font-bold">Payment</h1>
-        <p class="text-sm opacity-90 mt-1"><?php echo e($order['order_code']); ?></p>
-    </header>
+<body class="customer-body bg-gray-100 min-h-screen pb-24">
+    <?php customerToastRender(); ?>
+    <div class="max-w-md md:max-w-3xl mx-auto min-h-screen">
+        <?php renderCustomerLayout(['title' => 'Payment', 'subtitle' => $order['order_code']]); ?>
 
-    <main class="p-4 md:p-6">
-        <?php showMessage(); ?>
-
-        <div class="bg-white p-5 rounded-2xl shadow space-y-4">
-            <p><strong>Shop:</strong> <?php echo e($order['shop_name']); ?></p>
-            <p><strong>Total Amount:</strong> ₱<?php echo e(number_format($order['total_amount'], 2)); ?></p>
-
-            <a href="<?php echo e($merchant_link); ?>" target="_blank"
-               class="block text-center bg-green-600 text-white py-3 rounded-xl font-semibold">
-                Open Merchant Payment Link
-            </a>
-
-            <form action="<?php echo BASE_URL; ?>backend/actions/submit_payment_proof.php" method="POST" enctype="multipart/form-data" class="space-y-4">
-                <input type="hidden" name="order_id" value="<?php echo e($order_id); ?>">
-
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Upload Payment Screenshot</label>
-                    <input type="file" name="proof_of_payment_file" required class="w-full border rounded-xl p-3">
+        <main class="p-4 md:p-6">
+            <div class="bg-white p-5 rounded-2xl shadow space-y-5">
+                <div class="space-y-1">
+                    <p class="text-sm text-gray-500">Manual GCash Payment</p>
+                    <h2 class="text-xl font-bold text-gray-900"><?php echo e($order['shop_name']); ?></h2>
+                    <p><strong>Total Amount:</strong> &#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></p>
                 </div>
 
-                <button type="submit" name="submit_payment_proof"
-                        class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold">
-                    Submit Payment Proof
-                </button>
-            </form>
-        </div>
-    </main>
-</div>
+                <?php if (!$gcash_ready): ?>
+                    <div class="bg-yellow-100 text-yellow-800 p-4 rounded-xl text-sm">
+                        This shop has not completed its GCash payment details yet. Please contact the shop or try again later.
+                    </div>
+                <?php else: ?>
+                    <div class="grid md:grid-cols-[220px_1fr] gap-5 items-start">
+                        <div class="bg-gray-50 border rounded-2xl p-3">
+                            <img src="<?php echo GCASH_QR_URL . e($order['gcash_qr_file']); ?>"
+                                alt="GCash QR code for <?php echo e($order['shop_name']); ?>"
+                                class="w-full rounded-xl object-contain">
+                        </div>
+                        <div class="space-y-3">
+                            <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                                <p class="text-sm text-gray-500">GCash Account Name</p>
+                                <strong class="text-lg"><?php echo e($order['gcash_name']); ?></strong>
+                            </div>
+                            <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                                <p class="text-sm text-gray-500">GCash Number</p>
+                                <strong class="text-lg"><?php echo e($order['gcash_number']); ?></strong>
+                            </div>
+                            <ol class="list-decimal pl-5 text-sm text-gray-600 space-y-1">
+                                <li>Open your GCash app and pay the exact total amount.</li>
+                                <li>Take a screenshot of the successful payment.</li>
+                                <li>Upload the receipt. The system will try to detect the reference number and payment date for the shop.</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <form action="<?php echo BASE_URL; ?>backend/actions/submit_payment_proof.php" method="POST"
+                        enctype="multipart/form-data" class="space-y-4">
+                        <input type="hidden" name="order_id" value="<?php echo e($order_id); ?>">
+
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Upload Payment Screenshot</label>
+                            <input type="file" name="proof_of_payment_file"
+                                accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp"
+                                required class="w-full border rounded-xl p-3">
+                            <p class="mt-2 text-sm text-gray-500">
+                                The shop owner will review your uploaded proof. Detected receipt details will appear on their side when available.
+                            </p>
+                        </div>
+
+                        <button type="submit" name="submit_payment_proof"
+                            class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold">
+                            Submit Payment Proof
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </main>
+    </div>
+    <?php renderCustomerLayoutEnd('orders'); ?>
 </body>
+
 </html>

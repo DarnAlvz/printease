@@ -154,7 +154,7 @@ foreach ($weekly_sales as $index => $value) {
 $chart_polyline = implode(' ', $chart_points);
 $max_status = max(1, (int) $stats['total']);
 
-ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
+ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
 ?>
 
 <?php if (isset($_GET['profile']) && $_GET['profile'] === 'success'): ?>
@@ -162,8 +162,6 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
         <strong>Shop profile saved successfully.</strong>
     </div>
 <?php endif; ?>
-
-<?php showMessage(); ?>
 
 <?php if (!$has_shop): ?>
     <section class="hero-card">
@@ -235,7 +233,7 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                         <span class="status-badge status-success"><?php echo (int) $stats['total']; ?></span>
                     </div>
                     <strong><?php echo (int) $stats['total']; ?></strong>
-                    <p>Total Orders</p>
+                    <p>Total Orders</p> 
                 </article>
                 <article class="metric-card dashboard-stat-card">
                     <div class="metric-head">
@@ -258,7 +256,7 @@ ownerLayoutStart('dashboard', '', '', $notif_count, $shop);
                         <span class="metric-icon"><?php echo ownerIcon('badge-dollar-sign', 'icon'); ?></span>
                         <span class="status-badge status-info">Sales</span>
                     </div>
-                    <strong><?php echo dashboardMoney($stats['today_revenue'] > 0 ? $stats['today_revenue'] : $stats['revenue']); ?></strong>
+                    <strong style="color: white"><?php echo dashboardMoney($stats['today_revenue'] > 0 ? $stats['today_revenue'] : $stats['revenue']); ?></strong>
                     <p>Today's Sales</p>
                     <svg viewBox="0 0 220 45" class="mini-sparkline" aria-hidden="true">
                         <polyline points="4,34 55,32 102,25 150,30 216,16" fill="none" stroke="currentColor"

@@ -5,6 +5,16 @@ checkRole("customer");
 require_once __DIR__ . "/../../../backend/config/db.php";
 require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
+require_once __DIR__ . "/../../components/head.php";
+require_once __DIR__ . "/../../components/customer_layout.php";
+require_once __DIR__ . "/../../components/customer_toasts.php";
+
+$redirect_query = ['view' => 'all'];
+if (trim((string) ($_GET['search'] ?? '')) !== '') {
+    $redirect_query['search'] = trim((string) $_GET['search']);
+}
+header("Location: explore.php?" . http_build_query($redirect_query));
+exit();
 
 $customer_id = $_SESSION['user_id'];
 
@@ -19,16 +29,132 @@ if (($user['account_status'] ?? '') !== 'verified') {
 
 $search = trim($_GET['search'] ?? '');
 
+$sql = "SELECT ps.shop_id, ps.shop_name, ps.shop_address, ps.display_address, ps.landmark,
+               ps.contact_number, ps.shop_logo, ps.shop_status, ps.latitude, ps.longitude,
+               ps.weekday_open_time, ps.weekday_close_time, ps.weekend_open_time, ps.weekend_close_time,
+               COUNT(ss.service_id) AS service_count,
+               MIN(ss.price_per_page) AS starting_price
+        FROM print_shops ps
+        LEFT JOIN shop_services ss ON ps.shop_id = ss.shop_id AND ss.is_available = 1
+        WHERE ps.permit_status = 'verified'
+          AND ps.shop_status IN ('available', 'busy')
+          AND ps.latitude IS NOT NULL
+          AND ps.longitude IS NOT NULL";
+
+$types = '';
+$params = [];
 if ($search !== '') {
     $like = "%$search%";
-    $stmt = mysqli_prepare($conn, "SELECT * FROM print_shops WHERE shop_name LIKE ? OR shop_address LIKE ? ORDER BY shop_name ASC");
-    mysqli_stmt_bind_param($stmt, "ss", $like, $like);
-} else {
-    $stmt = mysqli_prepare($conn, "SELECT * FROM print_shops ORDER BY shop_name ASC");
+    $sql .= " AND (
+                ps.shop_name LIKE ?
+                OR ps.shop_address LIKE ?
+                OR ps.display_address LIKE ?
+                OR ps.landmark LIKE ?
+            )";
+    $types = 'ssss';
+    $params = [$like, $like, $like, $like];
 }
 
+$sql .= " GROUP BY ps.shop_id
+          HAVING service_count > 0
+          ORDER BY CASE ps.shop_status WHEN 'available' THEN 0 ELSE 1 END, ps.shop_name ASC";
+
+$stmt = mysqli_prepare($conn, $sql);
+if (!empty($params)) {
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
+}
 mysqli_stmt_execute($stmt);
 $shops = mysqli_stmt_get_result($stmt);
+
+function customerShopShortAddress(array $shop): string
+{
+    $preferred = trim((string) ($shop['display_address'] ?? ''));
+    if ($preferred !== '') {
+        return $preferred;
+    }
+
+    $address_parts = explode(',', (string) ($shop['shop_address'] ?? ''));
+    return trim($address_parts[0] ?? '') ?: 'Location not provided';
+}
+
+function customerShopTimeMinutes(?string $value): ?int
+{
+    if (!preg_match('/^(\d{1,2}):(\d{2})/', (string) $value, $matches)) {
+        return null;
+    }
+
+    return ((int) $matches[1] * 60) + (int) $matches[2];
+}
+
+function customerShopScheduleForDay(array $shop, int $day): array
+{
+    $weekend = in_array($day, [0, 6], true);
+
+    return $weekend
+        ? ['open' => $shop['weekend_open_time'] ?? '', 'close' => $shop['weekend_close_time'] ?? '']
+        : ['open' => $shop['weekday_open_time'] ?? '', 'close' => $shop['weekday_close_time'] ?? ''];
+}
+
+function customerShopFormatTime(?string $value): string
+{
+    $minutes = customerShopTimeMinutes($value);
+    if ($minutes === null) {
+        return '';
+    }
+
+    $hour = intdiv($minutes, 60);
+    $minute = $minutes % 60;
+    $display_hour = $hour % 12 ?: 12;
+
+    return $display_hour . ':' . str_pad((string) $minute, 2, '0', STR_PAD_LEFT) . ($hour >= 12 ? ' PM' : ' AM');
+}
+
+function customerShopHoursLabel(array $shop): string
+{
+    $schedule = customerShopScheduleForDay($shop, (int) date('w'));
+    if (empty($schedule['open']) || empty($schedule['close'])) {
+        return 'Hours not set';
+    }
+
+    return customerShopFormatTime($schedule['open']) . ' - ' . customerShopFormatTime($schedule['close']);
+}
+
+function customerShopIsOpenNow(array $shop): bool
+{
+    $current = ((int) date('G') * 60) + (int) date('i');
+    $today = customerShopScheduleForDay($shop, (int) date('w'));
+    $today_open = customerShopTimeMinutes($today['open']);
+    $today_close = customerShopTimeMinutes($today['close']);
+
+    if ($today_open !== null && $today_close !== null) {
+        if ($today_open === $today_close) {
+            return true;
+        }
+        if ($today_close > $today_open && $current >= $today_open && $current < $today_close) {
+            return true;
+        }
+        if ($today_close < $today_open && $current >= $today_open) {
+            return true;
+        }
+    }
+
+    $previous_day = ((int) date('w') + 6) % 7;
+    $previous = customerShopScheduleForDay($shop, $previous_day);
+    $previous_open = customerShopTimeMinutes($previous['open']);
+    $previous_close = customerShopTimeMinutes($previous['close']);
+
+    return $previous_open !== null && $previous_close !== null && $previous_close < $previous_open && $current < $previous_close;
+}
+
+function customerShopMoney($value): string
+{
+    return is_numeric($value) ? '&#8369;' . number_format((float) $value, 2) : 'Price unavailable';
+}
+
+function customerShopDirectionsUrl(array $shop): string
+{
+    return 'https://www.google.com/maps/dir/?api=1&destination=' . rawurlencode((string) $shop['latitude'] . ',' . (string) $shop['longitude']);
+}
 ?>
 
 <!DOCTYPE html>
@@ -36,86 +162,78 @@ $shops = mysqli_stmt_get_result($stmt);
 
 <head>
     <title>Print Shops</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php renderCustomerHead(); ?>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-gray-100 min-h-screen pb-24">
+<body class="customer-body bg-gray-100 min-h-screen pb-24">
+    <?php customerToastRender(); ?>
 
     <div class="max-w-md md:max-w-6xl mx-auto min-h-screen">
 
-        <header class="bg-blue-700 text-white p-5 rounded-b-3xl shadow">
-            <h1 class="text-2xl font-bold">Find Print Shops</h1>
-            <p class="text-sm opacity-90 mt-1">Choose your preferred shop for printing.</p>
-        </header>
+        <?php renderCustomerLayout(['title' => 'Find Print Shops', 'subtitle' => 'Choose your preferred shop for printing.']); ?>
 
         <main class="p-4 md:p-6">
 
-            <form method="GET" class="mb-4">
+            <form method="GET" class="customer-map-toolbar customer-shops-toolbar" role="search">
+                <div class="customer-map-search">
+                    <span class="customer-map-search-icon" aria-hidden="true"><?php echo customerIcon('search'); ?></span>
                 <input type="text" name="search" value="<?php echo e($search); ?>"
-                    placeholder="Search shop or address..."
-                    class="w-full p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    placeholder="Search shop, street, or landmark"
+                    aria-label="Search print shops">
+                    <button type="submit">Search</button>
+                </div>
             </form>
 
             <?php if (mysqli_num_rows($shops) == 0): ?>
-                <div class="bg-white p-5 rounded-2xl shadow text-center">
-                    <p class="text-gray-500">No print shops found.</p>
-                </div>
+                <section class="customer-map-empty" role="status">
+                    <span><?php echo customerIcon('printer'); ?></span>
+                    <h2>No print shops found</h2>
+                    <p>Try another search or check the Map tab for nearby verified shops.</p>
+                    <a href="shopLocation.php">Open Map</a>
+                </section>
             <?php else: ?>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="customer-shops-grid">
                     <?php while ($shop = mysqli_fetch_assoc($shops)): ?>
                         <?php
-                        $status = $shop['shop_status'] ?? 'not_accepting';
-
-                        if ($status === 'available') {
-                            $statusClass = "bg-green-100 text-green-700";
-                            $statusText = "Available";
-                        } elseif ($status === 'busy') {
-                            $statusClass = "bg-yellow-100 text-yellow-700";
-                            $statusText = "Busy";
-                        } else {
-                            $statusClass = "bg-red-100 text-red-700";
-                            $statusText = "Not Accepting";
-                        }
+                        $status = $shop['shop_status'] === 'available' ? 'available' : 'busy';
+                        $statusText = $status === 'available' ? 'Available' : 'Busy';
+                        $short_address = customerShopShortAddress($shop);
+                        $landmark = trim((string) ($shop['landmark'] ?? ''));
+                        $shop_logo = trim((string) ($shop['shop_logo'] ?? ''));
+                        $is_open = customerShopIsOpenNow($shop);
+                        $hours_label = customerShopHoursLabel($shop);
+                        $contact = trim((string) ($shop['contact_number'] ?? '')) ?: 'No contact listed';
                         ?>
-
-                        <div class="bg-white p-4 rounded-2xl shadow">
-                            <div class="flex justify-between items-start gap-3">
-                                <div>
-                                    <h2 class="font-bold text-lg text-gray-800">
-                                        <?php echo e($shop['shop_name']); ?>
-                                    </h2>
-                                    <p class="text-sm text-gray-500 mt-1">
-                                        <?php echo e($shop['shop_address']); ?>
-                                    </p>
-                                    <p class="text-sm text-gray-500">
-                                        Contact: <?php echo e($shop['contact_number'] ?? 'N/A'); ?>
-                                    </p>
+                        <article class="customer-map-shop-card customer-shops-card">
+                            <div class="customer-map-shop-head">
+                                <div class="customer-map-shop-logo">
+                                    <?php if ($shop_logo !== ''): ?>
+                                        <img src="<?php echo e(SHOP_LOGOS_URL . $shop_logo); ?>" alt="">
+                                    <?php else: ?>
+                                        <?php echo customerIcon('printer'); ?>
+                                    <?php endif; ?>
                                 </div>
-
-                                <span class="text-xs px-3 py-1 rounded-full <?php echo $statusClass; ?>">
-                                    <?php echo $statusText; ?>
-                                </span>
+                                <div class="customer-map-shop-title">
+                                    <h3><?php echo e($shop['shop_name']); ?></h3>
+                                    <p><span aria-hidden="true">&#9679;</span><?php echo e($short_address); ?></p>
+                                    <?php if ($landmark !== ''): ?><small><?php echo e($landmark); ?></small><?php endif; ?>
+                                </div>
+                                <span class="customer-map-status <?php echo e($status); ?>"><?php echo $statusText; ?></span>
                             </div>
 
-                            <div class="mt-4 flex gap-2">
-                                <?php if ($status === 'available' || $status === 'busy'): ?>
-                                    <a href="<?php echo BASE_URL; ?>frontend/user/customer/place_order.php?shop_id=<?php echo e($shop['shop_id']); ?>"
-                                        class="flex-1 bg-blue-600 text-white text-center py-3 rounded-xl font-semibold">
-                                        Order Here
-                                    </a>
-                                <?php else: ?>
-                                    <button disabled class="flex-1 bg-gray-300 text-gray-600 py-3 rounded-xl font-semibold">
-                                        Unavailable
-                                    </button>
-                                <?php endif; ?>
-
-                                <a href="<?php echo BASE_URL; ?>frontend/user/customer/shopLocation.php?shop_id=<?php echo e($shop['shop_id']); ?>"
-                                    class="px-4 py-3 rounded-xl border text-gray-600">
-                                    Map
-                                </a>
+                            <div class="customer-map-shop-facts">
+                                <span><strong><?php echo $is_open ? 'Open now' : 'Closed now'; ?></strong><?php echo e($hours_label); ?></span>
+                                <span><strong><?php echo (int) $shop['service_count']; ?> services</strong><?php echo customerShopMoney($shop['starting_price']); ?> start</span>
+                                <span><strong>Contact</strong><?php echo e($contact); ?></span>
                             </div>
-                        </div>
+
+                            <div class="customer-map-shop-actions">
+                                <a href="<?php echo BASE_URL; ?>frontend/user/customer/shopLocation.php?shop_id=<?php echo e($shop['shop_id']); ?>">View Map</a>
+                                <a href="<?php echo e(customerShopDirectionsUrl($shop)); ?>" target="_blank" rel="noopener">Directions</a>
+                                <a class="primary" href="<?php echo BASE_URL; ?>frontend/user/customer/place_order.php?shop_id=<?php echo e($shop['shop_id']); ?>">Order Now</a>
+                            </div>
+                        </article>
                     <?php endwhile; ?>
                 </div>
             <?php endif; ?>
@@ -123,15 +241,7 @@ $shops = mysqli_stmt_get_result($stmt);
         </main>
     </div>
 
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow md:static md:shadow-none md:border md:rounded-2xl md:mt-6">
-        <div class="max-w-md md:max-w-6xl mx-auto grid grid-cols-5 text-center text-xs">
-            <a href="dashboard.php" class="py-3 text-gray-600">Home</a>
-            <a href="shops.php" class="py-3 text-blue-700 font-bold">Shops</a>
-            <a href="shopLocation.php" class="py-3 text-gray-600">Map</a>
-            <a href="orders.php" class="py-3 text-gray-600">Track</a>
-            <a href="profile.php" class="py-3 text-gray-600">Profile</a>
-        </div>
-    </nav>
+    <?php renderCustomerLayoutEnd('shops'); ?>
 
 </body>
 

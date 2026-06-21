@@ -30,8 +30,6 @@ $shop = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can place orders with your print shop.', $notif_count, $shop, $owner_toast);
 ?>
 
-<?php showMessage(); ?>
-
 <div class="content-grid">
     <section class="owner-card">
         <div class="card-head">

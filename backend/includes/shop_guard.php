@@ -15,6 +15,10 @@ function requireVerifiedShop($conn) {
     }
 
     if ($shop['permit_status'] !== 'verified') {
+        if ($shop['permit_status'] === 'disabled') {
+            die("Your shop has been disabled by the Admin. Please contact support for assistance.");
+        }
+
         die("Your shop must be verified before accessing this page.");
     }
 }

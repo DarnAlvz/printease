@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../components/head.php';
+require_once __DIR__ . '/../components/auth_brand_panel.php';
+
 $register_alert_message = '';
 
 $register_error_messages = [
@@ -18,6 +22,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - PrintEase</title>
+    <?php renderPrintEaseIcons(); ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -85,7 +90,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
         }
 
         .brand-copy {
-            margin-top: 70px;
+            margin-top: 52px;
         }
 
         .brand-copy h1 {
@@ -98,27 +103,30 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
 
         .brand-copy p {
             max-width: 560px;
-            margin: 22px auto 0;
+            margin: 18px auto 0;
             color: rgba(255, 255, 255, .9);
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 500;
-            line-height: 1.45;
+            line-height: 1.55;
         }
 
         .benefits-card {
-            width: min(384px, 100%);
-            margin-top: 34px;
-            padding: 28px 34px 26px;
-            border-radius: 10px;
-            background: var(--panel-soft);
+            width: min(410px, 100%);
+            margin-top: 30px;
+            padding: 25px 30px;
+            border: 1px solid rgba(255, 255, 255, .28);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, .14);
+            box-shadow: 0 20px 44px rgba(0, 26, 75, .22), inset 0 1px 0 rgba(255, 255, 255, .16);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
             text-align: left;
         }
 
         .benefits-card h2 {
-            margin: 0 0 18px;
+            margin: 0 0 16px;
             color: #fff;
-            text-align: center;
-            font-size: 23px;
+            font-size: 20px;
             font-weight: 800;
         }
 
@@ -127,26 +135,27 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             padding: 0;
             list-style: none;
             display: grid;
-            gap: 13px;
+            gap: 12px;
         }
 
         .benefits-card li {
             position: relative;
-            padding-left: 20px;
+            padding-left: 24px;
             color: rgba(255, 255, 255, .94);
-            font-size: 15px;
-            line-height: 1.35;
+            font-size: 14px;
+            line-height: 1.45;
         }
 
         .benefits-card li::before {
             content: "";
             position: absolute;
             left: 0;
-            top: .48em;
-            width: 8px;
-            height: 8px;
+            top: .38em;
+            width: 10px;
+            height: 10px;
             border-radius: 999px;
             background: var(--cyan);
+            box-shadow: 0 0 0 4px rgba(9, 184, 207, .16);
         }
 
         .form-panel {
@@ -171,14 +180,14 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
         }
 
         .register-card > p {
-            margin: 10px 0 36px;
+            margin: 8px 0 28px;
             color: var(--text-blue);
             font-size: 15px;
             line-height: 1.45;
         }
 
         .auth-alert {
-            margin: -18px 0 26px;
+            margin: -12px 0 22px;
             padding: 13px 15px;
             border: 1px solid #fecaca;
             border-radius: 8px;
@@ -200,36 +209,38 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
         }
 
         .field-group {
-            margin-bottom: 24px;
+            margin-bottom: 19px;
         }
 
         .field-group label,
         .role-label {
             display: block;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             color: var(--navy);
             font-size: 15px;
             font-weight: 700;
         }
 
         .role-grid {
-            margin-bottom: 26px;
+            margin-bottom: 22px;
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
         }
 
         .role-card {
-            min-height: 96px;
-            border: 1px solid var(--input-border);
-            border-radius: 7px;
+            position: relative;
+            min-height: 102px;
+            padding: 14px 12px;
+            border: 1px solid var(--cyan);
+            border-radius: 12px;
             display: grid;
             place-items: center;
-            gap: 8px;
+            gap: 9px;
             color: var(--text-blue);
             background: #fff;
             cursor: pointer;
-            transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, color .18s ease;
+            transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, color .18s ease, transform .18s ease;
         }
 
         .role-card input {
@@ -239,8 +250,8 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
         }
 
         .role-card svg {
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             stroke-width: 2;
         }
 
@@ -251,14 +262,22 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
 
         .role-card:has(input:checked) {
             border-color: var(--navy);
-            background: #f5f5fb;
+            background: #eaf8ff;
             color: var(--navy);
-            box-shadow: 0 0 0 1px var(--navy);
+            box-shadow: 0 0 0 1px var(--navy), 0 10px 22px rgba(7, 5, 102, .12);
         }
 
         .role-card:hover {
-            border-color: var(--cyan);
-            box-shadow: 0 8px 18px rgba(9, 184, 207, .12);
+            border-color: var(--navy);
+            color: var(--navy);
+            background: #f4fbff;
+            box-shadow: 0 9px 20px rgba(9, 184, 207, .14);
+            transform: translateY(-1px);
+        }
+
+        .role-card:focus-within {
+            outline: 3px solid rgba(9, 184, 207, .2);
+            outline-offset: 3px;
         }
 
         .input-wrap {
@@ -268,7 +287,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             gap: 14px;
             padding: 0 16px;
             border: 1px solid var(--input-border);
-            border-radius: 7px;
+            border-radius: 9px;
             background: var(--input-bg);
             color: var(--text-blue);
             transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
@@ -302,11 +321,44 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             color: #5a87ab;
         }
 
+        .password-toggle {
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            border: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            color: var(--text-blue);
+            background: transparent;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .password-toggle:hover {
+            color: var(--navy);
+        }
+
+        .password-toggle:focus-visible {
+            outline: 2px solid var(--cyan);
+            outline-offset: 2px;
+        }
+
+        .password-toggle .password-icon-hidden,
+        .password-toggle[aria-pressed="true"] .password-icon-visible {
+            display: none;
+        }
+
+        .password-toggle[aria-pressed="true"] .password-icon-hidden {
+            display: block;
+        }
+
         .btn {
             width: 100%;
-            min-height: 50px;
-            border: 0;
-            border-radius: 7px;
+            min-height: 48px;
+            border: 1px solid var(--navy);
+            border-radius: 9px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -325,8 +377,34 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             box-shadow: var(--shadow);
         }
 
+        .social-stack {
+            margin-top: 14px;
+        }
+
+        .btn-social {
+            border-color: #c7dfea;
+            color: var(--navy);
+            background: #fff;
+            gap: 11px;
+            font-weight: 600;
+            box-shadow: 0 3px 10px rgba(15, 76, 117, .06);
+        }
+
+        .btn-social:hover {
+            border-color: #8ed8ed;
+            color: var(--navy);
+            background: #f7fcff;
+            box-shadow: 0 8px 18px rgba(15, 76, 117, .1);
+        }
+
+        .google-mark {
+            width: 20px;
+            height: 20px;
+            flex: 0 0 auto;
+        }
+
         .form-footer {
-            margin-top: 20px;
+            margin-top: 17px;
             text-align: center;
             display: grid;
             gap: 12px;
@@ -336,8 +414,16 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
         }
 
         .form-footer a {
+            color: var(--cyan-dark);
+            font-weight: 700;
+            text-underline-offset: 3px;
+        }
+
+        .form-footer a:hover,
+        .form-footer a:focus-visible {
             color: var(--navy);
-            font-weight: 600;
+            text-decoration: underline;
+            outline: none;
         }
 
         .form-footer .home-link {
@@ -350,13 +436,21 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
                 grid-template-columns: 1fr;
             }
 
+            .form-panel {
+                order: 1;
+            }
+
+            .brand-panel {
+                order: 2;
+            }
+
             .brand-panel,
             .form-panel {
                 min-height: auto;
             }
 
             .brand-panel {
-                padding: 56px 28px;
+                padding: 52px 28px 60px;
             }
 
             .brand-copy {
@@ -364,7 +458,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             }
 
             .form-panel {
-                padding: 56px 28px 72px;
+                padding: 52px 28px 60px;
             }
         }
 
@@ -390,7 +484,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             }
 
             .form-panel {
-                padding: 44px 22px 60px;
+                padding: 40px 22px 52px;
             }
 
             .register-card h2 {
@@ -406,26 +500,22 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
 
 <body>
     <main class="register-shell">
-        <section class="brand-panel" aria-label="PrintEase benefits">
-            <div class="brand-content">
-                <img class="brand-logo" src="../../assets/images/printing-logo.png" alt="PrintEase E-Printing System logo">
-
-                <div class="brand-copy">
-                    <h1>Print Made Easy!</h1>
-                    <p>Join PrintEase to place orders, manage requests, and connect with verified print shops across Calbayog City.</p>
-                </div>
-
-                <div class="benefits-card">
-                    <h2>Benefits:</h2>
-                    <ul>
-                        <li>Browse multiple print shops</li>
-                        <li>Compare prices and services</li>
-                        <li>Track orders in real-time</li>
-                        <li>Secure and verified transactions</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
+        <?php
+        renderAuthBrandPanel([
+            'aria_label' => 'PrintEase benefits',
+            'heading' => 'Print Made Easy!',
+            'description' => 'Create an account to place orders, manage print requests, and connect with verified print shops.',
+            'supporting_html' => '<div class="benefits-card">
+                <h2>Benefits:</h2>
+                <ul>
+                    <li>Browse multiple print shops</li>
+                    <li>Compare prices and services</li>
+                    <li>Track orders in real-time</li>
+                    <li>Secure and verified transactions</li>
+                </ul>
+            </div>',
+        ]);
+        ?>
 
         <section class="form-panel" aria-label="Create account form">
             <div class="register-card">
@@ -498,19 +588,56 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                             </svg>
                             <input id="password" type="password" name="password" placeholder="Create a password" autocomplete="new-password" required>
+                            <button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false" data-password-toggle="password">
+                                <svg class="password-icon-visible" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                                <svg class="password-icon-hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="m3 3 18 18" />
+                                    <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                                    <path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.1 3.2" />
+                                    <path d="M6.6 6.6C3.6 8.4 2 12 2 12s3.5 8 10 8a9.8 9.8 0 0 0 5.4-1.6" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
 
                     <button class="btn" type="submit" name="register">Create Account</button>
                 </form>
 
+                <div class="social-stack" aria-label="Social registration options">
+                    <a class="btn btn-social" href="../../backend/oauth/oauth_start.php?provider=google">
+                        <svg class="google-mark" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z" />
+                            <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.36l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z" />
+                            <path fill="#FBBC05" d="M6.39 13.93A6.02 6.02 0 0 1 6.08 12c0-.67.11-1.32.31-1.93V7.45H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.55l3.35-2.62Z" />
+                            <path fill="#EA4335" d="M12 5.94c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z" />
+                        </svg>
+                        <span>Continue with Google</span>
+                    </a>
+                </div>
+
                 <div class="form-footer">
-                    <span>Already have an account? <a href="login.php">Sign In</a></span>
+                    <span>Already have an account? <a href="login.php">Sign in</a></span>
                     <a class="home-link" href="../../index.php">&larr; Back to Home</a>
                 </div>
             </div>
         </section>
     </main>
+    <script>
+        document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var input = document.getElementById(button.dataset.passwordToggle);
+                if (!input) return;
+
+                var showPassword = input.type === 'password';
+                input.type = showPassword ? 'text' : 'password';
+                button.setAttribute('aria-pressed', showPassword ? 'true' : 'false');
+                button.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
+            });
+        });
+    </script>
 </body>
 
 </html>

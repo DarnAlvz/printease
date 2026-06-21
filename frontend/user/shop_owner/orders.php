@@ -51,6 +51,7 @@ if (!$shop) {
 $shop_id = (int) $shop['shop_id'];
 $search_code = trim($_GET['order_code'] ?? '');
 $focus_order_id = max(0, (int) ($_GET['focus_order_id'] ?? 0));
+$focus_order_code = trim($_GET['focus_order_code'] ?? '');
 $allowed_filters = ['all', 'pending', 'processing', 'ready_for_pickup', 'completed'];
 $status_filter = $_GET['status'] ?? 'all';
 if (!in_array($status_filter, $allowed_filters, true)) {
@@ -91,13 +92,32 @@ if ($page > $total_pages) {
 }
 $offset = ($page - 1) * $per_page;
 
-$orders_sql = "SELECT o.*, u.full_name, u.email, p.payment_id, p.payment_status, p.verification_status, p.proof_of_payment_file, p.rejection_reason, p.created_at 
+$focus_sort = '';
+$focus_sort_types = '';
+$focus_sort_params = [];
+if ($focus_order_id > 0 && $focus_order_code !== '') {
+    $focus_sort = 'CASE WHEN o.order_id = ? OR o.order_code = ? THEN 0 ELSE 1 END,';
+    $focus_sort_types = 'is';
+    $focus_sort_params = [$focus_order_id, $focus_order_code];
+} elseif ($focus_order_id > 0) {
+    $focus_sort = 'CASE WHEN o.order_id = ? THEN 0 ELSE 1 END,';
+    $focus_sort_types = 'i';
+    $focus_sort_params = [$focus_order_id];
+} elseif ($focus_order_code !== '') {
+    $focus_sort = 'CASE WHEN o.order_code = ? THEN 0 ELSE 1 END,';
+    $focus_sort_types = 's';
+    $focus_sort_params = [$focus_order_code];
+}
+
+$orders_sql = "SELECT o.*, u.full_name, u.email, p.payment_id, p.payment_status, p.verification_status,
+                       p.reference_number, p.ocr_reference_number, p.payment_reference_match,
+                       p.ocr_payment_date, p.proof_of_payment_file, p.rejection_reason, p.created_at
                 AS payment_submitted_at
                FROM orders o
                JOIN users u ON o.customer_id = u.user_id
                LEFT JOIN payments p ON o.order_id = p.order_id
                $where
-               ORDER BY " . ($focus_order_id > 0 ? "CASE WHEN o.order_id = ? THEN 0 ELSE 1 END," : "") . "
+               ORDER BY $focus_sort
                         CASE o.order_status
                             WHEN 'processing' THEN 1
                             WHEN 'pending' THEN 2
@@ -108,10 +128,8 @@ $orders_sql = "SELECT o.*, u.full_name, u.email, p.payment_id, p.payment_status,
                         o.created_at DESC
                LIMIT ? OFFSET ?";
 $orders_stmt = mysqli_prepare($conn, $orders_sql);
-$orders_types = ($focus_order_id > 0 ? $types . "i" : $types) . "ii";
-$orders_params = $focus_order_id > 0
-    ? array_merge($params, [$focus_order_id, $per_page, $offset])
-    : array_merge($params, [$per_page, $offset]);
+$orders_types = $types . $focus_sort_types . "ii";
+$orders_params = array_merge($params, $focus_sort_params, [$per_page, $offset]);
 mysqli_stmt_bind_param($orders_stmt, $orders_types, ...$orders_params);
 mysqli_stmt_execute($orders_stmt);
 $result = mysqli_stmt_get_result($orders_stmt);
@@ -160,8 +178,6 @@ function paymentStatusLabel($payment_status, $verification_status)
 ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_toast);
 ?>
 
-<?php showMessage(); ?>
-
 <nav class="orders-tabs" aria-label="Order status filters">
     <?php
     $tabs = [
@@ -205,7 +221,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         <div class="orders-summary-icon"><?php echo ownerIcon('circle-check', 'icon'); ?></div>
         <strong><?php echo (int) $counts['completed']; ?></strong>
         <h2>Completed Orders</h2>
-        <p>Successfully delivered</p>
+        <p>Successfully picked up</p>
     </article>
 </section>
 
@@ -261,7 +277,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                         $first_file = $file_rows[0]['file_name'] ?? 'No uploaded file';
                         $order_files[(int) $order['order_id']] = $file_rows;
                         ?>
-                        <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
+                        <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
                         <tr class="<?php echo $is_focused_order ? 'order-focused' : ''; ?>"
                             data-order-row="<?php echo e($order['order_id']); ?>">
                             <td><strong><?php echo e($order['order_code']); ?></strong></td>
@@ -438,7 +454,46 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                     </strong>
                                 </div>
 
-                                <div>
+                                <?php if (!empty($order['reference_number']) && empty($order['ocr_reference_number'])): ?>
+                                    <div>
+                                        <span>Reference No.</span>
+                                        <strong><?php echo e($order['reference_number']); ?></strong>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if (!empty($order['payment_id'])): ?>
+                                    <div>
+                                        <span>Detected Reference No.</span>
+                                        <strong><?php echo e($order['ocr_reference_number'] ?: $order['reference_number'] ?: 'Not detected'); ?></strong>
+                                    </div>
+                                    <div>
+                                        <span>Detected Payment Date</span>
+                                        <strong><?php echo !empty($order['ocr_payment_date']) ? e(date('M d, Y', strtotime($order['ocr_payment_date']))) : 'Not detected'; ?></strong>
+                                    </div>
+                                    <div>
+                                        <span>Proof Submitted</span>
+                                        <strong><?php echo !empty($order['payment_submitted_at']) ? e(date('M d, Y - g:i A', strtotime($order['payment_submitted_at']))) : 'Not available'; ?></strong>
+                                    </div>
+                                    <div>
+                                        <span>OCR Status</span>
+                                        <strong>
+                                            <?php
+                                            $match_status = $order['payment_reference_match'] ?: 'not_detected';
+                                            $match_class = match ($match_status) {
+                                                'detected' => 'status-success',
+                                                'partial' => 'status-warning',
+                                                'not_detected' => 'status-warning',
+                                                default => 'status-info',
+                                            };
+                                            ?>
+                                            <span class="status-badge <?php echo e($match_class); ?>">
+                                                <?php echo e(ucwords(str_replace('_', ' ', $match_status))); ?>
+                                            </span>
+                                        </strong>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="order-payment-proof-card">
                                     <span>Proof of Payment</span>
                                     <strong>
                                         <?php if (!empty($order['proof_of_payment_file'])): ?>
@@ -447,17 +502,17 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                                 View Proof
                                             </button>
 
-                                            <div id="proof-preview-<?php echo e($order['payment_id']); ?>" class="hidden mt-3">
+                                            <div id="proof-preview-<?php echo e($order['payment_id']); ?>" class="hidden mt-3" data-payment-proof-preview>
                                                 <?php
                                                 $proof = BASE_URL . e($order['proof_of_payment_file']);
                                                 $ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION));
                                                 ?>
 
-                                                <?php if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])): ?>
+                                                <?php if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'jfif'])): ?>
                                                     <img src="<?php echo $proof; ?>"
-                                                        class="w-full max-h-96 object-contain rounded-xl border">
+                                                        class="order-payment-proof-image">
                                                 <?php else: ?>
-                                                    <iframe src="<?php echo $proof; ?>" class="w-full h-96 rounded-xl border"></iframe>
+                                                    <iframe src="<?php echo $proof; ?>" class="order-payment-proof-frame"></iframe>
                                                 <?php endif; ?>
                                             </div>
                                         <?php else: ?>
@@ -467,7 +522,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 </div>
 
                                 <?php if (!empty($order['payment_id']) && ($order['verification_status'] ?? '') === 'pending'): ?>
-                                    <div>
+                                    <div class="order-payment-action-card">
                                         <span>Payment Action</span>
                                         <strong class="payment-action-group">
                                             <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
@@ -475,7 +530,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                                 <input type="hidden" name="payment_id"
                                                     value="<?php echo e($order['payment_id']); ?>">
                                                 <button type="submit" name="verify_payment" class="btn order-btn-ready">
-                                                    Verify Payment
+                                                    Mark as Paid
                                                 </button>
                                             </form>
 
@@ -535,7 +590,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                 mysqli_stmt_execute($file_stmt);
                 $files = mysqli_stmt_get_result($file_stmt);
                 ?>
-                <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
+                <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
                 <article class="owner-card order-card-mobile <?php echo $is_focused_order ? 'order-focused' : ''; ?>"
                     data-order-card="<?php echo e($order['order_id']); ?>">
                     <div class="card-head">
@@ -605,11 +660,6 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         let activeModal = null;
 
         const focusedOrder = document.querySelector('.order-focused');
-        if (focusedOrder) {
-            window.setTimeout(function () {
-                focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 120);
-        }
 
         function openModal(modal) {
             if (!modal) {
@@ -620,6 +670,12 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
             modal.classList.add('is-open');
             modal.setAttribute('aria-hidden', 'false');
             document.body.classList.add('order-modal-open');
+        }
+
+        if (focusedOrder) {
+            window.setTimeout(function () {
+                focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 120);
         }
 
         function closeModal(modal) {
@@ -657,13 +713,37 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         });
 
         function setOrderProcessing(orderId) {
+            const processingIcon = <?php echo json_encode(ownerIcon('trending-up', 'icon-sm')); ?>;
             document.querySelectorAll('[data-order-status-badge="' + orderId + '"]').forEach(function (badge) {
                 badge.className = 'status-badge order-status-badge order-status-processing status-info';
-                badge.innerHTML = '<i data-lucide="trending-up" class="icon-sm" aria-hidden="true"></i>Processing';
+                badge.innerHTML = processingIcon + 'Processing';
             });
+        }
 
-            if (window.lucide) {
-                window.lucide.createIcons();
+        function createReadyForm(orderId, isMobile) {
+            const readyForm = document.createElement('form');
+            readyForm.action = '<?php echo BASE_URL; ?>backend/actions/update_order_status.php';
+            readyForm.method = 'POST';
+            readyForm.className = 'orders-update-form orders-status-action' + (isMobile ? ' mobile' : '');
+
+            readyForm.innerHTML =
+                '<input type="hidden" name="order_id" value="' + orderId + '">' +
+                '<input type="hidden" name="order_status" value="ready_for_pickup">' +
+                '<button type="submit" name="update_order" class="btn order-btn-ready">Mark as Ready</button>';
+
+            return readyForm;
+        }
+
+        function showReadyAction(orderId) {
+            const row = document.querySelector('[data-order-row="' + orderId + '"]');
+            const rowActions = row ? row.querySelector('.orders-actions') : null;
+            if (rowActions && !rowActions.querySelector('.order-btn-ready')) {
+                rowActions.appendChild(createReadyForm(orderId, false));
+            }
+
+            const mobileCard = document.querySelector('[data-order-card="' + orderId + '"]');
+            if (mobileCard && !mobileCard.querySelector('.order-btn-ready')) {
+                mobileCard.appendChild(createReadyForm(orderId, true));
             }
         }
 
@@ -722,6 +802,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 
                             const orderId = form.dataset.orderId;
                             setOrderProcessing(orderId);
+                            showReadyAction(orderId);
                             form.remove();
                             window.setTimeout(function () {
                                 closeModal(document.getElementById('order-modal-' + orderId));
@@ -734,7 +815,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 submitButton.disabled = false;
                                 submitButton.textContent = 'Accept & Download Order';
                             }
-                            alert('Failed to update order status. Please try again.');
+                            window.ownerShowToast('Failed to update order status. Please try again.', 'error');
                         });
                 }, Math.max(450, urls.length * 180));
             });

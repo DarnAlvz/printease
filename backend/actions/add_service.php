@@ -21,7 +21,7 @@ $print_type = trim($_POST['print_type']);
 $price_per_page = floatval($_POST['price_per_page']);
 
 if ($paper_size === "" || $paper_type === "" || $print_type === "" || $price_per_page <= 0) {
-    setMessage("Please enter valid service details.");
+    setError("Please enter valid service details.");
     redirect(BASE_URL . "frontend/user/shop_owner/services.php");
 }
 
@@ -32,7 +32,7 @@ mysqli_stmt_execute($shop_stmt);
 $shop = mysqli_fetch_assoc(mysqli_stmt_get_result($shop_stmt));
 
 if (!$shop) {
-    setMessage("Shop profile not found.");
+    setError("Shop profile not found.");
     redirect(BASE_URL . "frontend/user/shop_owner/services.php");
 }
 
@@ -48,7 +48,7 @@ mysqli_stmt_bind_param($stmt, "isssd", $shop_id, $paper_size, $paper_type, $prin
 if (mysqli_stmt_execute($stmt)) {
     setMessage("Service added successfully.");
 } else {
-    setMessage("Failed to add service.");
+    setError("Failed to add service.");
 }
 
 redirect(BASE_URL . "frontend/user/shop_owner/services.php");

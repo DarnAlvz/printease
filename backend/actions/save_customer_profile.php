@@ -66,7 +66,18 @@ if (isset($_POST['save_profile'])) {
 
     logActivity($conn, $customer_id, "Updated customer profile", "Customer Profile");
 
-    setMessage($new_status === 'verified' ? "Profile updated successfully." : "Profile saved. Pending verification by Super Admin.");
+    if ($new_status === 'pending' && $current_status !== 'pending') {
+        sendRoleNotification($conn, 'super_admin', 'A customer profile is ready for verification.', [
+            'type' => 'account_submitted', 'title' => 'Customer verification submitted',
+            'target_url' => BASE_URL . 'frontend/user/superadmin/manage_users.php',
+            'metadata' => ['user_id' => $customer_id, 'role' => 'customer'],
+        ]);
+    }
+
+    setToast(
+        $new_status === 'verified' ? "Profile updated successfully." : "Profile saved. Pending verification by Super Admin.",
+        $new_status === 'verified' ? 'success' : 'warning'
+    );
     redirect(BASE_URL . "frontend/user/customer/profile.php");
 }
 ?>
