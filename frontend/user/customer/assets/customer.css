@@ -831,12 +831,44 @@ body.customer-body .bg-green-100 {
 .customer-map-shop-card { padding: 14px; border: 1px solid #dceef4; border-radius: 14px; background: #fff; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .customer-map-shop-card:hover, .customer-map-shop-card.selected { border-color: #69cce4; box-shadow: 0 9px 22px rgba(2, 72, 115, .11); transform: translateY(-1px); }
 .customer-map-shop-card:focus-visible { outline: 3px solid rgba(5, 183, 211, .3); outline-offset: 2px; }
-.customer-map-shop-head { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.customer-map-shop-head { display: grid; grid-template-columns: 48px minmax(0, 1fr) max-content; gap: 10px; align-items: start; }
 .customer-map-shop-logo { width: 48px; height: 48px; overflow: hidden; border: 1px solid #cceaf3; border-radius: 12px; color: var(--customer-blue); background: #effaff; display: grid; place-items: center; }
 .customer-map-shop-logo img { width: 100%; height: 100%; object-fit: cover; }
 .customer-map-shop-logo svg { width: 23px; height: 23px; }
 .customer-map-shop-title { min-width: 0; }
+.customer-map-shop-name { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 88px; align-items: center; gap: 7px; }
 .customer-map-shop-title h3 { margin: 0; overflow: hidden; color: var(--customer-navy); font-size: 14px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.customer-map-shop-name h3 { min-width: 0; }
+.customer-shop-verified-badge {
+    position: relative;
+    width: 88px;
+    min-height: 23px;
+    padding: 3px 7px 3px 5px;
+    border: 1px solid #8ddde8;
+    border-radius: 999px;
+    color: #047c91;
+    background: #e6fbff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+}
+.customer-shop-verified-badge svg {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+    stroke-width: 2.2;
+}
+.customer-shop-verified-badge span {
+    min-width: 0;
+    overflow: hidden;
+    color: inherit;
+    text-overflow: ellipsis;
+}
 .customer-map-shop-title p { margin: 4px 0 0; color: #36536d; font-size: 11px; }
 .customer-map-shop-title p span { margin-right: 6px; color: var(--customer-cyan); }
 .customer-map-shop-title small { display: block; margin-top: 2px; color: var(--customer-muted); font-size: 10px; }
@@ -890,8 +922,15 @@ body.customer-body .bg-green-100 {
 .customer-map-marker.busy { background: #e8a008; }
 .customer-map-marker.selected { outline: 4px solid rgba(5, 183, 211, .35); transform: rotate(-45deg) scale(1.16); }
 .customer-map-popup { min-width: 180px; display: grid; gap: 4px; }
+.customer-map-popup-title { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 84px; align-items: center; gap: 7px; }
+.customer-map-popup-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.customer-map-popup-title .customer-shop-verified-badge { width: 84px; }
 .customer-map-popup strong { color: var(--customer-navy); font-size: 13px; }
 .customer-map-popup span, .customer-map-popup small { color: var(--customer-muted); }
+.customer-map-popup .customer-shop-verified-badge,
+.customer-map-popup .customer-shop-verified-badge span {
+    color: #047c91;
+}
 .customer-map-popup a { margin-top: 5px; padding: 7px 10px; border-radius: 8px; color: #fff; background: var(--customer-blue); text-align: center; font-weight: 800; }
 .customer-map-empty { min-height: 360px; padding: 40px 20px; border: 1px solid var(--customer-line); border-radius: 16px; background: #fff; box-shadow: var(--customer-shadow-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .customer-map-empty > span { width: 62px; height: 62px; border-radius: 18px; color: var(--customer-blue); background: #e9f9ff; display: grid; place-items: center; }
@@ -1628,6 +1667,17 @@ html[data-customer-theme="dark"] body.customer-body .customer-map-shop-actions .
     color: #ffffff !important;
 }
 
+html[data-customer-theme="dark"] body.customer-body .customer-shop-verified-badge {
+    border-color: rgba(103, 232, 249, .42) !important;
+    background: rgba(6, 182, 212, .18) !important;
+    color: #a5f3fc !important;
+}
+
+html[data-customer-theme="dark"] body.customer-body .customer-shop-verified-badge span,
+html[data-customer-theme="dark"] body.customer-body .customer-shop-verified-badge svg {
+    color: inherit !important;
+}
+
 html[data-customer-theme="dark"] body.customer-body .customer-map-status.available,
 html[data-customer-theme="dark"] body.customer-body .customer-shop-status.available {
     background: rgba(22, 101, 52, .28) !important;
@@ -2107,6 +2157,14 @@ html[data-customer-theme="dark"] .customer-order-wizard-alert {
     .customer-map-results-heading { display: none; }
     .customer-map-shop-list { padding: 10px; }
     .customer-map-shop-card { padding: 12px; }
+    .customer-map-shop-head { grid-template-columns: 44px minmax(0, 1fr) max-content; gap: 8px; }
+    .customer-map-shop-logo { width: 44px; height: 44px; border-radius: 11px; }
+    .customer-map-shop-name { grid-template-columns: minmax(0, 1fr) 76px; gap: 6px; }
+    .customer-shop-verified-badge { width: 76px; min-height: 22px; padding: 3px 6px 3px 5px; font-size: 8px; }
+    .customer-shop-verified-badge svg { width: 12px; height: 12px; }
+    .customer-shop-card-tools { min-width: 34px; }
+    .customer-map-popup-title { grid-template-columns: minmax(0, 1fr) 74px; gap: 6px; }
+    .customer-map-popup-title .customer-shop-verified-badge { width: 74px; }
     .customer-map-shop-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .customer-map-shop-facts span:last-child { grid-column: 1 / -1; }
     .customer-shops-grid { grid-template-columns: 1fr; gap: 12px; }
@@ -2229,6 +2287,46 @@ html[data-customer-theme="dark"] .customer-order-wizard-alert {
     body.customer-body .grid.grid-cols-2.md\:grid-cols-4 > * { min-height: 105px; }
     body.customer-body form.flex.gap-2 { flex-direction: column; }
     body.customer-body form.flex.gap-2 button { min-height: 46px; border-radius: 11px; }
+}
+
+@media (max-width: 640px) {
+    .customer-map-shop-name {
+        grid-template-columns: minmax(0, 1fr) 30px;
+        gap: 5px;
+    }
+
+    .customer-shop-verified-badge {
+        width: 30px;
+        min-width: 30px;
+        min-height: 22px;
+        padding: 0;
+    }
+
+    .customer-shop-verified-badge span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .customer-shop-verified-badge svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .customer-map-popup-title {
+        grid-template-columns: minmax(0, 1fr) 30px;
+        gap: 5px;
+    }
+
+    .customer-map-popup-title .customer-shop-verified-badge {
+        width: 30px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

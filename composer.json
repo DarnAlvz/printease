@@ -2,6 +2,7 @@
     "require": {
         "google/apiclient": "^2.19",
         "phpmailer/phpmailer": "^7.1",
-        "thiagoalessio/tesseract_ocr": "^2.13"
+        "thiagoalessio/tesseract_ocr": "^2.13",
+        "cloudinary/cloudinary_php": "^3.1"
     }
 }

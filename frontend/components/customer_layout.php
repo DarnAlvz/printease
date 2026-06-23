@@ -253,5 +253,6 @@ function renderCustomerLayoutEnd(?string $active = null)
             });
         })();
     </script>
+    <script src="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/assets/js/live-updates.js'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo is_file(__DIR__ . '/../assets/js/live-updates.js') ? filemtime(__DIR__ . '/../assets/js/live-updates.js') : time(); ?>" data-printease-live data-base-url="<?php echo htmlspecialchars(printEaseAssetUrl(''), ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php
 }

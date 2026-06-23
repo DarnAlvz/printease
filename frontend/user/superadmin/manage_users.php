@@ -121,9 +121,9 @@ if ($filter === 'pending') {
 }
 
 if ($search !== '') {
-    $where[] = "(u.full_name LIKE ? OR u.email LIKE ?)";
+    $where[] = "(LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ?)";
     $types .= 'ss';
-    $like = '%' . $search . '%';
+    $like = '%' . strtolower($search) . '%';
     $params[] = $like;
     $params[] = $like;
 }
@@ -192,7 +192,7 @@ $filters = [
 adminLayoutStart('users', 'User Management', 'Review, approve, and manage customer and shop owner accounts.');
 ?>
 <section class="admin-user-manager">
-    <form class="admin-user-toolbar" method="GET" action="manage_users.php">
+    <form class="admin-user-toolbar" method="GET" action="manage_users.php" data-live-search-form data-live-target="admin_users" data-live-min="1">
         <label class="admin-user-search" aria-label="Search users">
             <?php echo adminIcon('search'); ?>
             <input type="search" name="search" value="<?php echo e($search); ?>" placeholder="Search by name or email...">
@@ -201,7 +201,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
         <button class="admin-user-search-button" type="submit">Search</button>
     </form>
 
-    <nav class="admin-user-filters" aria-label="User status filters">
+    <nav class="admin-user-filters" aria-label="User status filters" data-live-region="admin-user-filters">
         <?php foreach ($filters as $key => $item): ?>
             <?php
                 $query = [];
@@ -217,7 +217,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
         <?php endforeach; ?>
     </nav>
 
-    <section class="admin-user-stats" aria-label="User management summary">
+    <section class="admin-user-stats" aria-label="User management summary" data-live-region="admin-user-stats">
         <article class="admin-user-stat admin-user-stat-total">
             <span><?php echo adminIcon('users'); ?></span>
             <strong><?php echo (int) $summary['total']; ?></strong>
@@ -245,7 +245,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
         </article>
     </section>
 
-    <section class="admin-user-table-card">
+    <section class="admin-user-table-card" data-live-region="admin-user-results">
         <div class="admin-user-table-wrap">
             <table class="admin-user-table">
                 <thead>

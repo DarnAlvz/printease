@@ -9,11 +9,13 @@ require_once __DIR__ . "/../../components/head.php";
 require_once __DIR__ . "/../../components/customer_layout.php";
 require_once __DIR__ . "/../../components/customer_toasts.php";
 require_once __DIR__ . "/../../../backend/includes/status_guard.php";
+require_once __DIR__ . "/../../../backend/config/cloudinary.php";
 
 requireVerifiedStatus($conn);
 
 $customer_id = $_SESSION['user_id'];
 $search = trim($_GET['order_code'] ?? '');
+$focus_order_id = max(0, (int) ($_GET['focus_order_id'] ?? 0));
 $focus_order_code = trim($_GET['focus_order_code'] ?? '');
 $allowed_tabs = ['active', 'completed'];
 $status_tab = $_GET['status'] ?? 'active';
@@ -37,7 +39,7 @@ function countCustomerOrdersByTab($conn, $customer_id, $status_tab)
     $sql = "SELECT COUNT(*) AS total FROM orders WHERE customer_id = ?";
 
     if ($status_tab === 'active') {
-        $sql .= " AND order_status <> 'completed'";
+        $sql .= " AND COALESCE(NULLIF(order_status, ''), 'pending') IN ('pending', 'processing', 'ready_for_pickup')";
     } else {
         $sql .= " AND order_status = 'completed'";
     }
@@ -73,13 +75,13 @@ $sql = "SELECT o.*, ps.shop_name,
         WHERE o.customer_id = ?";
 
 if ($status_tab === 'active') {
-    $sql .= " AND o.order_status <> 'completed'";
+    $sql .= " AND COALESCE(NULLIF(o.order_status, ''), 'pending') IN ('pending', 'processing', 'ready_for_pickup')";
 } else {
     $sql .= " AND o.order_status = 'completed'";
 }
 
 if ($search !== '') {
-    $sql .= " AND o.order_code LIKE ?";
+    $sql .= " AND LOWER(o.order_code) LIKE ?";
 }
 
 $sql .= " ORDER BY o.created_at DESC";
@@ -87,7 +89,7 @@ $sql .= " ORDER BY o.created_at DESC";
 $stmt = mysqli_prepare($conn, $sql);
 
 if ($search !== '') {
-    $like = "%$search%";
+    $like = '%' . strtolower($search) . '%';
     mysqli_stmt_bind_param($stmt, "is", $customer_id, $like);
 } else {
     mysqli_stmt_bind_param($stmt, "i", $customer_id);
@@ -96,27 +98,39 @@ if ($search !== '') {
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 
+function normalizeOrderStatus($status)
+{
+    $status = trim((string) $status);
+    return $status === '' ? 'pending' : $status;
+}
+
+function displayPrintType($print_type)
+{
+    $print_type = trim((string) $print_type);
+    return $print_type === '' || $print_type === '0' ? 'Not specified' : $print_type;
+}
+
 function orderBadge($status)
 {
-    return match ($status) {
+    return match (normalizeOrderStatus($status)) {
         'pending' => 'bg-yellow-100 text-yellow-700',
         'accepted' => 'bg-blue-100 text-blue-700',
         'processing' => 'bg-purple-100 text-purple-700',
         'ready_for_pickup' => 'bg-green-100 text-green-700',
         'completed' => 'bg-gray-200 text-gray-700',
+        'cancelled' => 'bg-red-100 text-red-700',
         default => 'bg-gray-100 text-gray-700'
     };
 }
 
 function orderStatusLabel($status)
 {
-    return match ($status) {
+    return match (normalizeOrderStatus($status)) {
         'pending' => 'Pending',
-        'accepted' => 'Accepted',
         'processing' => 'Processing',
         'ready_for_pickup' => 'Ready for Pickup',
         'completed' => 'Completed',
-        'cancelled' => 'Cancelled',
+        
         default => ucfirst(str_replace('_', ' ', $status))
     };
 }
@@ -151,14 +165,14 @@ function formatDateTime12Hour($datetime)
             <?php renderCustomerLayout(['title' => 'My Orders', 'subtitle' => 'Track your print requests and payments.']); ?>
 
             <main class="p-4 md:p-6">
-                <form method="GET" class="flex gap-2 mb-4">
+                <form method="GET" class="flex gap-2 mb-4" data-live-search-form data-live-target="customer_orders" data-live-min="1">
                     <input type="hidden" name="status" value="<?php echo e($status_tab); ?>">
                     <input type="text" name="order_code" value="<?php echo e($search); ?>"
                         placeholder="Search order code" class="flex-1 border rounded-xl p-3">
                     <button class="bg-blue-600 text-white px-4 rounded-xl">Search</button>
                 </form>
 
-                <nav class="grid grid-cols-2 gap-2 mb-4" aria-label="Order filters">
+                <nav class="grid grid-cols-2 gap-2 mb-4" aria-label="Order filters" data-live-region="customer-order-tabs">
                     <?php
                     $order_tabs = [
                         'active' => 'Active',
@@ -178,16 +192,17 @@ function formatDateTime12Hour($datetime)
                 </nav>
 
                 <?php if (mysqli_num_rows($result) == 0): ?>
-                    <div class="bg-white p-5 rounded-2xl shadow text-center">
+                    <div class="bg-white p-5 rounded-2xl shadow text-center" data-live-region="customer-order-results">
                         <p class="text-gray-500">No orders found.</p>
                         <a href="explore.php?view=all" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Order
                             Now</a>
                     </div>
                 <?php else: ?>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-live-region="customer-order-results">
                         <?php while ($order = mysqli_fetch_assoc($result)): ?>
                             <?php
-                            $is_focused_order = $focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0;
+                            $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0);
+                            $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
                             $file_stmt = mysqli_prepare($conn, "SELECT * FROM uploaded_files WHERE order_id = ? LIMIT 1");
                             mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                             mysqli_stmt_execute($file_stmt);
@@ -224,8 +239,10 @@ function formatDateTime12Hour($datetime)
                                     <p><strong>Paper:</strong> <?php echo e($order['paper_size']); ?>,
                                         <?php echo e($order['paper_type']); ?>
                                     </p>
-                                    <p><strong>Print:</strong> <?php echo e($order['print_type']); ?></p>
+                                    <p><strong>Print:</strong> <?php echo e(displayPrintType($order['print_type'])); ?></p>
+                                    <p><strong>Pages:</strong> <?php echo e($order_page_count); ?></p>
                                     <p><strong>Copies:</strong> <?php echo e($order['copies']); ?></p>
+                                    <p><strong>Volume:</strong> <?php echo e($order_page_count); ?> x <?php echo e($order['copies']); ?></p>
                                     <p><strong>Pickup:</strong>
                                         <?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></p>
                                     <p><strong>Total:</strong> ₱<?php echo e(number_format($order['total_amount'], 2)); ?></p>
@@ -248,8 +265,10 @@ function formatDateTime12Hour($datetime)
                                 </div>
 
                                 <?php if (!empty($order['proof_of_payment_file'])): ?>
+                                    <?php $proof_ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION)); ?>
                                     <button type="button" class="text-blue-600 font-semibold proof-view-btn"
-                                        data-proof="<?php echo BASE_URL . e($order['proof_of_payment_file']); ?>?v=<?php echo time(); ?>">
+                                        data-proof-url="<?php echo BASE_URL . e($order['proof_of_payment_file']); ?>?v=<?php echo time(); ?>"
+                                        data-proof-type="<?php echo e($proof_ext); ?>">
                                         View Uploaded Proof
                                     </button>
                                 <?php endif; ?>
@@ -299,45 +318,7 @@ function formatDateTime12Hour($datetime)
 
         <?php renderCustomerLayoutEnd('orders'); ?>
 
-        <div id="proofModal"
-            class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 p-4 overflow-auto">
-            <div class="bg-white rounded-2xl max-w-3xl w-full p-4">
-                <div class="flex justify-between items-center mb-3">
-                    <h2 class="font-bold text-lg">Payment Proof</h2>
-                    <button id="closeProofModal" class="text-red-600 font-bold">Close</button>
-                </div>
-                <div class="max-h-[70vh] overflow-auto">
-                    <img id="proofImage" class="w-full object-contain rounded-xl border hidden">
-                    <iframe id="proofIframe" class="w-full h-[60vh] hidden rounded-xl border"></iframe>
-                </div>
-            </div>
-        </div>
-
         <script>
-            document.querySelectorAll('.proof-view-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const file = btn.dataset.proof + "&t=" + new Date().getTime(); // extra cache-busting
-                    const ext = file.split('.').pop().toLowerCase();
-                    document.getElementById('proofImage').classList.add('hidden');
-                    document.getElementById('proofIframe').classList.add('hidden');
-
-                    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
-                        document.getElementById('proofImage').src = file;
-                        document.getElementById('proofImage').classList.remove('hidden');
-                    } else {
-                        document.getElementById('proofIframe').src = file;
-                        document.getElementById('proofIframe').classList.remove('hidden');
-                    }
-
-                    document.getElementById('proofModal').classList.remove('hidden');
-                    document.getElementById('proofModal').classList.add('flex');
-                });
-            });
-            document.getElementById('closeProofModal').addEventListener('click', () => {
-                document.getElementById('proofModal').classList.add('hidden');
-                document.getElementById('proofModal').classList.remove('flex');
-            });
-
             const focusedOrder = document.getElementById('focused-order');
             if (focusedOrder) {
                 focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });

@@ -134,6 +134,16 @@ function renderExploreFavoriteForm(array $shop, string $return_to): void
     <?php
 }
 
+function renderExploreVerifiedBadge(array $shop): void
+{
+    if (($shop['permit_status'] ?? '') !== 'verified' && empty($shop['is_verified'])) return;
+    ?>
+    <span class="customer-shop-verified-badge" title="Verified print shop" aria-label="Verified print shop">
+        <?php echo customerIcon('check'); ?><span>Verified</span>
+    </span>
+    <?php
+}
+
 function renderExploreShopCard(array $shop, string $return_to, bool $selected = false): void
 {
     $status = ($shop['shop_status'] ?? $shop['status'] ?? '') === 'available' ? 'available' : 'busy';
@@ -150,7 +160,10 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
                 <?php if ($logo_url !== ''): ?><img src="<?php echo e($logo_url); ?>" alt=""><?php else: ?><?php echo customerIcon('printer'); ?><?php endif; ?>
             </div>
             <div class="customer-map-shop-title">
-                <h3><?php echo e($shop['shop_name'] ?? $shop['name'] ?? 'Print Shop'); ?></h3>
+                <div class="customer-map-shop-name">
+                    <h3><?php echo e($shop['shop_name'] ?? $shop['name'] ?? 'Print Shop'); ?></h3>
+                    <?php renderExploreVerifiedBadge($shop); ?>
+                </div>
                 <p><span aria-hidden="true">&#9679;</span><?php echo e($short_address); ?></p>
                 <?php if ($landmark !== ''): ?><small><?php echo e($landmark); ?></small><?php endif; ?>
             </div>
@@ -176,7 +189,7 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
 }
 
 $sql = "SELECT ps.shop_id, ps.shop_name, ps.shop_address, ps.display_address, ps.landmark,
-               ps.contact_number, ps.shop_logo, ps.shop_status, ps.latitude, ps.longitude,
+               ps.contact_number, ps.shop_logo, ps.shop_status, ps.permit_status, ps.latitude, ps.longitude,
                ps.weekday_open_time, ps.weekday_close_time, ps.weekend_open_time, ps.weekend_close_time,
                COUNT(ss.service_id) AS service_count,
                MIN(ss.price_per_page) AS starting_price,
@@ -193,12 +206,12 @@ $types = 'i';
 $params = [$customer_id];
 if ($search !== '') {
     $sql .= " AND (
-                ps.shop_name LIKE ?
-                OR ps.shop_address LIKE ?
-                OR ps.display_address LIKE ?
-                OR ps.landmark LIKE ?
+                LOWER(ps.shop_name) LIKE ?
+                OR LOWER(ps.shop_address) LIKE ?
+                OR LOWER(ps.display_address) LIKE ?
+                OR LOWER(ps.landmark) LIKE ?
             )";
-    $like = "%$search%";
+    $like = '%' . strtolower($search) . '%';
     $types .= 'ssss';
     array_push($params, $like, $like, $like, $like);
 }
@@ -219,6 +232,7 @@ $shops = [];
 $shop_locations = [];
 while ($shop = mysqli_fetch_assoc($shops_result)) {
     $shop['is_favorite'] = !empty($shop['favorite_id']);
+    $shop['is_verified'] = ($shop['permit_status'] ?? '') === 'verified';
     $shops[] = $shop;
     $shop_locations[] = [
         'shop_id' => (int) $shop['shop_id'],
@@ -229,6 +243,7 @@ while ($shop = mysqli_fetch_assoc($shops_result)) {
         'contact' => (string) ($shop['contact_number'] ?? ''),
         'logo_url' => !empty($shop['shop_logo']) ? SHOP_LOGOS_URL . $shop['shop_logo'] : '',
         'status' => (string) $shop['shop_status'],
+        'is_verified' => ($shop['permit_status'] ?? '') === 'verified',
         'service_count' => (int) $shop['service_count'],
         'starting_price' => $shop['starting_price'] !== null ? (float) $shop['starting_price'] : null,
         'lat' => (float) $shop['latitude'],
@@ -273,7 +288,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
 
             <?php if ($view === 'all'): ?>
             <section class="customer-map-toolbar" aria-label="Shop search">
-                <form method="GET" action="explore.php" class="customer-map-search" role="search">
+                <form method="GET" action="explore.php" class="customer-map-search" role="search" data-live-search-form data-live-target="customer_explore" data-live-min="1">
                     <input type="hidden" name="view" value="all">
                     <span class="customer-map-search-icon" aria-hidden="true"><?php echo customerIcon('search'); ?></span>
                     <input id="shopExploreSearch" type="search" name="search" value="<?php echo e($search); ?>"
@@ -285,7 +300,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
 
             <?php if ($view === 'nearby'): ?>
                 <?php if (empty($shop_locations)): ?>
-                    <section class="customer-map-empty" role="status">
+                    <section class="customer-map-empty" role="status" data-live-region="customer-explore-results">
                         <span><?php echo customerIcon('map'); ?></span>
                         <h2>No mapped shops found</h2>
                         <p>No nearby mapped shops are available right now. Browse all verified print shops instead.</p>
@@ -327,14 +342,14 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                 <?php endif; ?>
             <?php else: ?>
                 <?php if (empty($shops)): ?>
-                    <section class="customer-map-empty" role="status">
+                    <section class="customer-map-empty" role="status" data-live-region="customer-explore-results">
                         <span><?php echo customerIcon($view === 'favorites' ? 'heart' : 'printer'); ?></span>
                         <h2><?php echo $view === 'favorites' ? 'No favorites yet' : 'No print shops found'; ?></h2>
                         <p><?php echo $view === 'favorites' ? 'Save shops from Nearby or All Shops to see them here.' : 'Try another search or check Nearby mode.'; ?></p>
                         <a href="explore.php?view=<?php echo $view === 'favorites' ? 'all' : 'nearby'; ?>"><?php echo $view === 'favorites' ? 'Browse Shops' : 'Open Nearby'; ?></a>
                     </section>
                 <?php else: ?>
-                    <div class="customer-shops-grid">
+                    <div class="customer-shops-grid" data-live-region="customer-explore-results">
                         <?php foreach ($shops as $shop): ?>
                             <?php renderExploreShopCard($shop, $return_to, (int) $shop['shop_id'] === $selected_shop_id); ?>
                         <?php endforeach; ?>
@@ -456,9 +471,16 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                         '<svg class="customer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>' +
                         '</button></form>';
                 }
+                function verifiedBadgeHtml(shop) {
+                    if (!shop.is_verified) return '';
+                    return '<span class="customer-shop-verified-badge" title="Verified print shop" aria-label="Verified print shop">' +
+                        '<svg class="customer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>' +
+                        '<span>Verified</span>' +
+                    '</span>';
+                }
                 function popupContent(shop) {
                     return '<div class="customer-map-popup">' +
-                        '<strong>' + escapeHtml(shop.name) + '</strong>' +
+                        '<div class="customer-map-popup-title"><strong>' + escapeHtml(shop.name) + '</strong>' + verifiedBadgeHtml(shop) + '</div>' +
                         '<span>' + escapeHtml(shortAddress(shop)) + '</span>' +
                         '<small>' + escapeHtml(hoursLabel(shop)) + ' &middot; ' + money(shop.starting_price) + ' start</small>' +
                         '<a href="place_order.php?shop_id=' + shop.shop_id + '">Order Now</a>' +
@@ -474,7 +496,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                     return '<article class="customer-map-shop-card' + (selected ? ' selected' : '') + '" data-shop-card="' + shop.shop_id + '" tabindex="0">' +
                         '<div class="customer-map-shop-head">' +
                             '<div class="customer-map-shop-logo">' + logoHtml(shop) + '</div>' +
-                            '<div class="customer-map-shop-title"><h3>' + escapeHtml(shop.name) + '</h3><p><span aria-hidden="true">&#9679;</span>' + escapeHtml(shortAddress(shop)) + '</p>' + (shop.landmark ? '<small>' + escapeHtml(shop.landmark) + '</small>' : '') + '</div>' +
+                            '<div class="customer-map-shop-title"><div class="customer-map-shop-name"><h3>' + escapeHtml(shop.name) + '</h3>' + verifiedBadgeHtml(shop) + '</div><p><span aria-hidden="true">&#9679;</span>' + escapeHtml(shortAddress(shop)) + '</p>' + (shop.landmark ? '<small>' + escapeHtml(shop.landmark) + '</small>' : '') + '</div>' +
                             '<div class="customer-shop-card-tools"><span class="customer-map-status ' + escapeHtml(shop.status) + '">' + (shop.status === 'available' ? 'Available' : 'Busy') + '</span>' + favoriteFormHtml(shop) + '</div>' +
                         '</div>' +
                         '<div class="customer-map-shop-facts">' +

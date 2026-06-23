@@ -186,6 +186,7 @@ function adminLayoutEnd()
                 document.addEventListener('keydown', function (event) { if (event.key === 'Escape') close(); });
             })();
         </script>
+        <script src="<?php echo BASE_URL; ?>frontend/assets/js/live-updates.js?v=<?php echo filemtime(__DIR__ . '/../../../assets/js/live-updates.js'); ?>" data-printease-live data-base-url="<?php echo e(BASE_URL); ?>"></script>
     </body>
     </html>
     <?php

@@ -63,14 +63,14 @@ if ($search !== '') {
                         WHERE o.shop_id = ?
                         AND p.payment_status = 'paid'
                         AND (
-                            o.order_code LIKE ?
-                            OR u.full_name LIKE ?
-                            OR u.email LIKE ?
-                            OR p.payment_method LIKE ?
+                            LOWER(o.order_code) LIKE ?
+                            OR LOWER(u.full_name) LIKE ?
+                            OR LOWER(u.email) LIKE ?
+                            OR LOWER(p.payment_method) LIKE ?
                         )
                         ORDER BY o.created_at DESC";
     $transaction_stmt = mysqli_prepare($conn, $transaction_sql);
-    $like = "%$search%";
+    $like = '%' . strtolower($search) . '%';
     mysqli_stmt_bind_param($transaction_stmt, "issss", $shop_id, $like, $like, $like, $like);
 } else {
     $transaction_sql = "SELECT p.*, o.order_code, o.paper_size, o.paper_type, o.print_type, o.copies,
@@ -127,7 +127,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
     </section>
 
     <section class="transactions-filter-card">
-        <form method="GET" class="transactions-search-form">
+        <form method="GET" class="transactions-search-form" data-live-search-form data-live-target="owner_transactions" data-live-min="1">
             <label class="transactions-search-box">
                 <?php echo ownerIcon('search', 'icon'); ?>
                 <input type="text" name="q" placeholder="Search by order code, customer, or payment method" value="<?php echo e($search); ?>">
@@ -140,12 +140,12 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
     </section>
 
     <?php if (empty($transactions)): ?>
-        <section class="owner-card empty-state transactions-empty-state">
+        <section class="owner-card empty-state transactions-empty-state" data-live-region="owner-transaction-results">
             <h2>No transactions found</h2>
             <p>Paid customer orders will appear here once payments are recorded.</p>
         </section>
     <?php else: ?>
-        <section class="transactions-table-card">
+        <section class="transactions-table-card" data-live-region="owner-transaction-results">
             <div class="owner-table-wrap">
                 <table class="transactions-table">
                     <thead>
@@ -222,7 +222,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
         </section>
     <?php endif; ?>
 
-    <section class="transactions-total-bar" aria-label="Transaction totals">
+    <section class="transactions-total-bar" aria-label="Transaction totals" data-live-region="owner-transaction-totals">
         <div>
             <span>Total Orders</span>
             <strong><?php echo (int) $summary['total_transactions']; ?></strong>

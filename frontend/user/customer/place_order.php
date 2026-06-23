@@ -70,6 +70,7 @@ $min_pickup = date('Y-m-d\TH:i');
     <title>Place Order</title>
     <?php renderCustomerHead(); ?>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
 <body class="customer-body bg-gray-100 min-h-screen pb-24">
@@ -84,6 +85,7 @@ $min_pickup = date('Y-m-d\TH:i');
                 class="customer-order-wizard bg-white p-5 md:p-6 rounded-2xl shadow" data-order-wizard novalidate>
                 <input type="hidden" name="shop_id" value="<?php echo e($shop['shop_id']); ?>">
                 <input type="hidden" name="service_id" id="service_id">
+                <input type="hidden" name="detected_page_count" id="detected_page_count" value="1">
 
                 <ol class="customer-order-steps" aria-label="Order progress">
                     <li class="is-active" data-step-indicator="0"><span>1</span><strong>File</strong></li>
@@ -145,11 +147,18 @@ $min_pickup = date('Y-m-d\TH:i');
                             <input type="number" name="copies" id="copies" min="1" value="1" required
                                 class="w-full border rounded-xl p-3">
                         </label>
+
+                        <div class="customer-order-field">
+                            <span>Pages</span>
+                            <strong class="w-full border rounded-xl p-3 bg-gray-50 block" data-page-count-label>1</strong>
+                            <small data-page-count-status>Upload a PDF to detect pages automatically.</small>
+                        </div>
                     </div>
 
                     <div class="customer-order-total">
                         <span>Estimated Total</span>
                         <strong>&#8369;<span id="total">0.00</span></strong>
+                        <small class="block text-sm text-gray-500 mt-1" data-total-breakdown>0 pages x 1 copy</small>
                     </div>
                 </section>
 
@@ -189,6 +198,7 @@ $min_pickup = date('Y-m-d\TH:i');
                         <div><span>Paper Size</span><strong data-review-paper-size>-</strong></div>
                         <div><span>Paper Type</span><strong data-review-paper-type>-</strong></div>
                         <div><span>Print Type</span><strong data-review-print-type>-</strong></div>
+                        <div><span>Pages</span><strong data-review-pages>1</strong></div>
                         <div><span>Copies</span><strong data-review-copies>1</strong></div>
                         <div><span>Pickup</span><strong data-review-pickup>-</strong></div>
                         <div><span>Instructions</span><strong data-review-instruction>None</strong></div>
@@ -197,6 +207,7 @@ $min_pickup = date('Y-m-d\TH:i');
                     <div class="customer-order-total review-total">
                         <span>Total Amount</span>
                         <strong>&#8369;<span data-review-total>0.00</span></strong>
+                        <small class="block text-sm text-gray-500 mt-1" data-review-breakdown>1 page x 1 copy</small>
                     </div>
                 </section>
 
@@ -232,7 +243,71 @@ $min_pickup = date('Y-m-d\TH:i');
         const instruction = document.getElementById("customer_instruction");
         const total = document.getElementById("total");
         const serviceId = document.getElementById("service_id");
+        const detectedPageCount = document.getElementById("detected_page_count");
+        const pageCountLabel = document.querySelector("[data-page-count-label]");
+        const pageCountStatus = document.querySelector("[data-page-count-status]");
+        const totalBreakdown = document.querySelector("[data-total-breakdown]");
+        const reviewBreakdown = document.querySelector("[data-review-breakdown]");
         let currentStep = 0;
+        let pageCountLoading = false;
+        let pageCountRequestId = 0;
+
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        }
+
+        function setPageCount(count, statusText = "") {
+            const normalized = Math.max(1, parseInt(count || "1", 10) || 1);
+            detectedPageCount.value = String(normalized);
+            if (pageCountLabel) pageCountLabel.textContent = String(normalized);
+            if (pageCountStatus) pageCountStatus.textContent = statusText || (normalized === 1 ? "1 page will be charged." : normalized + " pages will be charged.");
+            computeTotal();
+        }
+
+        function selectedFileIsPdf(file) {
+            if (!file) return false;
+            return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+        }
+
+        async function detectDocumentPages() {
+            const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
+            const requestId = ++pageCountRequestId;
+
+            if (!file) {
+                pageCountLoading = false;
+                setPageCount(1, "Upload a PDF to detect pages automatically.");
+                return;
+            }
+
+            if (!selectedFileIsPdf(file)) {
+                pageCountLoading = false;
+                setPageCount(1, "Non-PDF files are counted as 1 page.");
+                return;
+            }
+
+            if (!window.pdfjsLib) {
+                pageCountLoading = false;
+                setPageCount(1, "PDF page counter is unavailable. 1 page will be used.");
+                return;
+            }
+
+            pageCountLoading = true;
+            if (pageCountStatus) pageCountStatus.textContent = "Counting PDF pages...";
+            if (pageCountLabel) pageCountLabel.textContent = "...";
+            computeTotal();
+
+            try {
+                const buffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+                if (requestId !== pageCountRequestId) return;
+                pageCountLoading = false;
+                setPageCount(pdf.numPages || 1, (pdf.numPages || 1) + " PDF page" + ((pdf.numPages || 1) === 1 ? "" : "s") + " detected.");
+            } catch (error) {
+                if (requestId !== pageCountRequestId) return;
+                pageCountLoading = false;
+                setPageCount(1, "Could not read PDF pages. 1 page will be used.");
+            }
+        }
 
         function uniqueValues(key, filter = {}) {
             return [...new Set(services.filter(s =>
@@ -276,12 +351,17 @@ $min_pickup = date('Y-m-d\TH:i');
 
         function computeTotal() {
             const selected = selectedService();
+            const pages = Math.max(1, parseInt(detectedPageCount.value || "1", 10) || 1);
+            const copyCount = Math.max(1, parseInt(copies.value || "1", 10) || 1);
             if (selected) {
                 serviceId.value = selected.service_id;
-                total.textContent = (parseFloat(selected.price_per_page) * parseInt(copies.value || 1)).toFixed(2);
+                total.textContent = (parseFloat(selected.price_per_page) * pages * copyCount).toFixed(2);
             } else {
                 serviceId.value = "";
                 total.textContent = "0.00";
+            }
+            if (totalBreakdown) {
+                totalBreakdown.textContent = pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies");
             }
             updateReview();
         }
@@ -306,6 +386,10 @@ $min_pickup = date('Y-m-d\TH:i');
             }
 
             if (step === 1) {
+                if (pageCountLoading) {
+                    showAlert("Please wait while the PDF pages are being counted.");
+                    return false;
+                }
                 if (!serviceId.value || !selectedService()) {
                     showAlert("Please choose valid print settings.");
                     paperSize.focus();
@@ -333,6 +417,8 @@ $min_pickup = date('Y-m-d\TH:i');
 
         function updateReview() {
             const fileName = documentFile.files && documentFile.files[0] ? documentFile.files[0].name : "Not selected";
+            const pages = Math.max(1, parseInt(detectedPageCount.value || "1", 10) || 1);
+            const copyCount = Math.max(1, parseInt(copies.value || "1", 10) || 1);
             const pickupText = pickupDatetime.value ? new Date(pickupDatetime.value).toLocaleString([], {
                 year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
             }) : "-";
@@ -341,10 +427,14 @@ $min_pickup = date('Y-m-d\TH:i');
             document.querySelector("[data-review-paper-size]").textContent = paperSize.value || "-";
             document.querySelector("[data-review-paper-type]").textContent = paperType.value || "-";
             document.querySelector("[data-review-print-type]").textContent = printType.value || "-";
-            document.querySelector("[data-review-copies]").textContent = copies.value || "1";
+            document.querySelector("[data-review-pages]").textContent = String(pages);
+            document.querySelector("[data-review-copies]").textContent = String(copyCount);
             document.querySelector("[data-review-pickup]").textContent = pickupText;
             document.querySelector("[data-review-instruction]").textContent = instruction.value.trim() || "None";
             document.querySelector("[data-review-total]").textContent = total.textContent;
+            if (reviewBreakdown) {
+                reviewBreakdown.textContent = pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies");
+            }
         }
 
         function goToStep(step) {
@@ -376,7 +466,7 @@ $min_pickup = date('Y-m-d\TH:i');
         paperType.onchange = updatePrintType;
         printType.onchange = computeTotal;
         copies.oninput = computeTotal;
-        documentFile.onchange = updateReview;
+        documentFile.onchange = detectDocumentPages;
         pickupDatetime.onchange = updateReview;
         instruction.oninput = updateReview;
 

@@ -66,9 +66,9 @@ $types = "i";
 $params = [$shop_id];
 
 if ($search_code !== '') {
-    $where .= " AND o.order_code LIKE ?";
+    $where .= " AND LOWER(o.order_code) LIKE ?";
     $types .= "s";
-    $params[] = "%$search_code%";
+    $params[] = '%' . strtolower($search_code) . '%';
 }
 
 if ($status_filter !== 'all') {
@@ -178,7 +178,7 @@ function paymentStatusLabel($payment_status, $verification_status)
 ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_toast);
 ?>
 
-<nav class="orders-tabs" aria-label="Order status filters">
+<nav class="orders-tabs" aria-label="Order status filters" data-live-region="owner-order-tabs">
     <?php
     $tabs = [
         'all' => ['label' => 'All Orders', 'count' => (int) $counts['total'], 'icon' => 'package'],
@@ -198,7 +198,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
     <?php endforeach; ?>
 </nav>
 
-<section class="orders-summary-grid">
+<section class="orders-summary-grid" data-live-region="owner-order-summary">
     <article class="orders-summary-card pending">
         <div class="orders-summary-icon"><?php echo ownerIcon('clock', 'icon'); ?></div>
         <strong><?php echo (int) $counts['pending']; ?></strong>
@@ -226,7 +226,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 </section>
 
 <section class="orders-search-card">
-    <form method="GET">
+    <form method="GET" data-live-search-form data-live-target="owner_orders" data-live-min="1">
         <input type="hidden" name="status" value="<?php echo e($status_filter); ?>">
         <div class="orders-search-box">
             <?php echo ownerIcon('search', 'icon'); ?>
@@ -242,13 +242,13 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 </section>
 
 <?php if (empty($orders)): ?>
-    <section class="owner-card empty-state">
+    <section class="owner-card empty-state" data-live-region="owner-order-results">
         <h2>No orders found</h2>
         <p>New customer print orders will appear here.</p>
     </section>
 <?php else: ?>
     <?php $order_files = []; ?>
-    <section class="orders-table-card">
+    <section class="orders-table-card" data-live-region="owner-order-results">
         <div class="owner-table-wrap">
             <table class="orders-table">
                 <thead>
@@ -265,6 +265,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                 <tbody>
                     <?php foreach ($orders as $order): ?>
                         <?php
+                        $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
                         $file_sql = "SELECT * FROM uploaded_files WHERE order_id = ?";
                         $file_stmt = mysqli_prepare($conn, $file_sql);
                         mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
@@ -290,7 +291,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 <div class="print-detail-chips">
                                     <span><?php echo ownerIcon('file-text', 'icon-sm'); ?><?php echo e($order['paper_size']); ?></span>
                                     <span><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['print_type']); ?></span>
-                                    <span>x<?php echo e($order['copies']); ?></span>
+                                    <span><?php echo e($order_page_count); ?>p x<?php echo e($order['copies']); ?></span>
                                 </div>
                                 <small class="muted"><?php echo e($order['paper_type']); ?></small>
                             </td>
@@ -341,7 +342,10 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         </div>
 
         <?php foreach ($orders as $order): ?>
-            <?php $file_rows = $order_files[(int) $order['order_id']] ?? []; ?>
+            <?php
+            $file_rows = $order_files[(int) $order['order_id']] ?? [];
+            $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
+            ?>
             <div class="order-modal" id="order-modal-<?php echo e($order['order_id']); ?>" aria-hidden="true">
                 <div class="order-modal-backdrop" data-order-modal-close></div>
                 <section class="order-modal-dialog" role="dialog" aria-modal="true"
@@ -372,7 +376,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 <?php else: ?>
                                     <strong><?php echo e(count($file_rows) > 1 ? count($file_rows) . ' Uploaded Files' : 'PDF Document'); ?></strong>
                                     <?php foreach ($file_rows as $file): ?>
-                                        <a href="<?php echo BASE_URL . e($file['file_path']); ?>"
+                                        <a href="<?php echo e(printEaseFileUrl($file['file_path'])); ?>"
                                             target="_blank"><?php echo e($file['file_name']); ?></a>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
@@ -391,8 +395,16 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                     <strong><?php echo e($order['print_type'] ?: 'Not set'); ?></strong>
                                 </div>
                                 <div class="order-setting-card">
+                                    <span>Pages</span>
+                                    <strong><?php echo e($order_page_count); ?></strong>
+                                </div>
+                                <div class="order-setting-card">
                                     <span>Copies</span>
                                     <strong><?php echo e($order['copies'] ?: 'Not set'); ?></strong>
+                                </div>
+                                <div class="order-setting-card">
+                                    <span>Print Volume</span>
+                                    <strong><?php echo e($order_page_count); ?> x <?php echo e($order['copies'] ?: 1); ?></strong>
                                 </div>
                                 <div class="order-setting-card">
                                     <span>Services</span>
@@ -497,24 +509,15 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                     <span>Proof of Payment</span>
                                     <strong>
                                         <?php if (!empty($order['proof_of_payment_file'])): ?>
+                                            <?php
+                                            $proof = BASE_URL . e($order['proof_of_payment_file']);
+                                            $ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION));
+                                            ?>
                                             <button type="button" class="text-blue-700 font-semibold hover:underline proof-toggle"
-                                                data-target="proof-preview-<?php echo e($order['payment_id']); ?>">
+                                                data-proof-url="<?php echo $proof; ?>"
+                                                data-proof-type="<?php echo e($ext); ?>">
                                                 View Proof
                                             </button>
-
-                                            <div id="proof-preview-<?php echo e($order['payment_id']); ?>" class="hidden mt-3" data-payment-proof-preview>
-                                                <?php
-                                                $proof = BASE_URL . e($order['proof_of_payment_file']);
-                                                $ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION));
-                                                ?>
-
-                                                <?php if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'jfif'])): ?>
-                                                    <img src="<?php echo $proof; ?>"
-                                                        class="order-payment-proof-image">
-                                                <?php else: ?>
-                                                    <iframe src="<?php echo $proof; ?>" class="order-payment-proof-frame"></iframe>
-                                                <?php endif; ?>
-                                            </div>
                                         <?php else: ?>
                                             No proof uploaded
                                         <?php endif; ?>
@@ -570,7 +573,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                 <input type="hidden" name="order_status" value="processing">
                                 <?php foreach ($file_rows as $file): ?>
-                                    <input type="hidden" data-download-url value="<?php echo BASE_URL . e($file['file_path']); ?>">
+                                    <input type="hidden" data-download-url value="<?php echo e(printEaseFileUrl($file['file_path'])); ?>">
                                 <?php endforeach; ?>
                                 <button type="submit" name="update_order" class="btn order-modal-primary">Accept &amp; Download
                                     Order</button>
@@ -584,6 +587,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         <div class="orders-mobile-list">
             <?php foreach ($orders as $order): ?>
                 <?php
+                $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
                 $file_sql = "SELECT * FROM uploaded_files WHERE order_id = ?";
                 $file_stmt = mysqli_prepare($conn, $file_sql);
                 mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
@@ -603,7 +607,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     </div>
                     <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
                     <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>,
-                        <?php echo e($order['print_type']); ?>, x<?php echo e($order['copies']); ?>
+                        <?php echo e($order['print_type']); ?>, <?php echo e($order_page_count); ?> pages x<?php echo e($order['copies']); ?>
                     </p>
                     <p><strong>Total:</strong> <?php echo ownerMoney($order['total_amount']); ?></p>
                     <p><strong>Instruction:</strong> <?php echo e($order['customer_instruction'] ?: 'No instruction'); ?></p>
@@ -828,13 +832,6 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
             });
         });
     })();
-
-    document.querySelectorAll('.proof-toggle').forEach(function (button) {
-        button.addEventListener('click', function () {
-            const target = document.getElementById(button.dataset.target);
-            if (target) target.classList.toggle('hidden');
-        });
-    });
 
 </script>
 

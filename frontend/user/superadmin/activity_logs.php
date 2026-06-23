@@ -134,9 +134,9 @@ if ($module_filter !== 'all') {
 }
 
 if ($search !== '') {
-    $where[] = "(u.full_name LIKE ? OR u.role LIKE ? OR al.module LIKE ? OR al.action LIKE ?)";
+    $where[] = "(LOWER(u.full_name) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(al.module) LIKE ? OR LOWER(al.action) LIKE ?)";
     $types .= 'ssss';
-    $like = '%' . $search . '%';
+    $like = '%' . strtolower($search) . '%';
     $params[] = $like;
     $params[] = $like;
     $params[] = $like;
@@ -196,7 +196,7 @@ $ranges = [
 adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and monitor platform activity.');
 ?>
 <section class="admin-activity-page">
-    <form class="admin-activity-toolbar" method="GET" action="activity_logs.php">
+    <form class="admin-activity-toolbar" method="GET" action="activity_logs.php" data-live-search-form data-live-target="admin_activity" data-live-min="1">
         <label class="admin-activity-search">
             <?php echo adminIcon('search'); ?>
             <input type="search" name="search" value="<?php echo e($search); ?>" placeholder="Search by user, role, module, or action...">
@@ -226,14 +226,14 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
         <?php endforeach; ?>
     </nav>
 
-    <section class="admin-activity-stats" aria-label="Activity summary">
+    <section class="admin-activity-stats" aria-label="Activity summary" data-live-region="admin-activity-stats">
         <article class="total"><span><?php echo adminIcon('activity'); ?></span><strong><?php echo (int) $summary['total']; ?></strong><p>Total Logs <?php echo e($range_label); ?></p></article>
         <article class="critical"><span><?php echo adminIcon('x'); ?></span><strong><?php echo (int) $summary['important']; ?></strong><p>Important Events</p></article>
         <article class="users"><span><?php echo adminIcon('users'); ?></span><strong><?php echo (int) $summary['users']; ?></strong><p>User / Account Events</p></article>
         <article class="payments"><span><?php echo adminIcon('file'); ?></span><strong><?php echo (int) $summary['payments_orders']; ?></strong><p>Payments / Orders</p></article>
     </section>
 
-    <section class="admin-activity-list-card">
+    <section class="admin-activity-list-card" data-live-region="admin-activity-results">
         <header><h2><?php echo e($range_label); ?></h2><span>Latest <?php echo min(50, count($logs)); ?> shown</span></header>
         <div class="admin-activity-list">
             <?php if (empty($logs)): ?>

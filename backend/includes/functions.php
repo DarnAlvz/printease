@@ -28,6 +28,15 @@ function isInternalAppUrl($url) {
     return str_starts_with($url, '/') && !str_contains($url, "\n") && !str_contains($url, "\r");
 }
 
+function printEaseFileUrl($path) {
+    $path = trim((string) $path);
+    if ($path === '') return '';
+    if (preg_match('/^https?:\/\//i', $path)) return $path;
+    if (str_starts_with($path, '//')) return 'https:' . $path;
+
+    return defined('BASE_URL') ? BASE_URL . ltrim($path, '/') : $path;
+}
+
 function setToast($message, $status = 'info', array $options = []) {
     if (!isset($_SESSION['toasts']) || !is_array($_SESSION['toasts'])) {
         $_SESSION['toasts'] = [];
@@ -148,5 +157,42 @@ function requireAuth()
     }
 }
 
-?>
+function getPdfPageCount($filePath, $fallback = 1) {
+    $fallback = max(1, (int) $fallback);
 
+    if (!class_exists('Imagick')) {
+        return getPdfPageCountFromText($filePath, $fallback);
+    }
+
+    try {
+        $imagick = new Imagick();
+        $imagick->pingImage($filePath);
+        $page_count = $imagick->getNumberImages();
+        $imagick->clear();
+        $imagick->destroy();
+
+        return max(1, (int) $page_count);
+    } catch (Throwable $exception) {
+        return getPdfPageCountFromText($filePath, $fallback);
+    }
+}
+
+function getPdfPageCountFromText($filePath, $fallback = 1) {
+    $fallback = max(1, (int) $fallback);
+    if (!is_readable($filePath)) {
+        return $fallback;
+    }
+
+    $contents = @file_get_contents($filePath);
+    if ($contents === false || $contents === '') {
+        return $fallback;
+    }
+
+    if (preg_match_all('/\/Type\s*\/Page\b/', $contents, $matches)) {
+        return max(1, count($matches[0]));
+    }
+
+    return $fallback;
+}
+
+?>

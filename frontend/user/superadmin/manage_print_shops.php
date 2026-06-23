@@ -88,9 +88,9 @@ if ($filter !== 'all') {
 }
 
 if ($search !== '') {
-    $where[] = "(ps.shop_name LIKE ? OR u.full_name LIKE ?)";
+    $where[] = "(LOWER(ps.shop_name) LIKE ? OR LOWER(u.full_name) LIKE ?)";
     $types .= 'ss';
-    $like = '%' . $search . '%';
+    $like = '%' . strtolower($search) . '%';
     $params[] = $like;
     $params[] = $like;
 }
@@ -145,7 +145,7 @@ $filters = [
 adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop status, and control shop availability.');
 ?>
 <section class="admin-shop-manager">
-    <form class="admin-shop-toolbar" method="GET" action="manage_print_shops.php">
+    <form class="admin-shop-toolbar" method="GET" action="manage_print_shops.php" data-live-search-form data-live-target="admin_shops" data-live-min="1">
         <label class="admin-shop-search" aria-label="Search shops">
             <?php echo adminIcon('search'); ?>
             <input type="search" name="search" value="<?php echo e($search); ?>" placeholder="Search by shop name or owner name...">
@@ -154,7 +154,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
         <button class="admin-shop-search-button" type="submit">Search</button>
     </form>
 
-    <nav class="admin-shop-filters" aria-label="Shop status filters">
+    <nav class="admin-shop-filters" aria-label="Shop status filters" data-live-region="admin-shop-filters">
         <?php foreach ($filters as $key => $item): ?>
             <?php
                 $query = [];
@@ -170,7 +170,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
         <?php endforeach; ?>
     </nav>
 
-    <section class="admin-shop-stats" aria-label="Shop management summary">
+    <section class="admin-shop-stats" aria-label="Shop management summary" data-live-region="admin-shop-stats">
         <article class="admin-shop-stat admin-shop-stat-total">
             <span><?php echo adminIcon('shops'); ?></span>
             <strong><?php echo (int) $summary['total']; ?></strong>
@@ -198,7 +198,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
         </article>
     </section>
 
-    <section class="admin-shop-table-card">
+    <section class="admin-shop-table-card" data-live-region="admin-shop-results">
         <div class="admin-shop-table-wrap">
             <table class="admin-shop-table">
                 <thead>

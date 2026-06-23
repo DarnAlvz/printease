@@ -18,7 +18,7 @@ $owner_id = $_SESSION['user_id'];
 $order_id = intval($_POST['order_id']);
 $order_status = $_POST['order_status'] ?? '';
 
-$allowed = ['pending', 'accepted', 'processing', 'ready_for_pickup', 'completed', 'cancelled'];
+$allowed = ['pending', 'processing', 'ready_for_pickup', 'completed'];
 
 if (!in_array($order_status, $allowed)) {
     setError("Invalid order status.");
