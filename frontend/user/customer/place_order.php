@@ -61,6 +61,9 @@ if (empty($service_list)) {
 
 date_default_timezone_set('Asia/Manila');
 $min_pickup = date('Y-m-d\TH:i');
+$shop_logo_file = trim((string) ($shop['shop_logo'] ?? ''));
+$shop_logo_url = $shop_logo_file !== '' ? SHOP_LOGOS_URL . basename($shop_logo_file) : '';
+$shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 ?>
 
 <!DOCTYPE html>
@@ -96,6 +99,13 @@ $min_pickup = date('Y-m-d\TH:i');
 
                 <p class="customer-order-wizard-alert" data-wizard-alert role="alert" hidden></p>
 
+                <?php if ($shop_is_busy): ?>
+                    <section class="customer-busy-shop-inline" role="status">
+                        <strong>Notice: This shop is currently busy.</strong>
+                        <span>This shop is in high demand and has many orders at the moment, so your request may take longer than usual.</span>
+                    </section>
+                <?php endif; ?>
+
                 <section class="customer-order-step is-active" data-step-panel="0" aria-labelledby="orderStepFile">
                     <div class="customer-order-step-head">
                         <span>Step 1 of 4</span>
@@ -104,7 +114,14 @@ $min_pickup = date('Y-m-d\TH:i');
                     </div>
 
                     <div class="customer-order-shop-summary">
-                        <div class="customer-order-shop-icon"><?php echo customerIcon('printer'); ?></div>
+                        <div class="customer-order-shop-icon">
+                            <?php if ($shop_logo_url !== ''): ?>
+                                <img src="<?php echo e($shop_logo_url); ?>"
+                                    alt="<?php echo e($shop['shop_name']); ?> logo">
+                            <?php else: ?>
+                                <?php echo customerIcon('printer'); ?>
+                            <?php endif; ?>
+                        </div>
                         <div>
                             <small>Selected shop</small>
                             <strong><?php echo e($shop['shop_name']); ?></strong>
@@ -114,8 +131,11 @@ $min_pickup = date('Y-m-d\TH:i');
 
                     <label class="customer-order-field">
                         <span>Upload Document</span>
-                        <input type="file" name="document_file" id="document_file" required class="w-full border rounded-xl p-3">
-                        <small>One file per order only.</small>
+                        <input type="file" name="document_file" id="document_file" required
+                            class="w-full border rounded-xl p-3">
+                        <small>Each order must contain exactly one file attachment only.
+                            Only PDF files are accepted.
+                        </small>
                     </label>
                 </section>
 
@@ -150,7 +170,8 @@ $min_pickup = date('Y-m-d\TH:i');
 
                         <div class="customer-order-field">
                             <span>Pages</span>
-                            <strong class="w-full border rounded-xl p-3 bg-gray-50 block" data-page-count-label>1</strong>
+                            <strong class="w-full border rounded-xl p-3 bg-gray-50 block"
+                                data-page-count-label>1</strong>
                             <small data-page-count-status>Upload a PDF to detect pages automatically.</small>
                         </div>
                     </div>
@@ -214,8 +235,10 @@ $min_pickup = date('Y-m-d\TH:i');
                 <div class="customer-order-actions">
                     <a href="explore.php?view=all" class="customer-order-cancel" data-wizard-cancel>Cancel</a>
                     <button type="button" class="customer-order-back" data-wizard-back hidden>Back</button>
-                    <button type="button" class="customer-order-next bg-blue-600 text-white" data-wizard-next>Next</button>
-                    <button type="submit" name="submit_order" class="customer-order-submit bg-blue-600 text-white" data-wizard-submit hidden>
+                    <button type="button" class="customer-order-next bg-blue-600 text-white"
+                        data-wizard-next>Next</button>
+                    <button type="submit" name="submit_order" class="customer-order-submit bg-blue-600 text-white"
+                        data-wizard-submit hidden>
                         Submit Order
                     </button>
                 </div>

@@ -441,7 +441,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 <div>
                                     <span>Payment Status</span>
                                     <strong>
-                                        <span class="status-badge">
+                                        <span class="status-badge" data-payment-status-label="<?php echo e($order['payment_id'] ?? ''); ?>">
                                             <?php echo e(paymentStatusLabel($order['payment_status'] ?? '', $order['verification_status'] ?? '')); ?>
                                         </span>
                                     </strong>
@@ -449,7 +449,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 
                                 <div>
                                     <span>Verification Status</span>
-                                    <strong>
+                                    <strong data-verification-status-label="<?php echo e($order['payment_id'] ?? ''); ?>">
                                         <?php
                                         if (empty($order['payment_id'])) {
                                             echo "No Payment Submitted";
@@ -525,11 +525,12 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 </div>
 
                                 <?php if (!empty($order['payment_id']) && ($order['verification_status'] ?? '') === 'pending'): ?>
-                                    <div class="order-payment-action-card">
+                                    <div class="order-payment-action-card" data-payment-action-card="<?php echo e($order['payment_id']); ?>">
                                         <span>Payment Action</span>
                                         <strong class="payment-action-group">
                                             <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
-                                                class="orders-update-form">
+                                                class="orders-update-form" data-payment-verify-form
+                                                data-payment-id="<?php echo e($order['payment_id']); ?>">
                                                 <input type="hidden" name="payment_id"
                                                     value="<?php echo e($order['payment_id']); ?>">
                                                 <button type="submit" name="verify_payment" class="btn order-btn-ready">
@@ -569,6 +570,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                         <?php if ($owner_is_verified && $order['order_status'] === 'pending'): ?>
                             <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                                 class="orders-update-form orders-status-action" data-accept-download-form
+                                data-owner-local-handler="true"
                                 data-order-id="<?php echo e($order['order_id']); ?>">
                                 <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                 <input type="hidden" name="order_status" value="processing">
@@ -751,6 +753,77 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
             }
         }
 
+        function setPaymentVerified(paymentId) {
+            document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function (label) {
+                label.textContent = 'Paid';
+            });
+
+            document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function (label) {
+                label.textContent = 'Verified';
+            });
+
+            document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function (card) {
+                card.remove();
+            });
+        }
+
+        document.querySelectorAll('[data-payment-verify-form]').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (form.dataset.paymentSubmitting === 'true') {
+                    return;
+                }
+
+                form.dataset.paymentSubmitting = 'true';
+                form.classList.add('is-loading');
+                const submitButton = form.querySelector('[type="submit"]');
+                const originalText = submitButton ? submitButton.textContent : '';
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Marking...';
+                }
+
+                const formData = new FormData(form);
+                if (!formData.has('verify_payment')) {
+                    formData.append('verify_payment', '1');
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            if (!response.ok || !data || !data.success) {
+                                throw new Error((data && data.message) || 'Payment update failed.');
+                            }
+                            return data;
+                        });
+                    })
+                    .then(function (data) {
+                        setPaymentVerified(data.payment_id || form.dataset.paymentId);
+                        if (window.ownerShowToast) {
+                            window.ownerShowToast(data.message || 'Payment verified successfully.', 'success');
+                        }
+                    })
+                    .catch(function (error) {
+                        form.dataset.paymentSubmitting = 'false';
+                        form.classList.remove('is-loading');
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = originalText || 'Mark as Paid';
+                        }
+                        if (window.ownerShowToast) {
+                            window.ownerShowToast(error.message || 'Failed to verify payment. Please try again.', 'error');
+                        }
+                    });
+            });
+        });
+
         document.querySelectorAll('[data-accept-download-form]').forEach(function (form) {
             form.addEventListener('submit', function (event) {
                 if (form.dataset.downloadStarted === 'true') {
@@ -758,6 +831,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                 }
 
                 event.preventDefault();
+                event.stopPropagation();
 
                 const urls = Array.from(form.querySelectorAll('[data-download-url]'))
                     .map(function (input) {
@@ -808,9 +882,9 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                             setOrderProcessing(orderId);
                             showReadyAction(orderId);
                             form.remove();
-                            window.setTimeout(function () {
-                                closeModal(document.getElementById('order-modal-' + orderId));
-                            }, 180);
+                            if (window.ownerShowToast) {
+                                window.ownerShowToast('Order accepted and downloads started.', 'success');
+                            }
                         })
                         .catch(function () {
                             form.dataset.downloadStarted = 'false';
@@ -819,7 +893,9 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 submitButton.disabled = false;
                                 submitButton.textContent = 'Accept & Download Order';
                             }
-                            window.ownerShowToast('Failed to update order status. Please try again.', 'error');
+                            if (window.ownerShowToast) {
+                                window.ownerShowToast('Failed to update order status. Please try again.', 'error');
+                            }
                         });
                 }, Math.max(450, urls.length * 180));
             });

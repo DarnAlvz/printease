@@ -147,6 +147,7 @@ function renderExploreVerifiedBadge(array $shop): void
 function renderExploreShopCard(array $shop, string $return_to, bool $selected = false): void
 {
     $status = ($shop['shop_status'] ?? $shop['status'] ?? '') === 'available' ? 'available' : 'busy';
+    $shop_name = (string) ($shop['shop_name'] ?? $shop['name'] ?? 'Print Shop');
     $short_address = customerExploreShortAddress($shop);
     $landmark = trim((string) ($shop['landmark'] ?? ''));
     $shop_logo = trim((string) ($shop['shop_logo'] ?? ''));
@@ -161,7 +162,7 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
             </div>
             <div class="customer-map-shop-title">
                 <div class="customer-map-shop-name">
-                    <h3><?php echo e($shop['shop_name'] ?? $shop['name'] ?? 'Print Shop'); ?></h3>
+                    <h3><?php echo e($shop_name); ?></h3>
                     <?php renderExploreVerifiedBadge($shop); ?>
                 </div>
                 <p><span aria-hidden="true">&#9679;</span><?php echo e($short_address); ?></p>
@@ -182,7 +183,9 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
         <div class="customer-map-shop-actions">
             <a href="<?php echo e(customerExploreUrl('nearby', ['shop_id' => (int) $shop['shop_id']])); ?>">View Map</a>
             <a href="<?php echo e(customerExploreDirectionsUrl($shop)); ?>" target="_blank" rel="noopener">Directions</a>
-            <a class="primary" href="place_order.php?shop_id=<?php echo (int) $shop['shop_id']; ?>">Order Now</a>
+            <a class="primary" href="place_order.php?shop_id=<?php echo (int) $shop['shop_id']; ?>"
+                data-busy-shop-link data-shop-status="<?php echo e($status); ?>"
+                data-shop-name="<?php echo e($shop_name); ?>">Order Now</a>
         </div>
     </article>
     <?php
@@ -361,6 +364,94 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
 
     <?php renderCustomerLayoutEnd('explore'); ?>
 
+    <div class="customer-busy-shop-modal" id="busyShopModal" role="dialog" aria-modal="true"
+        aria-labelledby="busyShopTitle" aria-describedby="busyShopMessage" hidden>
+        <div class="customer-busy-shop-backdrop" data-busy-shop-close></div>
+        <section class="customer-busy-shop-panel" tabindex="-1">
+            <span class="customer-busy-shop-icon" aria-hidden="true"><?php echo customerIcon('clock'); ?></span>
+            <div class="customer-busy-shop-copy">
+                <small>Busy shop notice</small>
+                <h2 id="busyShopTitle">This shop is currently busy</h2>
+                <p id="busyShopMessage">
+                    Notice: This shop is currently in high demand and has many orders at the moment.
+                    Your request may take longer than usual. You may continue or choose another shop.
+                </p>
+                <strong data-busy-shop-name></strong>
+            </div>
+            <div class="customer-busy-shop-actions">
+                <button type="button" class="customer-busy-shop-secondary" data-busy-shop-close>Choose Another Shop</button>
+                <button type="button" class="customer-busy-shop-primary" data-busy-shop-continue>Continue</button>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('busyShopModal');
+            if (!modal) return;
+
+            const panel = modal.querySelector('.customer-busy-shop-panel');
+            const shopNameLabel = modal.querySelector('[data-busy-shop-name]');
+            const continueButton = modal.querySelector('[data-busy-shop-continue]');
+            const acknowledgedBusyLinks = new Set();
+            let pendingHref = '';
+            let lastTrigger = null;
+
+            function openBusyShopModal(link) {
+                pendingHref = link.href;
+                lastTrigger = link;
+                if (shopNameLabel) {
+                    shopNameLabel.textContent = link.dataset.shopName || 'Selected print shop';
+                }
+                modal.hidden = false;
+                modal.classList.add('is-visible');
+                document.body.classList.add('customer-modal-open');
+                window.setTimeout(function () {
+                    (panel || continueButton || modal).focus();
+                }, 0);
+            }
+
+            function closeBusyShopModal() {
+                modal.classList.remove('is-visible');
+                modal.hidden = true;
+                document.body.classList.remove('customer-modal-open');
+                pendingHref = '';
+                if (lastTrigger && document.contains(lastTrigger)) {
+                    lastTrigger.focus();
+                }
+            }
+
+            document.addEventListener('click', function (event) {
+                const link = event.target.closest('[data-busy-shop-link]');
+                if (!link) return;
+
+                const status = String(link.dataset.shopStatus || '').toLowerCase();
+                if (status !== 'busy' || acknowledgedBusyLinks.has(link.href)) return;
+
+                event.preventDefault();
+                openBusyShopModal(link);
+            });
+
+            modal.querySelectorAll('[data-busy-shop-close]').forEach(function (button) {
+                button.addEventListener('click', closeBusyShopModal);
+            });
+
+            if (continueButton) {
+                continueButton.addEventListener('click', function () {
+                    if (!pendingHref) return;
+                    acknowledgedBusyLinks.add(pendingHref);
+                    window.location.href = pendingHref;
+                });
+            }
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && !modal.hidden) {
+                    closeBusyShopModal();
+                }
+            });
+        });
+    </script>
+
     <?php if ($view === 'nearby' && !empty($shop_locations)): ?>
         <script>
             document.addEventListener('DOMContentLoaded', function () {
@@ -483,7 +574,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                         '<div class="customer-map-popup-title"><strong>' + escapeHtml(shop.name) + '</strong>' + verifiedBadgeHtml(shop) + '</div>' +
                         '<span>' + escapeHtml(shortAddress(shop)) + '</span>' +
                         '<small>' + escapeHtml(hoursLabel(shop)) + ' &middot; ' + money(shop.starting_price) + ' start</small>' +
-                        '<a href="place_order.php?shop_id=' + shop.shop_id + '">Order Now</a>' +
+                        '<a href="place_order.php?shop_id=' + shop.shop_id + '" data-busy-shop-link data-shop-status="' + escapeHtml(shop.status) + '" data-shop-name="' + escapeHtml(shop.name) + '">Order Now</a>' +
                     '</div>';
                 }
                 function logoHtml(shop) {
@@ -504,7 +595,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                             '<span><strong>' + shop.service_count + ' services</strong>' + money(shop.starting_price) + ' start</span>' +
                             '<span><strong>' + escapeHtml(formatDistance(shop.distance)) + '</strong>' + escapeHtml(shop.contact || 'No contact listed') + '</span>' +
                         '</div>' +
-                        '<div class="customer-map-shop-actions"><button type="button" data-focus-shop="' + shop.shop_id + '">View Map</button><a href="' + directionsUrl(shop) + '" target="_blank" rel="noopener">Directions</a><a class="primary" href="place_order.php?shop_id=' + shop.shop_id + '">Order Now</a></div>' +
+                        '<div class="customer-map-shop-actions"><button type="button" data-focus-shop="' + shop.shop_id + '">View Map</button><a href="' + directionsUrl(shop) + '" target="_blank" rel="noopener">Directions</a><a class="primary" href="place_order.php?shop_id=' + shop.shop_id + '" data-busy-shop-link data-shop-status="' + escapeHtml(shop.status) + '" data-shop-name="' + escapeHtml(shop.name) + '">Order Now</a></div>' +
                     '</article>';
                 }
                 function createMarkers() {

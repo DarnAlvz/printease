@@ -546,6 +546,7 @@
 
         document.addEventListener('submit', function (event) {
             const form = event.target.closest('[data-accept-download-form]');
+            if (form && form.dataset.ownerLocalHandler === 'true') return;
             if (!form || form.dataset.downloadStarted === 'true') return;
             event.preventDefault();
             const urls = Array.from(form.querySelectorAll('[data-download-url]')).map(function (input) {

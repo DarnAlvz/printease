@@ -10,6 +10,19 @@ checkRole("shop_owner");
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
+$is_ajax = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest';
+
+function paymentJsonResponse($success, $message, $extra = [], $status = 200)
+{
+    http_response_code($status);
+    header('Content-Type: application/json');
+    echo json_encode(array_merge([
+        'success' => $success,
+        'message' => $message,
+    ], $extra));
+    exit();
+}
+
 $owner_id = $_SESSION['user_id'];
 $payment_id = intval($_POST['payment_id'] ?? 0);
 
@@ -26,6 +39,9 @@ mysqli_stmt_execute($stmt);
 $payment = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
 if (!$payment) {
+    if ($is_ajax) {
+        paymentJsonResponse(false, "Payment not found or unauthorized.", [], 404);
+    }
     setError("Payment not found or unauthorized.");
     redirect(BASE_URL . "frontend/user/shop_owner/payments.php");
 }
@@ -36,13 +52,29 @@ if (isset($_POST['verify_payment'])) {
                WHERE payment_id=?";
     $stmt = mysqli_prepare($conn, $update);
     mysqli_stmt_bind_param($stmt, "ii", $owner_id, $payment_id);
-    mysqli_stmt_execute($stmt);
+    $updated = mysqli_stmt_execute($stmt);
+
+    if (!$updated) {
+        if ($is_ajax) {
+            paymentJsonResponse(false, "Failed to verify payment. Please try again.", [], 500);
+        }
+        setError("Failed to verify payment. Please try again.");
+        redirect(BASE_URL . "frontend/user/shop_owner/orders.php");
+    }
 
     sendNotification($conn, $payment['customer_id'], "Your payment for order #" . $payment['order_code'] . " has been verified.", [
         'type' => 'payment_verified', 'title' => 'Payment verified',
         'target_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . (int) $payment['order_id'],
         'metadata' => ['order_id' => (int) $payment['order_id'], 'order_code' => $payment['order_code']],
     ]);
+    if ($is_ajax) {
+        paymentJsonResponse(true, "Payment verified successfully.", [
+            'payment_id' => (int) $payment_id,
+            'order_id' => (int) $payment['order_id'],
+            'payment_status' => 'paid',
+            'verification_status' => 'verified',
+        ]);
+    }
     setMessage("Payment verified successfully.");
 }
 
@@ -56,14 +88,34 @@ if (isset($_POST['reject_payment'])) {
            WHERE payment_id=?";
     $stmt = mysqli_prepare($conn, $update);
     mysqli_stmt_bind_param($stmt, "si", $reason, $payment_id);
-    mysqli_stmt_execute($stmt);
+    $updated = mysqli_stmt_execute($stmt);
+
+    if (!$updated) {
+        if ($is_ajax) {
+            paymentJsonResponse(false, "Failed to reject payment. Please try again.", [], 500);
+        }
+        setError("Failed to reject payment. Please try again.");
+        redirect(BASE_URL . "frontend/user/shop_owner/orders.php");
+    }
 
     sendNotification($conn, $payment['customer_id'], "Your payment proof for order #" . $payment['order_code'] . " was rejected.", [
         'type' => 'payment_rejected', 'title' => 'Payment proof rejected',
         'target_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . (int) $payment['order_id'],
         'metadata' => ['order_id' => (int) $payment['order_id'], 'order_code' => $payment['order_code']],
     ]);
+    if ($is_ajax) {
+        paymentJsonResponse(true, "Payment proof rejected.", [
+            'payment_id' => (int) $payment_id,
+            'order_id' => (int) $payment['order_id'],
+            'payment_status' => 'unpaid',
+            'verification_status' => 'rejected',
+        ]);
+    }
     setToast("Payment proof rejected.", "warning");
+}
+
+if ($is_ajax) {
+    paymentJsonResponse(false, "No payment action was requested.", [], 400);
 }
 
 redirect(BASE_URL . "frontend/user/shop_owner/orders.php");
