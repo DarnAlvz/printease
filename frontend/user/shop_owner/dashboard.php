@@ -325,74 +325,6 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                 </article>
             </section>
 
-            <section class="owner-card recent-orders-card">
-                <div class="card-head recent-orders-head">
-                    <h2>Recent Orders</h2>
-                    <a href="orders.php">View All</a>
-                </div>
-                <?php if (empty($recent_orders)): ?>
-                    <div class="empty-state">
-                        <h2>No recent orders</h2>
-                        <p>New print orders will appear here.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="recent-orders-table-wrap">
-                        <table class="recent-orders-table">
-                            <thead>
-                                <tr>
-                                    <th>Customer</th>
-                                    <th>Order ID</th>
-                                    <th>File Name</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php
-                                $avatar_classes = ['avatar-blue', 'avatar-purple', 'avatar-pink', 'avatar-green'];
-                                foreach ($recent_orders as $index => $order):
-                                    $avatar_class = $avatar_classes[$index % count($avatar_classes)];
-                                    ?>
-                                    <tr>
-                                        <td>
-                                            <div class="recent-customer">
-                                                <span
-                                                    class="customer-avatar <?php echo e($avatar_class); ?>"><?php echo e(dashboardInitials($order['full_name'])); ?></span>
-                                                <strong><?php echo e($order['full_name']); ?></strong>
-                                            </div>
-                                        </td>
-                                        <td><a
-                                                href="orders.php?order_code=<?php echo e(substr($order['order_code'], -4)); ?>"><?php echo e($order['order_code']); ?></a>
-                                        </td>
-                                        <td><?php echo e($order['file_name'] ?: 'No uploaded file'); ?></td>
-                                        <td><strong><?php echo dashboardMoney($order['total_amount']); ?></strong></td>
-                                        <td>
-                                            <span class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>">
-                                                <?php echo ownerIcon($order['order_status'] === 'completed' ? 'circle-check' : ($order['order_status'] === 'processing' ? 'trending-up' : 'clock'), 'icon-sm'); ?>
-                                                <?php echo e(ownerStatusLabel($order['order_status'])); ?>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="order-mobile-list recent-order-mobile-list">
-                        <?php foreach ($recent_orders as $index => $order): ?>
-                            <article class="owner-card order-card-mobile">
-                                <div class="card-head">
-                                    <h2><?php echo e($order['order_code']); ?></h2>
-                                    <span
-                                        class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>"><?php echo e(ownerStatusLabel($order['order_status'])); ?></span>
-                                </div>
-                                <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
-                                <p><strong>File:</strong> <?php echo e($order['file_name'] ?: 'No uploaded file'); ?></p>
-                                <p><strong>Amount:</strong> <?php echo dashboardMoney($order['total_amount']); ?></p>
-                            </article>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </section>
         </section>
 
         <aside class="dashboard-aside">
@@ -429,6 +361,75 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                 <p>Ready Orders <strong><?php echo (int) $stats['ready_for_pickup']; ?></strong></p>
             </section>
         </aside>
+
+        <section class="owner-card recent-orders-card">
+            <div class="card-head recent-orders-head">
+                <h2>Recent Orders</h2>
+                <a href="orders.php">View All</a>
+            </div>
+            <?php if (empty($recent_orders)): ?>
+                <div class="empty-state">
+                    <h2>No recent orders</h2>
+                    <p>New print orders will appear here.</p>
+                </div>
+            <?php else: ?>
+                <div class="recent-orders-table-wrap">
+                    <table class="recent-orders-table">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th>Order ID</th>
+                                <th>File Name</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $avatar_classes = ['avatar-blue', 'avatar-purple', 'avatar-pink', 'avatar-green'];
+                            foreach ($recent_orders as $index => $order):
+                                $avatar_class = $avatar_classes[$index % count($avatar_classes)];
+                                ?>
+                                <tr>
+                                    <td>
+                                        <div class="recent-customer">
+                                            <span
+                                                class="customer-avatar <?php echo e($avatar_class); ?>"><?php echo e(dashboardInitials($order['full_name'])); ?></span>
+                                            <strong><?php echo e($order['full_name']); ?></strong>
+                                        </div>
+                                    </td>
+                                    <td><a
+                                            href="orders.php?order_code=<?php echo e(substr($order['order_code'], -4)); ?>"><?php echo e($order['order_code']); ?></a>
+                                    </td>
+                                    <td><?php echo e($order['file_name'] ?: 'No uploaded file'); ?></td>
+                                    <td><strong><?php echo dashboardMoney($order['total_amount']); ?></strong></td>
+                                    <td>
+                                        <span class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>">
+                                            <?php echo ownerIcon($order['order_status'] === 'completed' ? 'circle-check' : ($order['order_status'] === 'processing' ? 'trending-up' : 'clock'), 'icon-sm'); ?>
+                                            <?php echo e(ownerStatusLabel($order['order_status'])); ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="order-mobile-list recent-order-mobile-list">
+                    <?php foreach ($recent_orders as $index => $order): ?>
+                        <article class="owner-card order-card-mobile">
+                            <div class="card-head">
+                                <h2><?php echo e($order['order_code']); ?></h2>
+                                <span
+                                    class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>"><?php echo e(ownerStatusLabel($order['order_status'])); ?></span>
+                            </div>
+                            <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
+                            <p><strong>File:</strong> <?php echo e($order['file_name'] ?: 'No uploaded file'); ?></p>
+                            <p><strong>Amount:</strong> <?php echo dashboardMoney($order['total_amount']); ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </section>
     </div>
 <?php endif; ?>
 

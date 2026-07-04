@@ -67,7 +67,10 @@ ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment pr
                 <p><strong>Proof Submitted:</strong> <?php echo !empty($payment['created_at']) ? e(date('M d, Y - g:i A', strtotime($payment['created_at']))) : 'Not available'; ?></p>
                 <p><strong>OCR Status:</strong> <span class="status-badge <?php echo e($ocr_class); ?>"><?php echo e(ucwords(str_replace('_', ' ', $ocr_status))); ?></span></p>
                 <p><strong>Payment Status:</strong> <?php echo e($payment['payment_status']); ?></p>
-                <p><strong>Verification:</strong> <?php echo e($payment['verification_status']); ?></p>
+                <p><strong>Verification:</strong> <?php echo ($payment['verification_status'] ?? '') === 'pending' ? 'For Verification' : e($payment['verification_status']); ?></p>
+                <?php if (($payment['verification_status'] ?? '') === 'rejected'): ?>
+                    <p><strong>Rejection Reason:</strong> <?php echo e($payment['rejection_reason'] ?: 'No reason provided.'); ?></p>
+                <?php endif; ?>
 
                 <?php if (!empty($payment['proof_of_payment_file'])): ?>
                     <div style="margin-top:12px;">
@@ -90,10 +93,16 @@ ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment pr
                         <button type="submit" name="verify_payment" class="btn btn-primary">
                             Mark as Paid
                         </button>
+                    </form>
 
-                        <br><br>
-
-                        <textarea name="rejection_reason" placeholder="Reason if rejected"></textarea><br>
+                    <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST" style="margin-top:12px;">
+                        <input type="hidden" name="payment_id" value="<?php echo e($payment['payment_id']); ?>">
+                        <label for="payment-rejection-<?php echo e($payment['payment_id']); ?>" style="display:block; font-weight:600; margin-bottom:6px;">
+                            Reason for rejection
+                        </label>
+                        <textarea id="payment-rejection-<?php echo e($payment['payment_id']); ?>" name="rejection_reason"
+                            placeholder="Tell the customer what needs to be corrected" maxlength="500" required
+                            style="width:100%; max-width:520px; min-height:90px;"></textarea><br>
 
                         <button type="submit" name="reject_payment" class="btn btn-danger">
                             Reject Payment

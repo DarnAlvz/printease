@@ -27,6 +27,10 @@ if (!isset($_POST['login'])) {
     redirectToLogin();
 }
 
+if (($_POST['terms_privacy'] ?? '') !== '1') {
+    redirectToLogin('error=terms_required');
+}
+
 $email = rateLimitIdentifier($_POST['email'] ?? '');
 $password = $_POST['password'] ?? '';
 $remember_me = isset($_POST['remember_me']) && $_POST['remember_me'] === '1';

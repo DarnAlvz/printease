@@ -163,7 +163,7 @@ function customerShopDirectionsUrl(array $shop): string
 <head>
     <title>Print Shops</title>
     <?php renderCustomerHead(); ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
 </head>
 
 <body class="customer-body bg-gray-100 min-h-screen pb-24">

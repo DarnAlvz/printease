@@ -15,6 +15,8 @@ if (isset($_POST['save_profile'])) {
     $landmark = trim($_POST['landmark'] ?? '');
     $gcash_name = trim($_POST['gcash_name'] ?? '');
     $gcash_number = trim($_POST['gcash_number'] ?? '');
+    $merchant_link = trim($_POST['merchant_link'] ?? '');
+    $payment_instructions = trim($_POST['payment_instructions'] ?? '');
 
     $latitude_raw = trim($_POST['latitude'] ?? '');
     $longitude_raw = trim($_POST['longitude'] ?? '');
@@ -78,6 +80,15 @@ if (isset($_POST['save_profile'])) {
     mysqli_stmt_execute($check_stmt);
     $existing = mysqli_fetch_assoc(mysqli_stmt_get_result($check_stmt));
     $shop_status = $existing['shop_status'] ?? 'available';
+    $existing_payment_settings = null;
+
+    if ($existing) {
+        $payment_settings_sql = "SELECT * FROM shop_payment_settings WHERE shop_id = ? LIMIT 1";
+        $payment_settings_stmt = mysqli_prepare($conn, $payment_settings_sql);
+        mysqli_stmt_bind_param($payment_settings_stmt, "i", $existing['shop_id']);
+        mysqli_stmt_execute($payment_settings_stmt);
+        $existing_payment_settings = mysqli_fetch_assoc(mysqli_stmt_get_result($payment_settings_stmt));
+    }
 
     $has_new_permit = isset($_FILES['business_permit_file'])
         && $_FILES['business_permit_file']['error'] === UPLOAD_ERR_OK
@@ -93,16 +104,28 @@ if (isset($_POST['save_profile'])) {
 
     $new_name = null;
     $new_logo_name = null;
-    $new_gcash_qr_name = $existing['gcash_qr_file'] ?? null;
+    $new_gcash_qr_name = $existing_payment_settings['gcash_qr_code'] ?? ($existing['gcash_qr_file'] ?? null);
 
-    if (strlen($gcash_name) > 150) {
-        setError("GCash account name is too long.");
+    if ($gcash_name === '' || strlen($gcash_name) > 150) {
+        setError("Please enter a valid GCash account name.");
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     }
 
-    if ($gcash_number !== '' && !preg_match('/^[0-9+\\-\\s]{7,30}$/', $gcash_number)) {
+    if ($gcash_number === '' || !preg_match('/^[0-9+\\-\\s]{7,30}$/', $gcash_number)) {
         setError("Please enter a valid GCash number.");
+        header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+        exit();
+    }
+
+    if ($payment_instructions === '' || strlen($payment_instructions) > 1000) {
+        setError("Please enter payment instructions up to 1000 characters.");
+        header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+        exit();
+    }
+
+    if ($merchant_link !== '' && (strlen($merchant_link) > 500 || !filter_var($merchant_link, FILTER_VALIDATE_URL) || !preg_match('/^https?:\\/\\//i', $merchant_link))) {
+        setError("Please enter a valid optional payment link that starts with http:// or https://.");
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     }
@@ -155,6 +178,12 @@ if (isset($_POST['save_profile'])) {
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
             exit();
         }
+    }
+
+    if (empty($new_gcash_qr_name)) {
+        setError("Please upload a GCash QR code for customer payments.");
+        header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+        exit();
     }
 
     if ($has_new_permit) {
@@ -376,7 +405,7 @@ if (isset($_POST['save_profile'])) {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issssddssssss",
+            "issssddsssssss",
             $owner_id,
             $shop_name,
             $shop_address,
@@ -414,6 +443,22 @@ if (isset($_POST['save_profile'])) {
         mysqli_stmt_bind_param($gcash_stmt, "sssii", $gcash_name, $gcash_number, $new_gcash_qr_name, $shop_id, $owner_id);
         mysqli_stmt_execute($gcash_stmt);
 
+        $payment_settings_sql = "INSERT INTO shop_payment_settings
+            (shop_id, payment_method, merchant_link, gcash_account_name, gcash_number, gcash_qr_code, instructions, approval_status, is_active, created_at, updated_at)
+            VALUES (?, 'gcash', ?, ?, ?, ?, ?, 'pending', 1, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                merchant_link = VALUES(merchant_link),
+                gcash_account_name = VALUES(gcash_account_name),
+                gcash_number = VALUES(gcash_number),
+                gcash_qr_code = VALUES(gcash_qr_code),
+                instructions = VALUES(instructions),
+                approval_status = 'pending',
+                is_active = 1,
+                updated_at = NOW()";
+        $payment_settings_stmt = mysqli_prepare($conn, $payment_settings_sql);
+        mysqli_stmt_bind_param($payment_settings_stmt, "isssss", $shop_id, $merchant_link, $gcash_name, $gcash_number, $new_gcash_qr_name, $payment_instructions);
+        mysqli_stmt_execute($payment_settings_stmt);
+
         if (!$existing || $has_new_permit) {
             $pending_user_sql = "UPDATE users
                                  SET account_status = 'pending'
@@ -434,6 +479,12 @@ if (isset($_POST['save_profile'])) {
                 'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
             ]);
         }
+        sendRoleNotification($conn, 'super_admin', 'A print shop payment setting is ready for review.', [
+            'type' => 'payment_settings_submitted',
+            'title' => 'Payment settings submitted',
+            'target_url' => BASE_URL . 'frontend/user/superadmin/manage_print_shops.php#payment-settings-review',
+            'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
+        ]);
         setMessage($message);
 
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");

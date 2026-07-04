@@ -32,13 +32,14 @@ while ($payment = mysqli_fetch_assoc($result)) {
     $scanned++;
     $relative_path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $payment['proof_of_payment_file']);
     $proof_path = $base_dir . DIRECTORY_SEPARATOR . $relative_path;
+    $allowed_proof_path = resolveAllowedOcrImagePath($proof_path, [ocrUploadsPath('payment_proofs')]);
 
-    if (!is_file($proof_path)) {
-        echo "Skipped payment #{$payment['payment_id']}: proof file not found.\n";
+    if ($allowed_proof_path === null) {
+        echo "Skipped payment #{$payment['payment_id']}: proof file not found or not allowed for OCR.\n";
         continue;
     }
 
-    $ocr_text = runReceiptOcr($proof_path);
+    $ocr_text = runReceiptOcr($allowed_proof_path);
     $ocr_reference_number = detectGcashReferenceFromText($ocr_text);
     $ocr_payment_date = detectGcashPaymentDateFromText($ocr_text);
     $ocr_status = gcashOcrStatus($ocr_reference_number, $ocr_payment_date);

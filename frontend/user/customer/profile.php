@@ -35,7 +35,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 <head>
     <title>Customer Profile</title>
     <?php renderCustomerHead(); ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
     <style>
         .customer-modal[hidden] {
             display: none;

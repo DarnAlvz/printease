@@ -270,7 +270,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <?php endif; ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
 </head>
 
 <body class="customer-body customer-map-page customer-explore-page bg-gray-100 min-h-screen pb-24">

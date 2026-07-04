@@ -4,10 +4,14 @@ session_start();
 require_once __DIR__ . "/../config/oauth.php";
 require_once __DIR__ . "/../includes/oauth_helpers.php";
 
-$provider = $_GET['provider'] ?? '';
+$provider = $_REQUEST['provider'] ?? '';
 
 if (!isAllowedOAuthProvider($provider)) {
     redirectToLoginError('oauth_invalid_provider');
+}
+
+if (($_REQUEST['terms_privacy'] ?? '') !== '1') {
+    redirectToLoginError('terms_required');
 }
 
 $config = oauthProvider($provider);

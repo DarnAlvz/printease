@@ -271,11 +271,24 @@
         list.innerHTML = items.map(function (item) {
             const tag = item.target_url ? 'a' : 'article';
             const href = item.target_url ? ' href="' + escapeHtml(item.target_url) + '"' : '';
-            return '<' + tag + ' class="notification-popover-item' + (item.target_url ? ' notification-popover-link' : '') + '"' + href +
-                ' data-notification-id="' + item.id + '" data-is-read="' + item.is_read + '">' +
+            const tone = ownerNotificationTone(item);
+            return '<' + tag + ' class="notification-popover-item notification-tone-' + tone + (item.target_url ? ' notification-popover-link' : '') + '"' + href +
+                ' data-notification-id="' + item.id + '" data-is-read="' + item.is_read + '" data-notification-tone="' + tone + '">' +
                 '<span class="notification-popover-icon"></span><div><p>' + escapeHtml(item.message) + '</p>' +
                 '<time>' + escapeHtml(item.created_at) + '</time></div></' + tag + '>';
         }).join('');
+    }
+
+    function ownerNotificationTone(item) {
+        const type = String(item && item.type || '').toLowerCase();
+        const text = String(((item && item.title) || '') + ' ' + ((item && item.message) || '')).toLowerCase();
+
+        if (type.indexOf('rejected') !== -1 || text.indexOf('rejected') !== -1) return 'danger';
+        if (type === 'pickup_reminder' || text.indexOf('pickup reminder') !== -1 || text.indexOf('pickup time') !== -1) return 'warning';
+        if (type.indexOf('verified') !== -1 || text.indexOf('verified') !== -1 || text.indexOf('paid') !== -1 || text.indexOf('completed') !== -1 || text.indexOf('approved') !== -1) return 'success';
+        if (type === 'payment_submitted' || text.indexOf('submitted') !== -1 || text.indexOf('pending') !== -1 || text.indexOf('for verification') !== -1) return 'info';
+        if (type.indexOf('order') !== -1) return 'info';
+        return 'neutral';
     }
 
     function renderAdminNotifications(items) {
@@ -296,8 +309,10 @@
         }
         list.innerHTML = items.map(function (item) {
             const href = item.target_url || 'notifications.php';
-            return '<a href="' + escapeHtml(href) + '" data-notification-id="' + item.id + '" data-is-read="' + item.is_read + '">' +
-                '<strong>' + escapeHtml(item.title || 'Notification') + '</strong><span>' + escapeHtml(item.message) + '</span></a>';
+            const unreadClass = toInt(item.is_read) === 0 ? ' class="is-unread"' : '';
+            return '<a href="' + escapeHtml(href) + '"' + unreadClass + ' data-notification-id="' + item.id + '" data-is-read="' + item.is_read + '">' +
+                '<strong>' + escapeHtml(item.title || 'Notification') + '</strong><span>' + escapeHtml(item.message) + '</span>' +
+                '<time>' + escapeHtml(item.relative_time || item.created_at || '') + '</time></a>';
         }).join('');
     }
 
@@ -308,7 +323,7 @@
         if (ownerText) ownerText.textContent = count + ' unread';
 
         const adminToggle = document.getElementById('adminNotificationToggle');
-        setBadge(adminToggle, count, 'span');
+        setBadge(adminToggle, count, '.admin-notification-badge');
         const adminHeaderText = document.querySelector('#adminNotificationPopover header span');
         if (adminHeaderText) adminHeaderText.textContent = count + ' unread';
 
@@ -389,7 +404,7 @@
             const href = item.getAttribute('href');
             if (href) event.preventDefault();
             markNotificationRead(item, href);
-        });
+        }, true);
     }
 
     function setupOwnerOrderPolling() {
@@ -549,38 +564,78 @@
             if (form && form.dataset.ownerLocalHandler === 'true') return;
             if (!form || form.dataset.downloadStarted === 'true') return;
             event.preventDefault();
-            const urls = Array.from(form.querySelectorAll('[data-download-url]')).map(function (input) {
-                return input.value;
-            }).filter(Boolean);
+            const files = Array.from(form.querySelectorAll('[data-download-url]')).map(function (input, index) {
+                return {
+                    url: input.value,
+                    name: input.dataset.downloadName || ('order-file-' + (index + 1))
+                };
+            }).filter(function (file) {
+                return file.url;
+            });
             form.dataset.downloadStarted = 'true';
             form.classList.add('is-loading');
-            urls.forEach(function (url, index) {
-                window.setTimeout(function () {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = '';
-                    link.target = '_blank';
-                    link.rel = 'noopener';
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                }, index * 150);
-            });
-            const formData = new FormData(form);
-            if (!formData.has('update_order')) formData.append('update_order', '1');
-            window.setTimeout(function () {
-                fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin' })
+
+            Promise.all(files.map(function (file) {
+                const checkUrl = new URL(file.url, window.location.href);
+                checkUrl.searchParams.set('check', '1');
+
+                return fetch(checkUrl.toString(), {
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
                     .then(function (response) {
-                        if (!response.ok) throw new Error('Order update failed.');
-                        const orderForm = document.querySelector('[data-live-target="owner_orders"]');
-                        if (orderForm) refreshLiveForm(orderForm, { updateHistory: false });
-                    })
-                    .catch(function () {
-                        form.dataset.downloadStarted = 'false';
-                        form.classList.remove('is-loading');
-                        if (window.ownerShowToast) window.ownerShowToast('Failed to update order status. Please try again.', 'error');
+                        return response.json().catch(function () {
+                            return null;
+                        }).then(function (data) {
+                            if (!response.ok || !data || !data.success) {
+                                throw new Error((data && data.message) || 'Download failed. Please open the file preview link and download manually.');
+                            }
+
+                            return {
+                                url: data.remote && data.url ? data.url : file.url,
+                                name: file.name,
+                                remote: Boolean(data.remote)
+                            };
+                        });
                     });
-            }, Math.max(450, urls.length * 180));
+            }))
+                .then(function (resolvedFiles) {
+                    const formData = new FormData(form);
+                    if (!formData.has('update_order')) formData.append('update_order', '1');
+
+                    return fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin' })
+                        .then(function (response) {
+                            if (!response.ok) throw new Error('Order update failed.');
+
+                            resolvedFiles.forEach(function (file, index) {
+                                window.setTimeout(function () {
+                                    const link = document.createElement('a');
+                                    link.href = file.url;
+                                    if (file.remote) {
+                                        link.target = '_blank';
+                                        link.rel = 'noopener';
+                                    } else {
+                                        link.download = file.name;
+                                    }
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    link.remove();
+                                }, index * 150);
+                            });
+
+                            const orderForm = document.querySelector('[data-live-target="owner_orders"]');
+                            window.setTimeout(function () {
+                                if (orderForm) refreshLiveForm(orderForm, { updateHistory: false });
+                            }, Math.max(1200, resolvedFiles.length * 350));
+                        });
+                })
+                .catch(function (error) {
+                    form.dataset.downloadStarted = 'false';
+                    form.classList.remove('is-loading');
+                    if (window.ownerShowToast) {
+                        window.ownerShowToast(error.message || 'Failed to update order status. Please try again.', 'error');
+                    }
+                });
         });
 
         document.addEventListener('keydown', function (event) {

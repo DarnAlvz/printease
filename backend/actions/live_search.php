@@ -31,7 +31,7 @@ $targets = [
         ],
         'owner_transactions' => [
             'file' => __DIR__ . '/../../frontend/user/shop_owner/transactions.php',
-            'params' => ['q'],
+            'params' => ['q', 'date_filter'],
         ],
     ],
     'customer' => [

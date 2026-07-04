@@ -38,7 +38,7 @@ function dashboardOrderStatusLabel($status)
 function dashboardPaymentLabel($payment_status, $verification_status)
 {
     if ($payment_status === 'paid' && $verification_status === 'verified') return 'Paid';
-    if ($verification_status === 'pending') return 'Payment Under Review';
+    if ($verification_status === 'pending') return 'For Verification';
     if ($verification_status === 'rejected') return 'Payment Rejected';
     return 'Unpaid';
 }
@@ -52,6 +52,14 @@ function dashboardFormatDate($datetime, $fallback = 'Not scheduled')
 function dashboardMoney($amount)
 {
     return number_format((float) $amount, 2);
+}
+
+function dashboardOrderUnitPrice(array $order)
+{
+    $page_count = max(1, (int) ($order['page_count'] ?? 1));
+    $copies = max(1, (int) ($order['copies'] ?? 1));
+
+    return (float) ($order['total_amount'] ?? 0) / $page_count / $copies;
 }
 
 function dashboardOrderLink(array $order)
@@ -86,7 +94,8 @@ if ($account_status === 'verified') {
     $metrics['total_spent'] = (float) (mysqli_fetch_assoc(mysqli_stmt_get_result($spending_stmt))['total_spent'] ?? 0);
 
     $order_select = "SELECT o.order_id, o.order_code, o.order_status, o.created_at, o.pickup_datetime,
-                            o.total_amount, ps.shop_name, p.payment_status, p.verification_status
+                            o.total_amount, o.page_count, o.copies, o.paper_size, o.paper_type,
+                            ps.shop_name, p.payment_status, p.verification_status
                      FROM orders o
                      JOIN print_shops ps ON ps.shop_id = o.shop_id
                      LEFT JOIN payments p ON p.payment_id = (
@@ -118,7 +127,7 @@ $current_progress = $current_order ? array_search($current_order['order_status']
 <head>
     <title>Customer Dashboard</title>
     <?php renderCustomerHead(); ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
 </head>
 
 <body class="customer-body customer-dashboard-page bg-gray-100 min-h-screen pb-24">
@@ -198,9 +207,15 @@ $current_progress = $current_order ? array_search($current_order['order_status']
                     </div>
 
                     <?php if ($current_order): ?>
+                        <?php
+                        $current_page_count = max(1, (int) ($current_order['page_count'] ?? 1));
+                        $current_copies = max(1, (int) ($current_order['copies'] ?? 1));
+                        $current_unit_price = dashboardOrderUnitPrice($current_order);
+                        ?>
                         <div class="customer-current-order-summary">
                             <div><small>Order code</small><strong>#<?php echo e($current_order['order_code']); ?></strong><span><?php echo e($current_order['shop_name']); ?></span></div>
                             <div><small>Order total</small><strong>&#8369;<?php echo e(dashboardMoney($current_order['total_amount'])); ?></strong><span><?php echo e(dashboardPaymentLabel($current_order['payment_status'] ?? '', $current_order['verification_status'] ?? '')); ?></span></div>
+                            <div><small>Price breakdown</small><strong>&#8369;<?php echo e(dashboardMoney($current_unit_price)); ?>/page</strong><span><?php echo e($current_page_count); ?> page<?php echo $current_page_count === 1 ? '' : 's'; ?> x <?php echo e($current_copies); ?> cop<?php echo $current_copies === 1 ? 'y' : 'ies'; ?></span></div>
                             <div><small>Pickup schedule</small><strong><?php echo e(dashboardFormatDate($current_order['pickup_datetime'])); ?></strong><span><?php echo e(dashboardOrderStatusLabel($current_order['order_status'])); ?></span></div>
                         </div>
                         <ol class="customer-order-progress" aria-label="Order progress">

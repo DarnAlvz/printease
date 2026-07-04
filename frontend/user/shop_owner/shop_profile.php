@@ -20,6 +20,14 @@ $shop_stmt = mysqli_prepare($conn, $shop_sql);
 mysqli_stmt_bind_param($shop_stmt, "i", $owner_id);
 mysqli_stmt_execute($shop_stmt);
 $shop = mysqli_fetch_assoc(mysqli_stmt_get_result($shop_stmt));
+$payment_settings = null;
+
+if ($shop) {
+    $payment_settings_stmt = mysqli_prepare($conn, "SELECT * FROM shop_payment_settings WHERE shop_id = ? LIMIT 1");
+    mysqli_stmt_bind_param($payment_settings_stmt, "i", $shop['shop_id']);
+    mysqli_stmt_execute($payment_settings_stmt);
+    $payment_settings = mysqli_fetch_assoc(mysqli_stmt_get_result($payment_settings_stmt));
+}
 
 $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
 $shop_status = $shop['shop_status'] ?? 'available';
@@ -65,6 +73,9 @@ $weekday_open_time = shopTimeValue($shop['weekday_open_time'] ?? '');
 $weekday_close_time = shopTimeValue($shop['weekday_close_time'] ?? '');
 $weekend_open_time = shopTimeValue($shop['weekend_open_time'] ?? '');
 $weekend_close_time = shopTimeValue($shop['weekend_close_time'] ?? '');
+$payment_approval_status = $payment_settings['approval_status'] ?? 'pending';
+$payment_qr_code = $payment_settings['gcash_qr_code'] ?? ($shop['gcash_qr_file'] ?? '');
+$payment_instructions = $payment_settings['instructions'] ?? 'Pay the exact order total using this GCash account, then upload your reference number and payment screenshot.';
 
 $weekday_hours_label = ($weekday_open_time && $weekday_close_time)
     ? shopTimeLabel($weekday_open_time) . " - " . shopTimeLabel($weekday_close_time)
@@ -249,23 +260,31 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                     <div class="field full">
                         <label for="gcash_name">GCash Account Name</label>
                         <input id="gcash_name" type="text" name="gcash_name"
-                            value="<?php echo e($shop['gcash_name'] ?? ''); ?>"
-                            placeholder="Account name shown in GCash" data-editable disabled>
-                        <span class="muted">Shown to customers on the manual GCash payment page.</span>
+                            value="<?php echo e($payment_settings['gcash_account_name'] ?? ($shop['gcash_name'] ?? '')); ?>"
+                            placeholder="Account name shown in GCash" required data-editable disabled>
+                        <span class="muted">Shown to customers when they pay online through GCash.</span>
                     </div>
 
                     <div class="field full">
                         <label for="gcash_number">GCash Number</label>
                         <input id="gcash_number" type="text" name="gcash_number"
-                            value="<?php echo e($shop['gcash_number'] ?? ''); ?>" placeholder="09XXXXXXXXX"
-                            data-editable disabled>
+                            value="<?php echo e($payment_settings['gcash_number'] ?? ($shop['gcash_number'] ?? '')); ?>" placeholder="09XXXXXXXXX"
+                            required data-editable disabled>
+                    </div>
+
+                    <div class="field full">
+                        <label for="merchant_link">Optional GCash Payment Link</label>
+                        <input id="merchant_link" type="url" name="merchant_link"
+                            value="<?php echo e($payment_settings['merchant_link'] ?? ''); ?>"
+                            placeholder="https://..." data-editable disabled>
+                        <span class="muted">Optional. Use this only if your GCash account has an official payment link.</span>
                     </div>
 
                     <div class="field full">
                         <label for="gcash_qr_file">GCash QR Code</label>
-                        <?php if (!empty($shop['gcash_qr_file'])): ?>
+                        <?php if (!empty($payment_qr_code)): ?>
                             <div class="shop-logo-panel">
-                                <img src="<?php echo GCASH_QR_URL . e($shop['gcash_qr_file']); ?>" class="shop-logo-preview"
+                                <img src="<?php echo GCASH_QR_URL . e($payment_qr_code); ?>" class="shop-logo-preview"
                                     alt="GCash QR code">
                                 <div>
                                     <h3>Current GCash QR</h3>
@@ -275,7 +294,22 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                         <?php endif; ?>
                         <input id="gcash_qr_file" type="file" name="gcash_qr_file"
                             accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
-                        <span class="muted">Required before customers can submit manual GCash payments.</span>
+                        <span class="muted">Required before customers can pay online through GCash and submit proof.</span>
+                    </div>
+
+                    <div class="field full">
+                        <label for="payment_instructions">Payment Instructions</label>
+                        <textarea id="payment_instructions" name="payment_instructions" rows="3" required
+                            placeholder="Tell customers to pay the exact total and upload their GCash receipt."
+                            data-editable disabled><?php echo e($payment_instructions); ?></textarea>
+                        <span class="muted">Saving payment details sends them to Super Admin for approval.</span>
+                    </div>
+
+                    <div class="field full">
+                        <label>Payment Details Approval</label>
+                        <span class="status-badge <?php echo ownerStatusClass($payment_approval_status === 'approved' ? 'verified' : ($payment_approval_status === 'rejected' ? 'rejected' : 'pending')); ?>">
+                            <?php echo e(ucfirst($payment_approval_status)); ?>
+                        </span>
                     </div>
 
                     <div class="field full">

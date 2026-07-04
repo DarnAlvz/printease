@@ -10,6 +10,9 @@ require_once __DIR__ . "/includes/admin_layout.php";
 if (empty($_SESSION['admin_shop_status_csrf'])) {
     $_SESSION['admin_shop_status_csrf'] = bin2hex(random_bytes(32));
 }
+if (empty($_SESSION['admin_payment_settings_csrf'])) {
+    $_SESSION['admin_payment_settings_csrf'] = bin2hex(random_bytes(32));
+}
 
 function manageShopStatusLabel($status)
 {
@@ -27,6 +30,24 @@ function manageShopStatusClass($status)
         'verified' => 'admin-shop-status admin-shop-status-approved',
         'rejected' => 'admin-shop-status admin-shop-status-rejected',
         'disabled' => 'admin-shop-status admin-shop-status-disabled',
+        default => 'admin-shop-status admin-shop-status-pending',
+    };
+}
+
+function managePaymentStatusLabel($status)
+{
+    return match ((string) $status) {
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        default => 'Pending',
+    };
+}
+
+function managePaymentStatusClass($status)
+{
+    return match ((string) $status) {
+        'approved' => 'admin-shop-status admin-shop-status-approved',
+        'rejected' => 'admin-shop-status admin-shop-status-rejected',
         default => 'admin-shop-status admin-shop-status-pending',
     };
 }
@@ -141,6 +162,31 @@ $filters = [
     'rejected' => ['label' => 'Rejected', 'count' => $summary['rejected'], 'icon' => 'x'],
     'disabled' => ['label' => 'Disabled', 'count' => $summary['disabled'], 'icon' => 'shield'],
 ];
+
+$payment_settings_sql = "
+    SELECT
+        sps.*,
+        ps.shop_name,
+        u.full_name AS owner_name,
+        u.email AS owner_email
+    FROM shop_payment_settings sps
+    JOIN print_shops ps ON sps.shop_id = ps.shop_id
+    JOIN users u ON ps.owner_id = u.user_id
+    ORDER BY
+        CASE sps.approval_status
+            WHEN 'pending' THEN 1
+            WHEN 'approved' THEN 2
+            ELSE 3
+        END,
+        sps.updated_at DESC
+";
+$payment_settings_result = mysqli_query($conn, $payment_settings_sql);
+$payment_settings = [];
+if ($payment_settings_result) {
+    while ($row = mysqli_fetch_assoc($payment_settings_result)) {
+        $payment_settings[] = $row;
+    }
+}
 
 adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop status, and control shop availability.');
 ?>
@@ -294,6 +340,97 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
                                             <input type="hidden" name="status" value="verified">
                                             <input type="hidden" name="return_to" value="manage_print_shops.php">
                                             <button class="admin-shop-action admin-shop-action-approve" type="submit"><?php echo adminIcon('check'); ?>Re-approve</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="admin-shop-table-card" id="payment-settings-review" data-live-region="admin-payment-settings-results" style="margin-top:24px;">
+        <div style="padding:18px 20px 4px;">
+            <h2 style="margin:0;font-size:20px;">Payment Settings Review</h2>
+            <p style="margin:6px 0 0;color:#667085;">Approve shop owner-provided GCash details before customers can use them.</p>
+        </div>
+        <div class="admin-shop-table-wrap">
+            <table class="admin-shop-table">
+                <thead>
+                    <tr>
+                        <th>Shop</th>
+                        <th>GCash Details</th>
+                        <th>QR / Link</th>
+                        <th>Instructions</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($payment_settings)): ?>
+                        <tr>
+                            <td colspan="6">
+                                <div class="admin-empty compact">No payment settings submitted yet.</div>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+
+                    <?php foreach ($payment_settings as $setting): ?>
+                        <?php
+                            $payment_status = (string) ($setting['approval_status'] ?? 'pending');
+                            $qr_url = !empty($setting['gcash_qr_code']) ? GCASH_QR_URL . $setting['gcash_qr_code'] : '';
+                        ?>
+                        <tr>
+                            <td>
+                                <div class="admin-shop-owner">
+                                    <strong><?php echo e($setting['shop_name']); ?></strong>
+                                    <small><?php echo e($setting['owner_name']); ?> · <?php echo e($setting['owner_email']); ?></small>
+                                </div>
+                            </td>
+                            <td>
+                                <strong><?php echo e($setting['gcash_account_name']); ?></strong>
+                                <small style="display:block;"><?php echo e($setting['gcash_number']); ?></small>
+                            </td>
+                            <td>
+                                <div class="admin-payment-link-actions">
+                                    <?php if ($qr_url !== ''): ?>
+                                        <a class="admin-payment-link-btn primary" href="<?php echo e($qr_url); ?>" target="_blank" rel="noopener">
+                                            <?php echo adminIcon('file'); ?>View QR
+                                        </a>
+                                    <?php endif; ?>
+                                    <?php if (!empty($setting['merchant_link'])): ?>
+                                        <a class="admin-payment-link-btn" href="<?php echo e($setting['merchant_link']); ?>" target="_blank" rel="noopener">
+                                            <?php echo adminIcon('search'); ?>Payment Link
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <?php
+                                $short_instructions = (string) $setting['instructions'];
+                                if (strlen($short_instructions) > 120) {
+                                    $short_instructions = substr($short_instructions, 0, 117) . '...';
+                                }
+                            ?>
+                            <td><?php echo e($short_instructions); ?></td>
+                            <td><span class="<?php echo e(managePaymentStatusClass($payment_status)); ?>"><?php echo e(managePaymentStatusLabel($payment_status)); ?></span></td>
+                            <td>
+                                <div class="admin-shop-actions">
+                                    <?php if ($payment_status !== 'approved'): ?>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_payment_settings_status.php">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_payment_settings_csrf']); ?>">
+                                            <input type="hidden" name="settings_id" value="<?php echo (int) $setting['id']; ?>">
+                                            <input type="hidden" name="status" value="approved">
+                                            <button class="admin-shop-action admin-shop-action-approve" type="submit"><?php echo adminIcon('check'); ?>Approve</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($payment_status !== 'rejected'): ?>
+                                        <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_payment_settings_status.php">
+                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_payment_settings_csrf']); ?>">
+                                            <input type="hidden" name="settings_id" value="<?php echo (int) $setting['id']; ?>">
+                                            <input type="hidden" name="status" value="rejected">
+                                            <button class="admin-shop-action admin-shop-action-reject" type="submit"><?php echo adminIcon('x'); ?>Reject</button>
                                         </form>
                                     <?php endif; ?>
                                 </div>

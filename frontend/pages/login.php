@@ -61,6 +61,7 @@ $login_error_messages = [
     'oauth_session_expired' => 'Your social sign-in session expired. Please try again.',
     'duplicate_email' => 'That email is already registered. Please sign in or use another email.',
     'too_many_attempts' => 'Too many sign-in attempts. Please wait 15 minutes before trying again.',
+    'terms_required' => 'Please agree to the Terms and Privacy Policy before signing in.',
 ];
 
 if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
@@ -125,7 +126,7 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
                     </div>
                 <?php endif; ?>
 
-                <form action="../../backend/actions/login_process.php" method="POST">
+                <form id="password-login-form" action="../../backend/actions/login_process.php" method="POST">
                     <div class="field-group">
                         <label for="email">Email Address</label>
                         <div class="input-wrap">
@@ -178,23 +179,35 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
                         </a>
                     </div>
 
+                    <div class="policy-agreement">
+                        <input id="terms_privacy" type="checkbox" name="terms_privacy" value="1" aria-label="I agree to the Terms and Privacy Policy" required>
+                        <span>
+                            I agree to the <button class="policy-link" type="button" data-policy-open="terms-modal">Terms</button> and
+                            <button class="policy-link" type="button" data-policy-open="privacy-modal">Privacy Policy</button>.
+                        </span>
+                    </div>
+
                     <button class="btn btn-primary" type="submit" name="login">Sign In</button>
                 </form>
 
                 <div class="social-stack" aria-label="Social sign in options">
-                    <a class="btn btn-social" href="../../backend/oauth/oauth_start.php?provider=google">
-                        <svg class="google-mark" viewBox="0 0 24 24" aria-hidden="true">
-                            <path fill="#4285F4"
-                                d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z" />
-                            <path fill="#34A853"
-                                d="M12 22c2.7 0 4.97-.9 6.62-2.36l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z" />
-                            <path fill="#FBBC05"
-                                d="M6.39 13.93A6.02 6.02 0 0 1 6.08 12c0-.67.11-1.32.31-1.93V7.45H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.55l3.35-2.62Z" />
-                            <path fill="#EA4335"
-                                d="M12 5.94c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z" />
-                        </svg>
-                        <span>Continue with Google</span>
-                    </a>
+                    <form id="google-login-form" action="../../backend/oauth/oauth_start.php" method="POST">
+                        <input type="hidden" name="provider" value="google">
+                        <input id="google_terms_privacy" type="hidden" name="terms_privacy" value="">
+                        <button class="btn btn-social" type="submit">
+                            <svg class="google-mark" viewBox="0 0 24 24" aria-hidden="true">
+                                <path fill="#4285F4"
+                                    d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z" />
+                                <path fill="#34A853"
+                                    d="M12 22c2.7 0 4.97-.9 6.62-2.36l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z" />
+                                <path fill="#FBBC05"
+                                    d="M6.39 13.93A6.02 6.02 0 0 1 6.08 12c0-.67.11-1.32.31-1.93V7.45H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.55l3.35-2.62Z" />
+                                <path fill="#EA4335"
+                                    d="M12 5.94c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z" />
+                            </svg>
+                            <span>Continue with Google</span>
+                        </button>
+                    </form>
                 </div>
 
                 <p class="register-prompt">Don't have an account? <a href="register.php">Create account</a></p>
@@ -202,6 +215,97 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
             </div>
         </section>
     </main>
+
+    <div class="policy-modal" id="terms-modal" role="dialog" aria-modal="true" aria-labelledby="terms-modal-title" hidden>
+        <div class="policy-modal-backdrop" data-policy-close></div>
+        <section class="policy-modal-panel" tabindex="-1">
+            <header class="policy-modal-header">
+                <div>
+                    <p class="policy-modal-eyebrow">PrintEase</p>
+                    <h2 id="terms-modal-title">Terms of Service</h2>
+                    <p>Last updated: July 3, 2026</p>
+                </div>
+                <button class="policy-modal-close" type="button" aria-label="Close Terms of Service" data-policy-close>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div class="policy-modal-body">
+                <section>
+                    <h3>Use of PrintEase</h3>
+                    <p>PrintEase helps customers connect with print shops, place orders, track requests, and manage related transactions. By using the platform, you agree to provide accurate information and use the service only for lawful printing and business purposes.</p>
+                </section>
+
+                <section>
+                    <h3>Accounts and Security</h3>
+                    <p>You are responsible for keeping your login details secure and for activities made through your account. If you believe your account was accessed without permission, contact the PrintEase administrator as soon as possible.</p>
+                </section>
+
+                <section>
+                    <h3>Orders and Payments</h3>
+                    <p>Customers are responsible for reviewing order details before submitting them. Print shops are responsible for keeping service, price, status, and payment information accurate. Payment confirmations may be reviewed before an order is processed.</p>
+                </section>
+
+                <section>
+                    <h3>Acceptable Content</h3>
+                    <p>Do not upload or request printing of files that are illegal, harmful, abusive, fraudulent, or that violate another person's rights. PrintEase may restrict access or reject orders that appear to violate these terms.</p>
+                </section>
+
+                <section>
+                    <h3>Changes to These Terms</h3>
+                    <p>PrintEase may update these terms when platform features or policies change. Continued use of the service after updates means you accept the revised terms.</p>
+                </section>
+            </div>
+        </section>
+    </div>
+
+    <div class="policy-modal" id="privacy-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" hidden>
+        <div class="policy-modal-backdrop" data-policy-close></div>
+        <section class="policy-modal-panel" tabindex="-1">
+            <header class="policy-modal-header">
+                <div>
+                    <p class="policy-modal-eyebrow">PrintEase</p>
+                    <h2 id="privacy-modal-title">Privacy Policy</h2>
+                    <p>Last updated: July 3, 2026</p>
+                </div>
+                <button class="policy-modal-close" type="button" aria-label="Close Privacy Policy" data-policy-close>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div class="policy-modal-body">
+                <section>
+                    <h3>Information We Collect</h3>
+                    <p>PrintEase may collect account details, contact information, print order details, uploaded files, payment references, profile information, and activity needed to operate the platform.</p>
+                </section>
+
+                <section>
+                    <h3>How We Use Information</h3>
+                    <p>We use information to create and secure accounts, process orders, connect customers with print shops, send notifications, verify payment details, improve services, and support platform administration.</p>
+                </section>
+
+                <section>
+                    <h3>Sharing Information</h3>
+                    <p>Order and contact details may be shared between customers, print shop owners, and administrators when needed to complete a transaction or resolve an issue. PrintEase does not sell personal information.</p>
+                </section>
+
+                <section>
+                    <h3>Data Security</h3>
+                    <p>PrintEase uses reasonable safeguards to protect user information. No system is perfectly secure, so users should keep their passwords private and report suspicious activity promptly.</p>
+                </section>
+
+                <section>
+                    <h3>Your Choices</h3>
+                    <p>You may update your profile information through your account pages. For account concerns, corrections, or privacy questions, contact the PrintEase administrator.</p>
+                </section>
+            </div>
+        </section>
+    </div>
+
     <script>
         document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -213,6 +317,105 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
                 button.setAttribute('aria-pressed', showPassword ? 'true' : 'false');
                 button.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
             });
+        });
+
+        var googleLoginForm = document.getElementById('google-login-form');
+        var termsCheckbox = document.getElementById('terms_privacy');
+        var googleTermsInput = document.getElementById('google_terms_privacy');
+
+        if (googleLoginForm && termsCheckbox && googleTermsInput) {
+            googleLoginForm.addEventListener('submit', function (event) {
+                if (!termsCheckbox.checked) {
+                    event.preventDefault();
+                    termsCheckbox.reportValidity();
+                    termsCheckbox.focus();
+                    return;
+                }
+
+                googleTermsInput.value = '1';
+            });
+        }
+
+        var activePolicyModal = null;
+        var policyModalTrigger = null;
+        var focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+        function getPolicyFocusable(modal) {
+            return Array.prototype.slice.call(modal.querySelectorAll(focusableSelector))
+                .filter(function (element) {
+                    return element.offsetParent !== null || element === document.activeElement;
+                });
+        }
+
+        function openPolicyModal(modal, trigger) {
+            if (!modal) return;
+
+            activePolicyModal = modal;
+            policyModalTrigger = trigger;
+            modal.hidden = false;
+            document.body.classList.add('modal-open');
+
+            var panel = modal.querySelector('.policy-modal-panel');
+            var closeButton = modal.querySelector('[data-policy-close]');
+            (closeButton || panel || modal).focus();
+        }
+
+        function closePolicyModal() {
+            if (!activePolicyModal) return;
+
+            activePolicyModal.hidden = true;
+            document.body.classList.remove('modal-open');
+
+            if (policyModalTrigger) {
+                policyModalTrigger.focus();
+            }
+
+            activePolicyModal = null;
+            policyModalTrigger = null;
+        }
+
+        document.querySelectorAll('[data-policy-open]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openPolicyModal(document.getElementById(button.dataset.policyOpen), button);
+            });
+        });
+
+        document.querySelectorAll('.policy-modal').forEach(function (modal) {
+            modal.addEventListener('click', function (event) {
+                if (event.target.closest('[data-policy-close]')) {
+                    closePolicyModal();
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (!activePolicyModal) return;
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closePolicyModal();
+                return;
+            }
+
+            if (event.key !== 'Tab') return;
+
+            var focusable = getPolicyFocusable(activePolicyModal);
+            if (focusable.length === 0) {
+                event.preventDefault();
+                activePolicyModal.focus();
+                return;
+            }
+
+            var first = focusable[0];
+            var last = focusable[focusable.length - 1];
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
         });
     </script>
 </body>

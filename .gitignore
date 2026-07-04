@@ -6,3 +6,5 @@ vendor/
 NEED TO DOWNLOAD.txt
 
 .env
+
+node_modules/

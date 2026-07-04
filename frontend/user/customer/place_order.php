@@ -72,7 +72,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 <head>
     <title>Place Order</title>
     <?php renderCustomerHead(); ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
@@ -179,6 +179,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     <div class="customer-order-total">
                         <span>Estimated Total</span>
                         <strong>&#8369;<span id="total">0.00</span></strong>
+                        <small class="block text-sm text-gray-700 mt-1" data-paper-price>Paper Price: &#8369;0.00/page</small>
                         <small class="block text-sm text-gray-500 mt-1" data-total-breakdown>0 pages x 1 copy</small>
                     </div>
                 </section>
@@ -219,6 +220,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                         <div><span>Paper Size</span><strong data-review-paper-size>-</strong></div>
                         <div><span>Paper Type</span><strong data-review-paper-type>-</strong></div>
                         <div><span>Print Type</span><strong data-review-print-type>-</strong></div>
+                        <div><span>Paper Price</span><strong data-review-paper-price>&#8369;0.00/page</strong></div>
                         <div><span>Pages</span><strong data-review-pages>1</strong></div>
                         <div><span>Copies</span><strong data-review-copies>1</strong></div>
                         <div><span>Pickup</span><strong data-review-pickup>-</strong></div>
@@ -269,6 +271,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         const detectedPageCount = document.getElementById("detected_page_count");
         const pageCountLabel = document.querySelector("[data-page-count-label]");
         const pageCountStatus = document.querySelector("[data-page-count-status]");
+        const paperPrice = document.querySelector("[data-paper-price]");
         const totalBreakdown = document.querySelector("[data-total-breakdown]");
         const reviewBreakdown = document.querySelector("[data-review-breakdown]");
         let currentStep = 0;
@@ -354,6 +357,11 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             );
         }
 
+        function formatMoney(value) {
+            const amount = Number.parseFloat(value);
+            return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+        }
+
         function updatePaperType() {
             fillSelect(paperType, uniqueValues("paper_type", { paper_size: paperSize.value }));
             updatePrintType();
@@ -376,15 +384,19 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             const selected = selectedService();
             const pages = Math.max(1, parseInt(detectedPageCount.value || "1", 10) || 1);
             const copyCount = Math.max(1, parseInt(copies.value || "1", 10) || 1);
+            const unitPrice = selected ? parseFloat(selected.price_per_page) || 0 : 0;
             if (selected) {
                 serviceId.value = selected.service_id;
-                total.textContent = (parseFloat(selected.price_per_page) * pages * copyCount).toFixed(2);
+                total.textContent = formatMoney(unitPrice * pages * copyCount);
             } else {
                 serviceId.value = "";
                 total.textContent = "0.00";
             }
+            if (paperPrice) {
+                paperPrice.textContent = "Paper Price: \u20b1" + formatMoney(unitPrice) + "/page";
+            }
             if (totalBreakdown) {
-                totalBreakdown.textContent = pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies");
+                totalBreakdown.textContent = "Computation: \u20b1" + formatMoney(unitPrice) + " x " + pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies") + " = \u20b1" + total.textContent;
             }
             updateReview();
         }
@@ -442,6 +454,8 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             const fileName = documentFile.files && documentFile.files[0] ? documentFile.files[0].name : "Not selected";
             const pages = Math.max(1, parseInt(detectedPageCount.value || "1", 10) || 1);
             const copyCount = Math.max(1, parseInt(copies.value || "1", 10) || 1);
+            const selected = selectedService();
+            const unitPrice = selected ? parseFloat(selected.price_per_page) || 0 : 0;
             const pickupText = pickupDatetime.value ? new Date(pickupDatetime.value).toLocaleString([], {
                 year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
             }) : "-";
@@ -450,13 +464,14 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             document.querySelector("[data-review-paper-size]").textContent = paperSize.value || "-";
             document.querySelector("[data-review-paper-type]").textContent = paperType.value || "-";
             document.querySelector("[data-review-print-type]").textContent = printType.value || "-";
+            document.querySelector("[data-review-paper-price]").textContent = "\u20b1" + formatMoney(unitPrice) + "/page";
             document.querySelector("[data-review-pages]").textContent = String(pages);
             document.querySelector("[data-review-copies]").textContent = String(copyCount);
             document.querySelector("[data-review-pickup]").textContent = pickupText;
             document.querySelector("[data-review-instruction]").textContent = instruction.value.trim() || "None";
             document.querySelector("[data-review-total]").textContent = total.textContent;
             if (reviewBreakdown) {
-                reviewBreakdown.textContent = pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies");
+                reviewBreakdown.textContent = "Computation: \u20b1" + formatMoney(unitPrice) + " x " + pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies") + " = \u20b1" + total.textContent;
             }
         }
 

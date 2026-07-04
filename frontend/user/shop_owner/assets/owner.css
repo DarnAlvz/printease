@@ -506,8 +506,8 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
 }
 
 .notification-popover-item[data-is-read="0"] {
-    border-left: 4px solid #ef233c;
-    background: #fff5f5;
+    border-left: 4px solid var(--notification-tone, #05b7d3);
+    background: var(--notification-bg, #effbff);
 }
 
 .notification-popover-item[data-is-read="0"] p {
@@ -516,14 +516,14 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
 }
 
 .notification-popover-item[data-is-read="0"] time {
-    color: #9f1239;
+    color: var(--notification-text, #0369a1);
     font-weight: 700;
 }
 
 .notification-popover-item[data-is-read="0"] .notification-popover-icon {
     color: #fff;
-    background: #ef233c;
-    box-shadow: 0 8px 18px rgba(239, 35, 60, .28);
+    background: var(--notification-tone, #05b7d3);
+    box-shadow: 0 8px 18px var(--notification-shadow, rgba(5, 183, 211, .28));
 }
 
 .notification-popover-link:hover {
@@ -538,10 +538,50 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    color: #0077b6;
-    background: #e4f8ff;
+    color: var(--notification-tone, #0077b6);
+    background: var(--notification-icon-bg, #e4f8ff);
     display: grid;
     place-items: center;
+}
+
+.notification-tone-info {
+    --notification-tone: #05b7d3;
+    --notification-bg: #ecfeff;
+    --notification-icon-bg: #dff9ff;
+    --notification-text: #0369a1;
+    --notification-shadow: rgba(5, 183, 211, .28);
+}
+
+.notification-tone-success {
+    --notification-tone: #10b981;
+    --notification-bg: #ecfdf5;
+    --notification-icon-bg: #d1fae5;
+    --notification-text: #047857;
+    --notification-shadow: rgba(16, 185, 129, .28);
+}
+
+.notification-tone-danger {
+    --notification-tone: #ef4444;
+    --notification-bg: #fff1f2;
+    --notification-icon-bg: #fee2e2;
+    --notification-text: #be123c;
+    --notification-shadow: rgba(239, 68, 68, .28);
+}
+
+.notification-tone-warning {
+    --notification-tone: #f59e0b;
+    --notification-bg: #fffbeb;
+    --notification-icon-bg: #fef3c7;
+    --notification-text: #b45309;
+    --notification-shadow: rgba(245, 158, 11, .28);
+}
+
+.notification-tone-neutral {
+    --notification-tone: #64748b;
+    --notification-bg: #f8fafc;
+    --notification-icon-bg: #f1f5f9;
+    --notification-text: #475569;
+    --notification-shadow: rgba(100, 116, 139, .22);
 }
 
 .notification-popover-item p {
@@ -1917,7 +1957,8 @@ body.order-modal-open .owner-main {
 }
 
 .order-info-list > .order-payment-proof-card strong,
-.order-info-list > .order-payment-action-card strong {
+.order-info-list > .order-payment-action-card strong,
+.order-info-list > .order-payment-action-card .payment-action-group {
     text-align: left;
 }
 
@@ -2161,6 +2202,38 @@ body.order-modal-open .owner-main {
     top: 50%;
     right: 10px;
     transform: translateY(-50%);
+}
+
+.transactions-date-filters {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.transactions-date-filters a {
+    min-height: 38px;
+    padding: 0 13px;
+    border: 1px solid #bde9f8;
+    border-radius: 8px;
+    color: var(--ink-soft);
+    background: #f8fdff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.transactions-date-filters a:hover,
+.transactions-date-filters a.active {
+    color: #fff;
+    border-color: var(--navy);
+    background: var(--navy);
+    box-shadow: 0 8px 16px rgba(3, 4, 94, .18);
 }
 
 .transactions-visual-tabs {
@@ -2608,6 +2681,7 @@ body.order-modal-open .owner-main {
 }
 
 .recent-orders-card {
+    grid-column: 1 / -1;
     padding: 0;
     overflow: hidden;
 }
@@ -4823,6 +4897,14 @@ select {
 
 .payment-action-group > .orders-update-form:not([hidden]):has(.payment-reject-textarea) {
     flex-basis: 100%;
+}
+
+.payment-action-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: #005e91;
+    font-size: 13px;
+    font-weight: 800;
 }
 
 .payment-reject-textarea {

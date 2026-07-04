@@ -110,6 +110,14 @@ function displayPrintType($print_type)
     return $print_type === '' || $print_type === '0' ? 'Not specified' : $print_type;
 }
 
+function customerOrderUnitPrice(array $order)
+{
+    $page_count = max(1, (int) ($order['page_count'] ?? 1));
+    $copies = max(1, (int) ($order['copies'] ?? 1));
+
+    return (float) ($order['total_amount'] ?? 0) / $page_count / $copies;
+}
+
 function orderBadge($status)
 {
     return match (normalizeOrderStatus($status)) {
@@ -153,7 +161,7 @@ function formatDateTime12Hour($datetime)
 <head>
     <title>My Orders</title>
     <?php renderCustomerHead(); ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
 </head>
 
 <body class="customer-body bg-gray-100 min-h-screen pb-24">
@@ -203,6 +211,8 @@ function formatDateTime12Hour($datetime)
                             <?php
                             $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0);
                             $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
+                            $order_copies = max(1, (int) ($order['copies'] ?? 1));
+                            $order_unit_price = customerOrderUnitPrice($order);
                             $file_stmt = mysqli_prepare($conn, "SELECT * FROM uploaded_files WHERE order_id = ? LIMIT 1");
                             mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                             mysqli_stmt_execute($file_stmt);
@@ -241,8 +251,10 @@ function formatDateTime12Hour($datetime)
                                     </p>
                                     <p><strong>Print:</strong> <?php echo e(displayPrintType($order['print_type'])); ?></p>
                                     <p><strong>Pages:</strong> <?php echo e($order_page_count); ?></p>
-                                    <p><strong>Copies:</strong> <?php echo e($order['copies']); ?></p>
-                                    <p><strong>Volume:</strong> <?php echo e($order_page_count); ?> x <?php echo e($order['copies']); ?></p>
+                                    <p><strong>Copies:</strong> <?php echo e($order_copies); ?></p>
+                                    <p><strong>Volume:</strong> <?php echo e($order_page_count); ?> x <?php echo e($order_copies); ?></p>
+                                    <p><strong>Paper Price:</strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?>/page</p>
+                                    <p><strong>Computation:</strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?> x <?php echo e($order_page_count); ?> page<?php echo $order_page_count === 1 ? '' : 's'; ?> x <?php echo e($order_copies); ?> cop<?php echo $order_copies === 1 ? 'y' : 'ies'; ?> = &#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></p>
                                     <p><strong>Pickup:</strong>
                                         <?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></p>
                                     <p><strong>Total:</strong> ₱<?php echo e(number_format($order['total_amount'], 2)); ?></p>
@@ -251,7 +263,7 @@ function formatDateTime12Hour($datetime)
                                         if (($order['payment_status'] ?? '') === 'paid' && ($order['verification_status'] ?? '') === 'verified') {
                                             echo "Paid";
                                         } elseif (($order['verification_status'] ?? '') === 'pending') {
-                                            echo "Pending Verification";
+                                            echo "For Verification";
                                         } elseif (($order['verification_status'] ?? '') === 'rejected') {
                                             echo "Rejected";
                                         } else {
@@ -295,7 +307,7 @@ function formatDateTime12Hour($datetime)
 
                                 <?php elseif (($order['verification_status'] ?? '') === 'pending'): ?>
                                     <p class="mt-4 bg-yellow-100 text-yellow-700 p-3 rounded-xl text-sm">
-                                        Payment proof submitted. Waiting for shop verification.
+                                        Payment submitted for verification.
                                     </p>
 
                                 <?php elseif (($order['payment_status'] ?? '') === 'paid'): ?>

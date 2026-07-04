@@ -281,7 +281,7 @@ body.admin-dashboard-body .notification:hover {
     background: #e7f7ff;
 }
 
-.admin-notification-button span,
+.admin-notification-badge,
 body.admin-dashboard-body .notification-badge {
     position: absolute;
     top: -2px;
@@ -297,6 +297,10 @@ body.admin-dashboard-body .notification-badge {
     place-items: center;
     font-size: 10px;
     font-weight: 800;
+}
+
+.admin-notification-badge[hidden] {
+    display: none;
 }
 
 .admin-notification-popover,
@@ -340,7 +344,23 @@ body.admin-dashboard-body .admin-notification-popover-item {
     padding: 14px 16px;
     border-bottom: 1px solid #edf7fb;
     display: grid;
+    gap: 4px;
     color: var(--admin-ink);
+}
+
+.admin-notification-list a.is-unread {
+    background: #effaff;
+}
+
+.admin-notification-list a.is-unread strong::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin-left: 8px;
+    border-radius: 999px;
+    background: #ef4444;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .admin-notification-list a:hover,
@@ -349,9 +369,14 @@ body.admin-dashboard-body .admin-notification-popover-item:hover {
 }
 
 .admin-notification-list span,
+.admin-notification-list time,
 .admin-notification-popover header span {
     color: var(--admin-muted);
     font-size: 12px;
+}
+
+.admin-notification-list time {
+    font-weight: 700;
 }
 
 .admin-user {
@@ -1452,6 +1477,46 @@ body.admin-dashboard-body .approval-btn {
 
 .admin-shop-action-disable {
     background: linear-gradient(135deg, #475569, #1f2937);
+}
+
+.admin-payment-link-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-payment-link-btn {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid #b7efff;
+    border-radius: 9px;
+    color: #005a8d;
+    background: #f1fbff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 900;
+    text-decoration: none;
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.admin-payment-link-btn:hover {
+    background: #e3f8ff;
+    box-shadow: 0 8px 18px rgba(5, 183, 211, .14);
+    transform: translateY(-1px);
+}
+
+.admin-payment-link-btn.primary {
+    color: #fff;
+    border-color: transparent;
+    background: linear-gradient(135deg, #05a4ca, var(--admin-blue));
+}
+
+.admin-payment-link-btn .admin-icon {
+    width: 15px;
+    height: 15px;
 }
 
 .admin-shop-modal {

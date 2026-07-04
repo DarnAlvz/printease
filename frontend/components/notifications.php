@@ -28,11 +28,42 @@ function notificationIconName($type)
 {
     return match ((string) $type) {
         'order_new', 'order_status', 'pickup_reminder' => 'package',
-        'payment_submitted', 'payment_verified', 'payment_rejected' => 'credit-card',
+        'payment_submitted', 'payment_verified', 'payment_rejected', 'payment_settings_submitted', 'payment_settings_status' => 'credit-card',
         'permit_submitted', 'permit_status' => 'file-check',
         'account_submitted', 'account_status' => 'user-check',
         default => 'bell',
     };
+}
+
+function notificationTone(array $notification)
+{
+    $type = strtolower((string) ($notification['type'] ?? ''));
+    $title = strtolower((string) ($notification['title'] ?? ''));
+    $message = strtolower((string) ($notification['message'] ?? ''));
+    $status = '';
+
+    if (!empty($notification['metadata_json'])) {
+        $decoded = json_decode((string) $notification['metadata_json'], true);
+        if (is_array($decoded)) {
+            $status = strtolower((string) ($decoded['status'] ?? ''));
+        }
+    }
+
+    $text = trim($type . ' ' . $title . ' ' . $message . ' ' . $status);
+
+    if ($type === 'payment_rejected' || str_contains($text, 'rejected')) {
+        return 'danger';
+    }
+
+    if ($type === 'order_status' && ($status === 'ready_for_pickup' || str_contains($text, 'ready for pickup'))) {
+        return 'success';
+    }
+
+    if ($type === 'order_status' && ($status === 'processing' || str_contains($text, 'accepted') || str_contains($text, 'processing'))) {
+        return 'info';
+    }
+
+    return 'default';
 }
 
 function notificationSafeTarget($url)
@@ -60,10 +91,12 @@ function renderNotificationCenter(array $notifications, array $options = [])
     <?php else: ?>
         <div class="app-notification-list">
             <?php foreach ($notifications as $notification): ?>
-                <?php $target = notificationSafeTarget($notification['target_url'] ?? ''); $tag = $target !== '' ? 'a' : 'article'; ?>
-                <<?php echo $tag; ?> class="app-notification <?php echo empty($notification['is_read']) ? 'is-unread' : ''; ?>"
+                <?php $target = notificationSafeTarget($notification['target_url'] ?? ''); $tag = $target !== '' ? 'a' : 'article'; $tone = notificationTone($notification); ?>
+                <<?php echo $tag; ?> class="app-notification notification-tone-<?php echo e($tone); ?> <?php echo empty($notification['is_read']) ? 'is-unread' : ''; ?>"
                     data-role="<?php echo e($role); ?>" data-notification-id="<?php echo (int) $notification['notification_id']; ?>"
-                    data-is-read="<?php echo (int) $notification['is_read']; ?>" <?php echo $target !== '' ? 'href="' . e($target) . '"' : ''; ?>>
+                    data-is-read="<?php echo (int) $notification['is_read']; ?>"
+                    data-notification-type="<?php echo e($notification['type'] ?? 'general'); ?>"
+                    data-notification-tone="<?php echo e($tone); ?>" <?php echo $target !== '' ? 'href="' . e($target) . '"' : ''; ?>>
                     <span class="app-notification-icon"><i data-lucide="<?php echo e(notificationIconName($notification['type'])); ?>" aria-hidden="true"></i></span>
                     <span class="app-notification-content">
                         <strong class="app-notification-title"><?php echo e($notification['title'] ?: 'Notification'); ?><?php if (empty($notification['is_read'])): ?><span class="app-notification-new" aria-label="Unread"></span><?php endif; ?></strong>

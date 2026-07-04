@@ -100,6 +100,34 @@ function ownerNotificationUrl($notification, $owner_id)
     return isInternalAppUrl($notification['target_url'] ?? '') ? (string) $notification['target_url'] : '';
 }
 
+function ownerNotificationTone($notification)
+{
+    $type = strtolower((string) ($notification['type'] ?? ''));
+    $text = strtolower(trim((string) (($notification['title'] ?? '') . ' ' . ($notification['message'] ?? ''))));
+
+    if (str_contains($type, 'rejected') || str_contains($text, 'rejected')) {
+        return 'danger';
+    }
+
+    if ($type === 'pickup_reminder' || str_contains($text, 'pickup reminder') || str_contains($text, 'pickup time')) {
+        return 'warning';
+    }
+
+    if (str_contains($type, 'verified') || str_contains($text, 'verified') || str_contains($text, 'paid') || str_contains($text, 'completed') || str_contains($text, 'approved')) {
+        return 'success';
+    }
+
+    if ($type === 'payment_submitted' || str_contains($text, 'submitted') || str_contains($text, 'pending') || str_contains($text, 'for verification')) {
+        return 'info';
+    }
+
+    if (str_starts_with($type, 'order_') || str_contains($type, 'order')) {
+        return 'info';
+    }
+
+    return 'neutral';
+}
+
 function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $shop = null, $floating_toast = null)
 {
     if (!empty($_SESSION['owner_toast']) && is_array($_SESSION['owner_toast'])) {
@@ -174,7 +202,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?php echo e($title); ?> | PrintEase</title>
         <?php renderPrintEaseIcons(); ?>
-        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -269,15 +297,18 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                                 <div class="notification-popover-list">
                                     <?php foreach ($recent_notifications as $notification): ?>
                                         <?php $notification_href = ownerNotificationUrl($notification, $owner_id); ?>
+                                        <?php $notification_tone = ownerNotificationTone($notification); ?>
                                         <?php if ($notification_href !== ''): ?>
-                                            <a class="notification-popover-item notification-popover-link"
+                                            <a class="notification-popover-item notification-popover-link notification-tone-<?php echo e($notification_tone); ?>"
                                                 href="<?php echo e($notification_href); ?>"
                                                 data-notification-id="<?php echo (int) $notification['notification_id']; ?>"
-                                                data-is-read="<?php echo (int) $notification['is_read']; ?>">
+                                                data-is-read="<?php echo (int) $notification['is_read']; ?>"
+                                                data-notification-tone="<?php echo e($notification_tone); ?>">
                                             <?php else: ?>
-                                                <article class="notification-popover-item"
+                                                <article class="notification-popover-item notification-tone-<?php echo e($notification_tone); ?>"
                                                     data-notification-id="<?php echo (int) $notification['notification_id']; ?>"
-                                                    data-is-read="<?php echo (int) $notification['is_read']; ?>">
+                                                    data-is-read="<?php echo (int) $notification['is_read']; ?>"
+                                                    data-notification-tone="<?php echo e($notification_tone); ?>">
                                                 <?php endif; ?>
                                                 <span
                                                     class="notification-popover-icon"><?php echo ownerIcon($notification['is_read'] == 0 ? 'bell-ring' : 'info', 'icon-sm'); ?></span>

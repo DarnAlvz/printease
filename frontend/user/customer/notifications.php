@@ -24,7 +24,7 @@ $unread_count = getUnreadNotificationCount($conn, $customer_id);
 <head>
     <title>Notifications</title>
     <?php renderCustomerHead(); ?>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 </head>
 

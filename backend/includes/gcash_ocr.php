@@ -73,23 +73,17 @@ function gcashOcrStatus($reference_number, $payment_date)
 
 function runReceiptOcr($image_path)
 {
-    if (!function_exists('shell_exec')) {
+    $allowed_image_path = resolveAllowedOcrImagePath($image_path);
+    if ($allowed_image_path === null) {
         return '';
     }
 
     $binary = resolveTesseractBinary();
-    $binary_command = $binary === 'tesseract' ? 'tesseract' : escapeshellarg($binary);
-
-    $null_device = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-    $version_command = $binary_command . ' --version 2>' . $null_device;
-    $version_output = @shell_exec($version_command);
-
-    if (!is_string($version_output) || trim($version_output) === '') {
+    if ($binary === null || !tesseractBinaryIsAvailable($binary)) {
         return '';
     }
 
-    $ocr_command = $binary_command . ' ' . escapeshellarg($image_path) . ' stdout --psm 6 2>' . $null_device;
-    $ocr_output = @shell_exec($ocr_command);
+    $ocr_output = runOcrProcess([$binary, $allowed_image_path, 'stdout', '--psm', '6'], 10);
 
     return is_string($ocr_output) ? $ocr_output : '';
 }
@@ -103,15 +97,162 @@ function resolveTesseractBinary()
     }
 
     $binary = trim($binary, "\"'");
+    if ($binary === '' || preg_match('/[\r\n\0]/', $binary)) {
+        return null;
+    }
 
     if (is_dir($binary)) {
-        $candidate = rtrim($binary, "\\/") . DIRECTORY_SEPARATOR . (PHP_OS_FAMILY === 'Windows' ? 'tesseract.exe' : 'tesseract');
-        if (is_file($candidate)) {
-            return $candidate;
+        $binary = rtrim($binary, "\\/") . DIRECTORY_SEPARATOR . ocrTesseractExecutableName();
+    }
+
+    $resolved = realpath($binary);
+    if ($resolved === false || !is_file($resolved)) {
+        return null;
+    }
+
+    if (strtolower(basename($resolved)) !== strtolower(ocrTesseractExecutableName())) {
+        return null;
+    }
+
+    if (PHP_OS_FAMILY !== 'Windows' && !is_executable($resolved)) {
+        return null;
+    }
+
+    return $resolved;
+}
+
+function ocrTesseractExecutableName()
+{
+    return PHP_OS_FAMILY === 'Windows' ? 'tesseract.exe' : 'tesseract';
+}
+
+function tesseractBinaryIsAvailable($binary)
+{
+    static $available = [];
+
+    $key = (string) $binary;
+    if (array_key_exists($key, $available)) {
+        return $available[$key];
+    }
+
+    $version_output = runOcrProcess([$key, '--version'], 3);
+    $available[$key] = is_string($version_output) && trim($version_output) !== '';
+
+    return $available[$key];
+}
+
+function runOcrProcess(array $command, $timeout_seconds = 10)
+{
+    if (!function_exists('proc_open')) {
+        return '';
+    }
+
+    $descriptor_spec = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+
+    $process = @proc_open($command, $descriptor_spec, $pipes);
+    if (!is_resource($process)) {
+        return '';
+    }
+
+    fclose($pipes[0]);
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+
+    $output = '';
+    $started_at = microtime(true);
+
+    do {
+        $output .= stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+
+        $status = proc_get_status($process);
+        if (!$status['running']) {
+            break;
+        }
+
+        if ((microtime(true) - $started_at) >= (int) $timeout_seconds) {
+            proc_terminate($process);
+            break;
+        }
+
+        usleep(100000);
+    } while (true);
+
+    $output .= stream_get_contents($pipes[1]);
+
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    proc_close($process);
+
+    return $output;
+}
+
+function resolveAllowedOcrImagePath($path, $allowed_roots = null)
+{
+    $resolved_path = realpath((string) $path);
+    if ($resolved_path === false || !is_file($resolved_path) || !is_readable($resolved_path)) {
+        return null;
+    }
+
+    if (!ocrPathIsUnderAllowedRoots($resolved_path, $allowed_roots ?? ocrAllowedImageRoots())) {
+        return null;
+    }
+
+    $mime_type = mime_content_type($resolved_path);
+    $allowed_mime_types = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!in_array($mime_type, $allowed_mime_types, true)) {
+        return null;
+    }
+
+    return $resolved_path;
+}
+
+function ocrAllowedImageRoots()
+{
+    return [
+        ocrUploadsPath('payment_proofs'),
+        ocrUploadsPath('ocr_tmp'),
+    ];
+}
+
+function ocrUploadsPath($directory)
+{
+    return ocrProjectRoot() . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . trim((string) $directory, "\\/");
+}
+
+function ocrProjectRoot()
+{
+    $root = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . '..');
+    return $root !== false ? $root : dirname(__DIR__, 2);
+}
+
+function ocrPathIsUnderAllowedRoots($path, array $allowed_roots)
+{
+    $resolved_path = ocrNormalizePathForCompare($path);
+
+    foreach ($allowed_roots as $root) {
+        $resolved_root = realpath((string) $root);
+        if ($resolved_root === false || !is_dir($resolved_root)) {
+            continue;
+        }
+
+        $resolved_root = rtrim(ocrNormalizePathForCompare($resolved_root), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (str_starts_with($resolved_path, $resolved_root)) {
+            return true;
         }
     }
 
-    return $binary;
+    return false;
+}
+
+function ocrNormalizePathForCompare($path)
+{
+    $normalized = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $path);
+    return PHP_OS_FAMILY === 'Windows' ? strtolower($normalized) : $normalized;
 }
 
 function isAllowedPaymentProofUpload(array $file, &$message = '')

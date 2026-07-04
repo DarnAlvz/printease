@@ -28,6 +28,64 @@ function orderPageUrl($page, $search_code, $status_filter)
 }
 
 $owner_id = $_SESSION['user_id'];
+$focus_order_id = max(0, (int) ($_GET['focus_order_id'] ?? 0));
+$focus_order_code = trim($_GET['focus_order_code'] ?? '');
+
+function markRelatedOwnerOrderNotificationsRead($conn, $owner_id, $focus_order_id, $focus_order_code)
+{
+    $focus_order_id = (int) $focus_order_id;
+    $focus_order_code = trim((string) $focus_order_code);
+
+    if ($focus_order_id <= 0 && $focus_order_code === '') {
+        return false;
+    }
+
+    $updated = false;
+
+    if ($focus_order_id > 0) {
+        $target_like_end = '%focus_order_id=' . $focus_order_id;
+        $target_like_with_more_params = '%focus_order_id=' . $focus_order_id . '&%';
+        $json_like = '%"order_id":' . $focus_order_id . '%';
+        $spaced_json_like = '%"order_id": ' . $focus_order_id . '%';
+        $sql = "UPDATE notifications
+                SET is_read = 1, read_at = COALESCE(read_at, NOW())
+                WHERE user_id = ?
+                  AND is_read = 0
+                  AND (
+                      target_url LIKE ?
+                      OR target_url LIKE ?
+                      OR metadata_json LIKE ?
+                      OR metadata_json LIKE ?
+                  )";
+        $stmt = mysqli_prepare($conn, $sql);
+        mysqli_stmt_bind_param($stmt, "issss", $owner_id, $target_like_end, $target_like_with_more_params, $json_like, $spaced_json_like);
+        mysqli_stmt_execute($stmt);
+        $updated = mysqli_stmt_affected_rows($stmt) > 0 || $updated;
+    }
+
+    if ($focus_order_code !== '') {
+        $like = '%focus_order_code=' . $focus_order_code . '%';
+        $json_like = '%"order_code":"' . $focus_order_code . '"%';
+        $spaced_json_like = '%"order_code": "' . $focus_order_code . '"%';
+        $sql = "UPDATE notifications
+                SET is_read = 1, read_at = COALESCE(read_at, NOW())
+                WHERE user_id = ?
+                  AND is_read = 0
+                  AND (
+                      target_url LIKE ?
+                      OR metadata_json LIKE ?
+                      OR metadata_json LIKE ?
+                  )";
+        $stmt = mysqli_prepare($conn, $sql);
+        mysqli_stmt_bind_param($stmt, "isss", $owner_id, $like, $json_like, $spaced_json_like);
+        mysqli_stmt_execute($stmt);
+        $updated = mysqli_stmt_affected_rows($stmt) > 0 || $updated;
+    }
+
+    return $updated;
+}
+
+markRelatedOwnerOrderNotificationsRead($conn, $owner_id, $focus_order_id, $focus_order_code);
 
 $notif_sql = "SELECT COUNT(*) AS total
               FROM notifications
@@ -50,8 +108,6 @@ if (!$shop) {
 
 $shop_id = (int) $shop['shop_id'];
 $search_code = trim($_GET['order_code'] ?? '');
-$focus_order_id = max(0, (int) ($_GET['focus_order_id'] ?? 0));
-$focus_order_code = trim($_GET['focus_order_code'] ?? '');
 $allowed_filters = ['all', 'pending', 'processing', 'ready_for_pickup', 'completed'];
 $status_filter = $_GET['status'] ?? 'all';
 if (!in_array($status_filter, $allowed_filters, true)) {
@@ -168,11 +224,61 @@ function paymentStatusLabel($payment_status, $verification_status)
     if ($payment_status === 'paid' && $verification_status === 'verified') {
         return 'Paid';
     } elseif ($verification_status === 'pending') {
-        return 'Pending Verification';
+        return 'For Verification';
     } elseif ($verification_status === 'rejected') {
         return 'Rejected';
     }
     return 'Unpaid';
+}
+
+function ownerOrderIsPaidAndPending(array $order)
+{
+    return ($order['order_status'] ?? '') === 'pending'
+        && ($order['payment_status'] ?? '') === 'paid'
+        && ($order['verification_status'] ?? '') === 'verified';
+}
+
+function ownerDownloadFileUrl(array $file)
+{
+    $file_id = (int) ($file['file_id'] ?? 0);
+    if ($file_id <= 0) {
+        return '';
+    }
+
+    return BASE_URL . 'backend/actions/download_order_file.php?file_id=' . $file_id;
+}
+
+function ownerDownloadFileName(array $file)
+{
+    $file_name = trim((string) ($file['file_name'] ?? ''));
+    if ($file_name === '') {
+        $file_name = 'order-file';
+    }
+
+    $file_name = preg_replace('/[^\w.\- ()]+/', '_', $file_name);
+    return trim($file_name, '._ ') ?: 'order-file';
+}
+
+function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = false)
+{
+    ?>
+    <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
+        class="orders-update-form orders-status-action order-modal-accept-form" data-accept-download-form
+        data-order-id="<?php echo e($order['order_id']); ?>" <?php echo $hidden ? 'hidden' : ''; ?>>
+        <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
+        <input type="hidden" name="order_status" value="processing">
+        <?php foreach ($file_rows as $file): ?>
+            <?php $download_url = ownerDownloadFileUrl($file); ?>
+            <?php if ($download_url !== ''): ?>
+                <input type="hidden" data-download-url value="<?php echo e($download_url); ?>"
+                    data-download-name="<?php echo e(ownerDownloadFileName($file)); ?>">
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <button type="submit" name="update_order" class="btn order-btn-ready">
+            Accept & Download Order
+        </button>
+    </form>
+    <?php
 }
 
 ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_toast);
@@ -456,7 +562,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                         } elseif (($order['verification_status'] ?? '') === 'verified') {
                                             echo "Verified";
                                         } elseif (($order['verification_status'] ?? '') === 'pending') {
-                                            echo "Pending Verification";
+                                            echo "For Verification";
                                         } elseif (($order['verification_status'] ?? '') === 'rejected') {
                                             echo "Rejected";
                                         } else {
@@ -527,7 +633,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 <?php if (!empty($order['payment_id']) && ($order['verification_status'] ?? '') === 'pending'): ?>
                                     <div class="order-payment-action-card" data-payment-action-card="<?php echo e($order['payment_id']); ?>">
                                         <span>Payment Action</span>
-                                        <strong class="payment-action-group">
+                                        <div class="payment-action-group">
                                             <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
                                                 class="orders-update-form" data-payment-verify-form
                                                 data-payment-id="<?php echo e($order['payment_id']); ?>">
@@ -538,23 +644,24 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                                 </button>
                                             </form>
 
-                                            <button type="button" class="btn order-btn-danger reject-toggle"
-                                                data-target="reject-box-<?php echo e($order['payment_id']); ?>">
+                                            <button type="button" class="btn order-btn-danger" data-payment-reject-toggle>
                                                 Reject Payment
                                             </button>
 
-                                            <form id="reject-box-<?php echo e($order['payment_id']); ?>"
-                                                action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
-                                                class="orders-update-form" hidden>
+                                            <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
+                                                class="orders-update-form" data-payment-reject-form
+                                                data-payment-id="<?php echo e($order['payment_id']); ?>" hidden>
                                                 <input type="hidden" name="payment_id"
                                                     value="<?php echo e($order['payment_id']); ?>">
-                                                <textarea name="rejection_reason" placeholder="Enter rejection reason"
-                                                    class="payment-reject-textarea" required></textarea>
+                                                <label for="reject-reason-<?php echo e($order['payment_id']); ?>">Reason for rejection</label>
+                                                <textarea id="reject-reason-<?php echo e($order['payment_id']); ?>" name="rejection_reason"
+                                                    placeholder="Tell the customer what needs to be corrected"
+                                                    class="payment-reject-textarea" maxlength="500" required></textarea>
                                                 <button type="submit" name="reject_payment" class="btn order-btn-danger">
                                                     Confirm Reject
                                                 </button>
                                             </form>
-                                        </strong>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
                                 <div>
@@ -568,18 +675,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     <footer class="order-modal-footer">
                         <button type="button" class="btn order-modal-secondary" data-order-modal-close>Close</button>
                         <?php if ($owner_is_verified && $order['order_status'] === 'pending'): ?>
-                            <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
-                                class="orders-update-form orders-status-action" data-accept-download-form
-                                data-owner-local-handler="true"
-                                data-order-id="<?php echo e($order['order_id']); ?>">
-                                <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
-                                <input type="hidden" name="order_status" value="processing">
-                                <?php foreach ($file_rows as $file): ?>
-                                    <input type="hidden" data-download-url value="<?php echo e(printEaseFileUrl($file['file_path'])); ?>">
-                                <?php endforeach; ?>
-                                <button type="submit" name="update_order" class="btn order-modal-primary">Accept &amp; Download
-                                    Order</button>
-                            </form>
+                            <?php renderAcceptDownloadForm($order, $file_rows, !ownerOrderIsPaidAndPending($order)); ?>
                         <?php endif; ?>
                     </footer>
                 </section>
@@ -595,6 +691,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                 mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                 mysqli_stmt_execute($file_stmt);
                 $files = mysqli_stmt_get_result($file_stmt);
+                $file_rows = $order_files[(int) $order['order_id']] ?? [];
                 ?>
                 <?php $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0) || ($search_code !== '' && strcasecmp($search_code, $order['order_code']) === 0); ?>
                 <article class="owner-card order-card-mobile <?php echo $is_focused_order ? 'order-focused' : ''; ?>"
@@ -706,6 +803,30 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         });
 
         document.addEventListener('click', function (event) {
+            const rejectToggle = event.target.closest('[data-payment-reject-toggle]');
+            if (rejectToggle) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const actionCard = rejectToggle.closest('[data-payment-action-card]');
+                const rejectForm = actionCard ? actionCard.querySelector('[data-payment-reject-form]') : null;
+                if (!rejectForm) {
+                    return;
+                }
+
+                rejectForm.hidden = !rejectForm.hidden;
+                rejectToggle.setAttribute('aria-expanded', rejectForm.hidden ? 'false' : 'true');
+
+                if (!rejectForm.hidden) {
+                    const textarea = rejectForm.querySelector('[name="rejection_reason"]');
+                    if (textarea) {
+                        textarea.focus();
+                    }
+                }
+
+                return;
+            }
+
             const closeTarget = event.target.closest(closeSelector);
             if (closeTarget) {
                 closeModal(closeTarget.closest('.order-modal'));
@@ -753,6 +874,12 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
             }
         }
 
+        function showAcceptDownloadAction(orderId) {
+            document.querySelectorAll('.order-modal [data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function (form) {
+                form.hidden = false;
+            });
+        }
+
         function setPaymentVerified(paymentId) {
             document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function (label) {
                 label.textContent = 'Paid';
@@ -760,6 +887,20 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 
             document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function (label) {
                 label.textContent = 'Verified';
+            });
+
+            document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function (card) {
+                card.remove();
+            });
+        }
+
+        function setPaymentRejected(paymentId) {
+            document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function (label) {
+                label.textContent = 'Rejected';
+            });
+
+            document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function (label) {
+                label.textContent = 'Rejected';
             });
 
             document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function (card) {
@@ -806,6 +947,9 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     })
                     .then(function (data) {
                         setPaymentVerified(data.payment_id || form.dataset.paymentId);
+                        if (data.order_id) {
+                            showAcceptDownloadAction(data.order_id);
+                        }
                         if (window.ownerShowToast) {
                             window.ownerShowToast(data.message || 'Payment verified successfully.', 'success');
                         }
@@ -824,89 +968,216 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
             });
         });
 
-        document.querySelectorAll('[data-accept-download-form]').forEach(function (form) {
+        document.querySelectorAll('[data-payment-reject-form]').forEach(function (form) {
             form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (form.dataset.paymentSubmitting === 'true') {
+                    return;
+                }
+
+                const reasonField = form.querySelector('[name="rejection_reason"]');
+                const reason = reasonField ? reasonField.value.trim() : '';
+                if (!reason) {
+                    if (window.ownerShowToast) {
+                        window.ownerShowToast('Please enter a reason before rejecting this payment proof.', 'error');
+                    }
+                    if (reasonField) {
+                        reasonField.focus();
+                    }
+                    return;
+                }
+
+                form.dataset.paymentSubmitting = 'true';
+                form.classList.add('is-loading');
+                const submitButton = form.querySelector('[type="submit"]');
+                const originalText = submitButton ? submitButton.textContent : '';
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Rejecting...';
+                }
+
+                const formData = new FormData(form);
+                if (!formData.has('reject_payment')) {
+                    formData.append('reject_payment', '1');
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            if (!response.ok || !data || !data.success) {
+                                throw new Error((data && data.message) || 'Payment rejection failed.');
+                            }
+                            return data;
+                        });
+                    })
+                    .then(function (data) {
+                        setPaymentRejected(data.payment_id || form.dataset.paymentId);
+                        if (window.ownerShowToast) {
+                            window.ownerShowToast(data.message || 'Payment proof rejected.', 'warning');
+                        }
+                    })
+                    .catch(function (error) {
+                        form.dataset.paymentSubmitting = 'false';
+                        form.classList.remove('is-loading');
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = originalText || 'Confirm Reject';
+                        }
+                        if (window.ownerShowToast) {
+                            window.ownerShowToast(error.message || 'Failed to reject payment. Please try again.', 'error');
+                        }
+                    });
+            });
+        });
+
+        document.querySelectorAll('[data-accept-download-form]').forEach(function (form) {
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+
                 if (form.dataset.downloadStarted === 'true') {
                     return;
                 }
 
-                event.preventDefault();
-                event.stopPropagation();
-
-                const urls = Array.from(form.querySelectorAll('[data-download-url]'))
-                    .map(function (input) {
-                        return input.value;
+                const files = Array.from(form.querySelectorAll('[data-download-url]'))
+                    .map(function (input, index) {
+                        return {
+                            url: input.value,
+                            name: input.dataset.downloadName || ('order-file-' + (index + 1))
+                        };
                     })
-                    .filter(Boolean);
+                    .filter(function (file) {
+                        return file.url;
+                    });
 
                 form.dataset.downloadStarted = 'true';
                 form.classList.add('is-loading');
                 const submitButton = form.querySelector('[type="submit"]');
                 if (submitButton) {
                     submitButton.disabled = true;
-                    submitButton.textContent = 'Accepting...';
+                    submitButton.textContent = 'Checking file...';
                 }
 
-                urls.forEach(function (url, index) {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = '';
-                    link.target = '_blank';
-                    link.rel = 'noopener';
-                    link.style.display = 'none';
-                    document.body.appendChild(link);
+                try {
+                    if (!files.length) {
+                        throw new Error('No downloadable file found for this order.');
+                    }
 
-                    window.setTimeout(function () {
-                        link.click();
-                        link.remove();
-                    }, index * 150);
-                });
+                    const resolvedFiles = [];
 
-                window.setTimeout(function () {
+                    for (const file of files) {
+                        const checkUrl = new URL(file.url, window.location.href);
+                        checkUrl.searchParams.set('check', '1');
+
+                        const response = await fetch(checkUrl.toString(), {
+                            credentials: 'same-origin',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+
+                        const checkData = await response.json().catch(function () {
+                            return null;
+                        });
+
+                        if (!response.ok) {
+                            throw new Error((checkData && checkData.message) || 'Download failed. Please open the file preview link and download manually.');
+                        }
+
+                        if (!checkData || !checkData.success) {
+                            throw new Error((checkData && checkData.message) || 'Download failed. Please open the file preview link and download manually.');
+                        }
+
+                        resolvedFiles.push({
+                            url: checkData.remote && checkData.url ? checkData.url : file.url,
+                            name: file.name,
+                            remote: Boolean(checkData.remote)
+                        });
+                    }
+
+                    if (submitButton) {
+                        submitButton.textContent = 'Accepting order...';
+                    }
+
                     const formData = new FormData(form);
                     if (!formData.has('update_order')) {
                         formData.append('update_order', '1');
                     }
 
-                    fetch(form.action, {
+                    const response = await fetch(form.action, {
                         method: 'POST',
                         body: formData,
-                        credentials: 'same-origin'
-                    })
-                        .then(function (response) {
-                            if (!response.ok) {
-                                throw new Error('Order update failed.');
-                            }
+                        credentials: 'same-origin',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
 
-                            const orderId = form.dataset.orderId;
-                            setOrderProcessing(orderId);
-                            showReadyAction(orderId);
-                            form.remove();
-                            if (window.ownerShowToast) {
-                                window.ownerShowToast('Order accepted and downloads started.', 'success');
+                    const data = await response.json().catch(function () {
+                        return null;
+                    });
+
+                    if (!response.ok || !data || !data.success) {
+                        throw new Error((data && data.message) || 'Order update failed.');
+                    }
+
+                    const orderId = data.order_id || form.dataset.orderId;
+                    setOrderProcessing(orderId);
+                    document.querySelectorAll('[data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function (matchingForm) {
+                        matchingForm.remove();
+                    });
+                    showReadyAction(orderId);
+
+                    if (submitButton) {
+                        submitButton.textContent = 'Starting download...';
+                    }
+
+                    resolvedFiles.forEach(function (file, index) {
+                        window.setTimeout(function () {
+                            const link = document.createElement('a');
+                            link.href = file.url;
+                            if (file.remote) {
+                                link.target = '_blank';
+                                link.rel = 'noopener';
+                            } else {
+                                link.download = file.name;
                             }
-                        })
-                        .catch(function () {
-                            form.dataset.downloadStarted = 'false';
-                            form.classList.remove('is-loading');
-                            if (submitButton) {
-                                submitButton.disabled = false;
-                                submitButton.textContent = 'Accept & Download Order';
-                            }
-                            if (window.ownerShowToast) {
-                                window.ownerShowToast('Failed to update order status. Please try again.', 'error');
-                            }
-                        });
-                }, Math.max(450, urls.length * 180));
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                        }, index * 150);
+                    });
+
+                    closeModal(form.closest('.order-modal') || activeModal);
+
+                    window.setTimeout(function () {
+                        const processingUrl = new URL('orders.php', window.location.href);
+                        processingUrl.searchParams.set('status', 'processing');
+                        processingUrl.searchParams.set('focus_order_id', orderId);
+                        window.location.href = processingUrl.toString();
+                    }, Math.max(1200, resolvedFiles.length * 350));
+
+                    if (window.ownerShowToast) {
+                        window.ownerShowToast('Order accepted and downloads started.', 'success');
+                    }
+                } catch (error) {
+                    form.dataset.downloadStarted = 'false';
+                    form.classList.remove('is-loading');
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.textContent = 'Accept & Download Order';
+                    }
+                    if (window.ownerShowToast) {
+                        window.ownerShowToast(error.message || 'Download failed. Please open the file preview link and download manually.', 'error');
+                    }
+                }
             });
         });
 
-        document.querySelectorAll('.reject-toggle').forEach(function (button) {
-            button.addEventListener('click', function () {
-                const target = document.getElementById(button.dataset.target);
-                if (target) target.hidden = !target.hidden;
-            });
-        });
     })();
 
 </script>

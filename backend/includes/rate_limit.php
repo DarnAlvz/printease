@@ -2,8 +2,10 @@
 
 function rateLimitClientIp()
 {
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $remote_addr = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    $ip = filter_var($remote_addr, FILTER_VALIDATE_IP) ? $remote_addr : 'unknown';
+
+    if ($ip !== 'unknown' && rateLimitIsTrustedProxy($ip) && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $forwarded = explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR']);
         $candidate = trim($forwarded[0] ?? '');
         if (filter_var($candidate, FILTER_VALIDATE_IP)) {
@@ -14,9 +16,64 @@ function rateLimitClientIp()
     return substr((string) $ip, 0, 45);
 }
 
+function rateLimitTrustedProxies()
+{
+    $raw = getenv('TRUSTED_PROXIES');
+    if ($raw === false || trim((string) $raw) === '') {
+        return [];
+    }
+
+    $proxies = [];
+    foreach (explode(',', (string) $raw) as $proxy) {
+        $proxy = trim($proxy);
+        if ($proxy !== '' && filter_var($proxy, FILTER_VALIDATE_IP)) {
+            $proxies[] = $proxy;
+        }
+    }
+
+    return $proxies;
+}
+
+function rateLimitIsTrustedProxy($ip)
+{
+    return in_array((string) $ip, rateLimitTrustedProxies(), true);
+}
+
 function rateLimitIdentifier($value)
 {
     return strtolower(trim((string) $value));
+}
+
+function rateLimitCompositeIdentifier(...$parts)
+{
+    $normalized = [];
+
+    foreach ($parts as $part) {
+        $part = preg_replace('/[^a-z0-9_.:@-]+/i', '_', strtolower(trim((string) $part)));
+        $part = trim($part, '_');
+        if ($part !== '') {
+            $normalized[] = $part;
+        }
+    }
+
+    $identifier = implode('|', $normalized);
+    return substr($identifier !== '' ? $identifier : 'unknown', 0, 255);
+}
+
+function rateLimitCurrentUserKey($prefix = 'user')
+{
+    $prefix = rateLimitIdentifier($prefix) ?: 'user';
+    $user_id = (int) ($_SESSION['user_id'] ?? 0);
+
+    if ($user_id > 0) {
+        return rateLimitCompositeIdentifier($prefix . ':' . $user_id);
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE && session_id() !== '') {
+        return rateLimitCompositeIdentifier('guest:' . session_id());
+    }
+
+    return 'guest:unknown';
 }
 
 function rateLimitFormatSeconds($seconds)

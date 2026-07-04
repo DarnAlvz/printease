@@ -68,6 +68,64 @@ if (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UP
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
+function buildCloudinaryOrderSafeName($original_name)
+{
+    $original_name = basename((string) $original_name);
+    $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+    $base_name = pathinfo($original_name, PATHINFO_FILENAME);
+
+    $safe_base = strtolower($base_name);
+    $safe_base = preg_replace('/[^a-z0-9]+/', '_', $safe_base);
+    $safe_base = trim($safe_base, '_');
+
+    if ($safe_base === '') {
+        $safe_base = 'order_file';
+    }
+
+    $safe_base = substr($safe_base, 0, 80);
+    $unique_suffix = date('Ymd_His') . '_' . bin2hex(random_bytes(3));
+    $public_id = $safe_base . '_' . $unique_suffix;
+
+    if ($extension !== '') {
+        $safe_extension = preg_replace('/[^a-z0-9]/', '', $extension);
+        if ($safe_extension !== '') {
+            $public_id .= '.' . $safe_extension;
+        }
+    }
+
+    return $public_id;
+}
+
+function createCloudinaryOrderUploadCopy($source_path, $safe_name)
+{
+    $root = realpath(__DIR__ . "/../..");
+    if ($root === false) {
+        throw new Exception("Project upload directory is not available.");
+    }
+
+    $temp_dir = $root . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'order_upload_tmp';
+    if (!is_dir($temp_dir) && !mkdir($temp_dir, 0755, true)) {
+        throw new Exception("Could not prepare order upload temp directory.");
+    }
+
+    $temp_dir_real = realpath($temp_dir);
+    if ($temp_dir_real === false || !is_dir($temp_dir_real)) {
+        throw new Exception("Order upload temp directory is not available.");
+    }
+
+    $target_path = $temp_dir_real . DIRECTORY_SEPARATOR . $safe_name;
+    if (!copy($source_path, $target_path)) {
+        throw new Exception("Could not prepare uploaded file for cloud storage.");
+    }
+
+    return $target_path;
+}
+
+function isDuplicateKeyError($conn)
+{
+    return (int) mysqli_errno($conn) === 1062;
+}
+
 $page_count = 1;
 $detected_page_count = max(1, min(10000, (int) ($_POST['detected_page_count'] ?? 1)));
 $original_name = basename($_FILES['document_file']['name']);
@@ -77,6 +135,7 @@ $file_tmp = $_FILES['document_file']['tmp_name'];
 $is_pdf = $file_type === 'pdf';
 $cloudinary_public_id = null;
 $cloudinary_resource_type = null;
+$cloudinary_upload_copy = null;
 $transaction_started = false;
 
 try {
@@ -85,14 +144,24 @@ try {
     }
 
     $total_amount = (float) $service['price_per_page'] * $page_count * $copies;
+    $cloudinary_safe_name = buildCloudinaryOrderSafeName($original_name);
+    $cloudinary_upload_copy = createCloudinaryOrderUploadCopy($file_tmp, $cloudinary_safe_name);
 
     $uploadResult = $cloudinary->uploadApi()->upload(
-        $file_tmp,
+        $cloudinary_upload_copy,
         [
             "folder" => "printease/orders",
-            "resource_type" => "auto"
+            "resource_type" => "raw",
+            "public_id" => $cloudinary_safe_name,
+            "use_filename" => false,
+            "unique_filename" => false
         ]
     );
+
+    if ($cloudinary_upload_copy && is_file($cloudinary_upload_copy)) {
+        unlink($cloudinary_upload_copy);
+        $cloudinary_upload_copy = null;
+    }
 
     $db_path = $uploadResult['secure_url'] ?? '';
     $cloudinary_public_id = $uploadResult['public_id'] ?? null;
@@ -100,20 +169,6 @@ try {
     if ($db_path === '') {
         throw new Exception("Cloudinary upload did not return a file URL.");
     }
-
-    // Generate unique order_code
-    do {
-        $random_code = strtoupper(bin2hex(random_bytes(3))); // 6-char random
-        $order_code = 'PE-' . date('Ymd') . '-' . $random_code;
-
-        // Check if it exists in DB
-        $check_sql = "SELECT COUNT(*) as count FROM orders WHERE order_code = ?";
-        $check_stmt = mysqli_prepare($conn, $check_sql);
-        mysqli_stmt_bind_param($check_stmt, "s", $order_code);
-        mysqli_stmt_execute($check_stmt);
-        $result = mysqli_stmt_get_result($check_stmt);
-        $row = mysqli_fetch_assoc($result);
-    } while ($row['count'] > 0); // loop until unique
 
     mysqli_begin_transaction($conn);
     $transaction_started = true;
@@ -127,6 +182,8 @@ try {
     if (!$order_stmt) {
         throw new Exception("Order SQL Error: " . mysqli_error($conn));
     }
+
+    $order_code = '';
     mysqli_stmt_bind_param(
         $order_stmt,
         "siiisssiissds",
@@ -144,8 +201,24 @@ try {
         $total_amount,
         $order_status
     );
-    if (!mysqli_stmt_execute($order_stmt)) {
-        throw new Exception("Failed to save order: " . mysqli_stmt_error($order_stmt));
+
+    $order_inserted = false;
+    for ($attempt = 1; $attempt <= 5; $attempt++) {
+        $random_code = strtoupper(bin2hex(random_bytes(3)));
+        $order_code = 'PE-' . date('Ymd') . '-' . $random_code;
+
+        if (mysqli_stmt_execute($order_stmt)) {
+            $order_inserted = true;
+            break;
+        }
+
+        if (!isDuplicateKeyError($conn)) {
+            throw new Exception("Failed to save order: " . mysqli_stmt_error($order_stmt));
+        }
+    }
+
+    if (!$order_inserted) {
+        throw new Exception("Could not generate a unique order code. Please try again.");
     }
 
     $order_id = mysqli_insert_id($conn);
@@ -190,6 +263,10 @@ try {
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 
 } catch (Throwable $e) {
+    if ($cloudinary_upload_copy && is_file($cloudinary_upload_copy)) {
+        unlink($cloudinary_upload_copy);
+    }
+
     if ($transaction_started) {
         mysqli_rollback($conn);
     }

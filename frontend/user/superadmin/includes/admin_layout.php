@@ -121,7 +121,7 @@ function adminLayoutStart($active, $title, $subtitle = '')
                     <div class="admin-notification-wrap">
                         <button type="button" class="admin-notification-button" id="adminNotificationToggle" aria-label="Notifications" aria-expanded="false" aria-controls="adminNotificationPopover">
                             <?php echo adminIcon('bell'); ?>
-                            <?php if ($unread_count > 0): ?><span><?php echo (int) $unread_count; ?></span><?php endif; ?>
+                            <span class="admin-notification-badge" <?php echo $unread_count === 0 ? 'hidden' : ''; ?>><?php echo (int) $unread_count; ?></span>
                         </button>
                         <section class="admin-notification-popover" id="adminNotificationPopover" aria-hidden="true">
                             <header>
@@ -134,9 +134,10 @@ function adminLayoutStart($active, $title, $subtitle = '')
                                 <div class="admin-notification-list">
                                     <?php foreach ($recent_notifications as $notification): ?>
                                         <?php $target = notificationSafeTarget($notification['target_url'] ?? '') ?: 'notifications.php'; ?>
-                                        <a href="<?php echo e($target); ?>" data-notification-id="<?php echo (int) $notification['notification_id']; ?>" data-is-read="<?php echo (int) $notification['is_read']; ?>">
+                                        <a href="<?php echo e($target); ?>" class="<?php echo empty($notification['is_read']) ? 'is-unread' : ''; ?>" data-notification-id="<?php echo (int) $notification['notification_id']; ?>" data-is-read="<?php echo (int) $notification['is_read']; ?>">
                                             <strong><?php echo e($notification['title'] ?? 'Notification'); ?></strong>
                                             <span><?php echo e($notification['message'] ?? ''); ?></span>
+                                            <time><?php echo e(notificationRelativeTime($notification['created_at'] ?? '')); ?></time>
                                         </a>
                                     <?php endforeach; ?>
                                 </div>

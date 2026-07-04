@@ -54,7 +54,7 @@ function reportPaymentLabel($paid_amount, $payment_status, $verification_status)
         return 'Paid';
     }
     if ($verification_status === 'pending') {
-        return 'Pending Verification';
+        return 'For Verification';
     }
     if ($verification_status === 'rejected') {
         return 'Rejected';

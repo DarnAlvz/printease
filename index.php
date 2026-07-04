@@ -26,6 +26,7 @@ if (!isset($_SESSION['seen_splash'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
 
 </head>
 
@@ -44,6 +45,10 @@ if (!isset($_SESSION['seen_splash'])) {
 
             <div class="nav-actions">
                 <a class="btn btn-primary login-btn" href="frontend/pages/login.php">Login</a>
+                <button class="install-app-btn" id="installAppBtn" type="button" hidden>
+                    <span class="install-app-icon" aria-hidden="true"></span>
+                    <span>Install App</span>
+                </button>
             </div>
         </div>
     </header>
@@ -53,13 +58,15 @@ if (!isset($_SESSION['seen_splash'])) {
             <div class="hero-inner">
                 <h1>Modern Printing Made Easy</h1>
                 <p>
-                    Connect customers with verified print shops in Calbayog City. Streamline your printing business with
+                        Connect customers with verified print shops in Calbayog City. Streamline your printing business
+                    with
                     our comprehensive e-printing management system.
                 </p>
 
                 <div class="hero-actions">
                     <a class="btn btn-primary" href="frontend/pages/login.php">Get Started</a>
                     <a class="btn btn-cyan" href="frontend/pages/register.php">Register Now</a>
+
                 </div>
 
                 <?php renderPrintEaseLogo(['class' => 'hero-logo', 'alt' => 'E-Printing System logo']); ?>
@@ -149,6 +156,52 @@ if (!isset($_SESSION['seen_splash'])) {
             </div>
         </div>
     </footer>
+
+    <script>
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("service-worker.js")
+                .then(() => console.log("SW registered"))
+                .catch(err => console.log("SW failed", err));
+        }
+
+
+
+        const installAppBtn = document.getElementById('installAppBtn');
+        let deferredPrompt = null;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+
+            if (installAppBtn) {
+                installAppBtn.hidden = false;
+                installAppBtn.classList.add('is-visible');
+            }
+        });
+
+        if (installAppBtn) {
+            installAppBtn.addEventListener('click', async () => {
+                if (!deferredPrompt) return;
+
+                deferredPrompt.prompt();
+
+                await deferredPrompt.userChoice;
+
+                deferredPrompt = null;
+                installAppBtn.hidden = true;
+                installAppBtn.classList.remove('is-visible');
+            });
+        }
+
+        window.addEventListener('appinstalled', () => {
+            deferredPrompt = null;
+            if (installAppBtn) {
+                installAppBtn.hidden = true;
+                installAppBtn.classList.remove('is-visible');
+            }
+        });
+    </script>
+
 </body>
 
 </html>

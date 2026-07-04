@@ -5,6 +5,7 @@ require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/status_guard.php";
 require_once __DIR__ . "/../includes/gcash_ocr.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 header('Content-Type: application/json');
 
@@ -29,6 +30,8 @@ requireVerifiedStatus($conn);
 
 $customer_id = $_SESSION['user_id'];
 $order_id = intval($_POST['order_id'] ?? 0);
+$ip = rateLimitClientIp();
+$customer_key = rateLimitCurrentUserKey();
 
 if ($order_id <= 0) {
     paymentReferenceJson(false, 'Invalid order.');
@@ -47,11 +50,39 @@ if (!$order) {
     paymentReferenceJson(false, 'Order not found.');
 }
 
+$ocr_customer_limit = rateLimitCheck($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60);
+$ocr_ip_limit = rateLimitCheck($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60);
+
+if (!$ocr_customer_limit['allowed'] || !$ocr_ip_limit['allowed']) {
+    $retry_after = max((int) $ocr_customer_limit['retry_after'], (int) $ocr_ip_limit['retry_after']);
+    paymentReferenceJson(false, 'OCR is temporarily rate limited. Please wait ' . rateLimitFormatSeconds($retry_after) . ' before trying again.');
+}
+
 if (!isset($_FILES['proof_of_payment_file']) || !isAllowedPaymentProofUpload($_FILES['proof_of_payment_file'], $upload_error)) {
     paymentReferenceJson(false, $upload_error ?: 'Please upload a valid image file.');
 }
 
-$ocr_text = runReceiptOcr($_FILES['proof_of_payment_file']['tmp_name']);
+$proof_extension = strtolower(pathinfo($_FILES['proof_of_payment_file']['name'], PATHINFO_EXTENSION));
+$ocr_tmp_dir = ocrUploadsPath('ocr_tmp') . DIRECTORY_SEPARATOR;
+if (!is_dir($ocr_tmp_dir)) {
+    mkdir($ocr_tmp_dir, 0775, true);
+}
+
+$tmp_file_name = time() . "_ocr_" . bin2hex(random_bytes(8)) . "." . $proof_extension;
+$tmp_path = $ocr_tmp_dir . $tmp_file_name;
+
+if (!move_uploaded_file($_FILES['proof_of_payment_file']['tmp_name'], $tmp_path)) {
+    paymentReferenceJson(false, 'Failed to prepare image for OCR.');
+}
+
+rateLimitRecord($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60, 60);
+rateLimitRecord($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60, 60 * 60);
+
+$ocr_text = runReceiptOcr($tmp_path);
+if (is_file($tmp_path)) {
+    @unlink($tmp_path);
+}
+
 $reference_number = detectGcashReferenceFromText($ocr_text);
 $payment_date = detectGcashPaymentDateFromText($ocr_text);
 $GLOBALS['payment_date'] = $payment_date ?? '';
