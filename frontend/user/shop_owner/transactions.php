@@ -96,6 +96,18 @@ $summary = mysqli_fetch_assoc(mysqli_stmt_get_result($summary_stmt)) ?: [
     'latest_payment' => null,
 ];
 
+$filtered_total = (int) ($summary['total_transactions'] ?? 0);
+$per_page = 10;
+$page_value = $_GET['page'] ?? 1;
+$page = max(1, is_scalar($page_value) ? (int) $page_value : 1);
+$total_pages = max(1, (int) ceil($filtered_total / $per_page));
+if ($page > $total_pages) {
+    $page = $total_pages;
+}
+$offset = ($page - 1) * $per_page;
+$showing_start = $filtered_total > 0 ? $offset + 1 : 0;
+$showing_end = min($offset + $per_page, $filtered_total);
+
 $transaction_sql = "SELECT p.*, o.order_code, o.paper_size, o.paper_type, o.print_type, o.copies,
                            o.total_amount, o.order_status, o.created_at AS order_created_at,
                            u.full_name, u.email
@@ -106,12 +118,15 @@ $transaction_sql = "SELECT p.*, o.order_code, o.paper_size, o.paper_type, o.prin
                     AND p.payment_status = 'paid'
                     $date_filter_sql
                     $search_filter_sql
-                    ORDER BY p.created_at DESC";
+                    ORDER BY p.created_at DESC
+                    LIMIT ? OFFSET ?";
 $transaction_stmt = mysqli_prepare($conn, $transaction_sql);
 if ($search !== '') {
-    mysqli_stmt_bind_param($transaction_stmt, "i" . $search_types, $shop_id, ...$search_params);
+    $transaction_types = "i" . $search_types . "ii";
+    $transaction_params = array_merge([$shop_id], $search_params, [$per_page, $offset]);
+    mysqli_stmt_bind_param($transaction_stmt, $transaction_types, ...$transaction_params);
 } else {
-    mysqli_stmt_bind_param($transaction_stmt, "i", $shop_id);
+    mysqli_stmt_bind_param($transaction_stmt, "iii", $shop_id, $per_page, $offset);
 }
 
 mysqli_stmt_execute($transaction_stmt);
@@ -140,6 +155,19 @@ function transactionDateFilterUrl($filter, $search)
     }
 
     return 'transactions.php' . ($params ? '?' . http_build_query($params) : '');
+}
+
+function transactionPageUrl($page, $date_filter, $search)
+{
+    $params = ['page' => max(1, (int) $page)];
+    if ($date_filter !== 'all') {
+        $params['date_filter'] = $date_filter;
+    }
+    if ($search !== '') {
+        $params['q'] = $search;
+    }
+
+    return 'transactions.php?' . http_build_query($params);
 }
 
 function transactionClearSearchUrl($date_filter)
@@ -290,6 +318,40 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
                         <p><strong>Date:</strong> <?php echo !empty($payment_date) ? e(date("Y-m-d", strtotime($payment_date))) : 'Not available'; ?></p>
                     </article>
                 <?php endforeach; ?>
+            </div>
+
+            <div class="orders-pagination transactions-pagination">
+                <p>
+                    Showing <?php echo e((string) $showing_start); ?>-<?php echo e((string) $showing_end); ?>
+                    of <?php echo e((string) $filtered_total); ?> transactions
+                </p>
+                <div>
+                    <?php if ($page > 1): ?>
+                        <a class="pagination-btn" href="<?php echo e(transactionPageUrl($page - 1, $date_filter, $search)); ?>">
+                            <?php echo ownerIcon('chevron-left', 'icon-sm'); ?>
+                            Previous
+                        </a>
+                    <?php else: ?>
+                        <span class="pagination-btn disabled">
+                            <?php echo ownerIcon('chevron-left', 'icon-sm'); ?>
+                            Previous
+                        </span>
+                    <?php endif; ?>
+
+                    <span class="pagination-current"><?php echo e((string) $page); ?> / <?php echo e((string) $total_pages); ?></span>
+
+                    <?php if ($page < $total_pages): ?>
+                        <a class="pagination-btn" href="<?php echo e(transactionPageUrl($page + 1, $date_filter, $search)); ?>">
+                            Next
+                            <?php echo ownerIcon('chevron-right', 'icon-sm'); ?>
+                        </a>
+                    <?php else: ?>
+                        <span class="pagination-btn disabled">
+                            Next
+                            <?php echo ownerIcon('chevron-right', 'icon-sm'); ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
             </div>
         </section>
     <?php endif; ?>
