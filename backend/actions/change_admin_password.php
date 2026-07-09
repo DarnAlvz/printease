@@ -88,7 +88,15 @@ if (!$version_row) {
     redirectAdminPassword($redirect_url, 'Unable to update your password. Please try again.');
 }
 
-logActivity($conn, $admin_id, 'Changed account password', 'Account Security');
+logActivity($conn, $admin_id, 'Changed account password', 'Account Security', [
+    'target_type' => 'user',
+    'target_id' => $admin_id,
+    'new_value' => [
+        'event' => 'password_changed',
+        'auth_provider' => $auth_provider,
+        'remembered_sessions_revoked' => true,
+    ],
+]);
 mysqli_commit($conn);
 
 session_regenerate_id(true);

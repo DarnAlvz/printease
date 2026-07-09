@@ -19,6 +19,9 @@ function customerIcon($name, $class = 'customer-icon')
         'orders' => '<path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5M9 13h6M9 17h6"/>',
         'profile' => '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
         'bell' => '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
+        'mail' => '<path d="M4 5h16v14H4Z"/><path d="m4 7 8 6 8-6"/>',
+        'phone' => '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6.4 6.4l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z"/>',
+        'edit' => '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
         'download' => '<path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/>',
         'logout' => '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
         'moon' => '<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
@@ -158,11 +161,6 @@ function renderCustomerLayout(array $options)
         <div class="customer-topbar-actions">
             <button type="button" class="customer-install-placeholder" data-customer-install hidden aria-label="Install PrintEase">
                 <?php echo customerIcon('download'); ?><span>Install</span>
-            </button>
-            <button type="button" class="customer-theme-toggle" data-customer-theme-toggle
-                aria-label="Switch to dark mode" aria-pressed="false">
-                <span class="customer-theme-toggle__sun"><?php echo customerIcon('sun'); ?></span>
-                <span class="customer-theme-toggle__moon"><?php echo customerIcon('moon'); ?></span>
             </button>
             <a class="customer-notification-link" href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/notifications.php'), ENT_QUOTES, 'UTF-8'); ?>" aria-label="Notifications">
                 <?php echo customerIcon('bell'); ?>

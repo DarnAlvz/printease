@@ -69,7 +69,20 @@ sendNotification($conn, (int) $settings['owner_id'], "Your payment settings for 
     'metadata' => ['shop_id' => (int) $settings['shop_id'], 'status' => $status],
 ]);
 
-logActivity($conn, $_SESSION['user_id'], "Updated payment settings #$settings_id (shop: {$shop_name}) to $status", "Payment Settings");
+logActivity($conn, $_SESSION['user_id'], "Updated payment settings #$settings_id (shop: {$shop_name}) to $status", "Payment Settings", [
+    'target_type' => 'payment_settings',
+    'target_id' => $settings_id,
+    'old_value' => [
+        'approval_status' => $settings['approval_status'] ?? null,
+        'is_active' => isset($settings['is_active']) ? (int) $settings['is_active'] : null,
+    ],
+    'new_value' => [
+        'approval_status' => $status,
+        'is_active' => $is_active,
+        'shop_id' => (int) $settings['shop_id'],
+        'shop_name' => $shop_name,
+    ],
+]);
 setToast("Payment settings for \"" . $shop_name . "\" set to " . $label . ".", "success");
 
 redirect($redirect_url);

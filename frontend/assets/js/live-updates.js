@@ -441,6 +441,97 @@
         poll();
     }
 
+    function setupAdminActivityPolling() {
+        const activityForm = document.querySelector('[data-live-target="admin_activity"]');
+        if (!activityForm) return;
+
+        let signature = '';
+
+        function activityModalOpen() {
+            return Boolean(document.querySelector('.admin-activity-modal.is-open'));
+        }
+
+        function activityRegionSignature(regions) {
+            return [
+                regions && regions['admin-activity-stats'] || '',
+                regions && regions['admin-activity-results'] || ''
+            ].join('\n');
+        }
+
+        function currentActivitySignature() {
+            const stats = document.querySelector('[data-live-region="admin-activity-stats"]');
+            const results = document.querySelector('[data-live-region="admin-activity-results"]');
+            return [(stats && stats.outerHTML) || '', (results && results.outerHTML) || ''].join('\n');
+        }
+
+        function setActivityUpdatedText() {
+            const header = document.querySelector('[data-live-region="admin-activity-results"] > header');
+            if (!header) return;
+
+            let status = header.querySelector('[data-activity-live-status]');
+            if (!status) {
+                status = document.createElement('small');
+                status.dataset.activityLiveStatus = 'true';
+                header.appendChild(status);
+            }
+
+            const now = new Date();
+            status.textContent = 'Updated ' + now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
+
+        function fetchActivityRegions() {
+            const formData = new FormData(activityForm);
+            const params = { target: 'admin_activity' };
+            formData.forEach(function (value, key) {
+                params[key] = value;
+            });
+
+            return fetch(buildUrl(endpoints.liveSearch, params), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    if (!data || !data.success || !data.regions) return false;
+
+                    const nextSignature = activityRegionSignature(data.regions);
+                    if (!signature) {
+                        signature = currentActivitySignature();
+                    }
+
+                    if (nextSignature && nextSignature !== signature && !activityModalOpen()) {
+                        replaceLiveRegions(data.regions);
+                        signature = nextSignature;
+                        setActivityUpdatedText();
+                        return true;
+                    }
+
+                    return false;
+                })
+                .catch(function () { return false; });
+        }
+
+        function poll() {
+            window.setTimeout(function () {
+                if (activityModalOpen()) {
+                    poll();
+                    return;
+                }
+
+                fetchActivityRegions().finally(poll);
+            }, document.hidden ? 60000 : 12000);
+        }
+
+        signature = currentActivitySignature();
+        poll();
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && !activityModalOpen()) {
+                fetchActivityRegions();
+            }
+        });
+    }
+
     function setupDelegatedModals() {
         document.addEventListener('click', function (event) {
             const userButton = event.target.closest('[data-user-view]');
@@ -497,6 +588,12 @@
                 modal.querySelector('[data-activity-modal-timestamp]').textContent = activityItem.dataset.timestamp || 'N/A';
                 modal.querySelector('[data-activity-modal-module]').textContent = activityItem.dataset.module || 'N/A';
                 modal.querySelector('[data-activity-modal-action]').textContent = activityItem.dataset.action || 'N/A';
+                modal.querySelector('[data-activity-modal-target]').textContent = activityItem.dataset.target || 'N/A';
+                modal.querySelector('[data-activity-modal-old-value]').textContent = activityItem.dataset.oldValue || 'N/A';
+                modal.querySelector('[data-activity-modal-new-value]').textContent = activityItem.dataset.newValue || 'N/A';
+                modal.querySelector('[data-activity-modal-ip-address]').textContent = activityItem.dataset.ipAddress || 'N/A';
+                modal.querySelector('[data-activity-modal-browser]').textContent = activityItem.dataset.browser || 'N/A';
+                modal.querySelector('[data-activity-modal-user-agent]').textContent = activityItem.dataset.userAgent || 'N/A';
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
             }
@@ -653,6 +750,7 @@
     setupNotificationPolling();
     setupNotificationDelegation();
     setupOwnerOrderPolling();
+    setupAdminActivityPolling();
     setupDelegatedModals();
 
     window.printEaseRefreshLiveSearch = function (target) {

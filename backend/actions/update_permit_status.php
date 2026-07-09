@@ -46,7 +46,7 @@ if (!$shop_id || !in_array($status, $allowed_status, true)) {
     redirect($redirect_url);
 }
 
-$owner_sql = "SELECT owner_id, shop_name FROM print_shops WHERE shop_id = ?";
+$owner_sql = "SELECT owner_id, shop_name, permit_status FROM print_shops WHERE shop_id = ?";
 $owner_stmt = mysqli_prepare($conn, $owner_sql);
 mysqli_stmt_bind_param($owner_stmt, "i", $shop_id);
 mysqli_stmt_execute($owner_stmt);
@@ -84,7 +84,18 @@ if (mysqli_stmt_execute($stmt)) {
         'target_url' => BASE_URL . 'frontend/user/shop_owner/shop_profile.php',
         'metadata' => ['shop_id' => $shop_id, 'status' => $status],
     ]);
-    logActivity($conn, $_SESSION['user_id'], "Updated permit #$shop_id (shop: {$shop_name}) to $status", "Permit Management");
+    logActivity($conn, $_SESSION['user_id'], "Updated permit #$shop_id (shop: {$shop_name}) to $status", "Permit Management", [
+        'target_type' => 'shop',
+        'target_id' => $shop_id,
+        'old_value' => [
+            'permit_status' => $shop['permit_status'] ?? null,
+        ],
+        'new_value' => [
+            'permit_status' => $status,
+            'shop_name' => $shop_name,
+            'owner_id' => (int) $shop['owner_id'],
+        ],
+    ]);
 
     if ($affected > 0) {
         setToast("Permit for \"" . $shop_name . "\" has been set to: " . ucfirst($label) . ".", "success");

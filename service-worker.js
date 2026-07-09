@@ -1,4 +1,4 @@
-const CACHE_NAME = "printease-v1";
+const CACHE_NAME = "printease-v2";
 
 const urlsToCache = [
   "/printease/",

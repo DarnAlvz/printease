@@ -12,13 +12,18 @@ require_once __DIR__ . "/../../components/customer_toasts.php";
 $customer_id = $_SESSION['user_id'];
 
 // Fetch current user info including account status
-$stmt = mysqli_prepare($conn, "SELECT phone_number, address, profile_picture, valid_id_file, account_status FROM users WHERE user_id = ?");
+$stmt = mysqli_prepare($conn, "SELECT full_name, email, phone_number, address, profile_picture, valid_id_file, account_status, created_at FROM users WHERE user_id = ?");
 mysqli_stmt_bind_param($stmt, "i", $customer_id);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $user = mysqli_fetch_assoc($result);
 
 $account_status = $user['account_status'] ?? 'incomplete';
+$profile_picture_url = !empty($user['profile_picture']) ? BASE_URL . e($user['profile_picture']) : '';
+$valid_id_url = !empty($user['valid_id_file']) ? BASE_URL . e($user['valid_id_file']) : '';
+$customer_name = (string) ($user['full_name'] ?? ($_SESSION['full_name'] ?? 'Customer'));
+$customer_email = (string) ($user['email'] ?? ($_SESSION['email'] ?? ''));
+$created_at = !empty($user['created_at']) ? date('M j, Y', strtotime($user['created_at'])) : 'N/A';
 
 if (empty($_SESSION['customer_password_csrf'])) {
     $_SESSION['customer_password_csrf'] = bin2hex(random_bytes(32));
@@ -110,63 +115,161 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 <p class="text-sm mt-1"><?php echo e($statusText); ?></p>
             </div>
 
-            <form action="../../../backend/actions/save_customer_profile.php" method="POST"
-                enctype="multipart/form-data"
-                class="bg-white p-5 md:p-6 rounded-2xl shadow grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Phone Number</label>
-                    <input type="text" name="phone_number" value="<?php echo e($user['phone_number']); ?>"
-                        class="w-full border rounded-xl p-3" required>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Profile Picture</label>
-                    <input type="file" name="profile_picture" class="w-full border rounded-xl p-3">
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-semibold mb-1">Address</label>
-
-                    <textarea id="address" name="address" rows="3" class="w-full border rounded-xl p-3"
-                        placeholder="Click Use My Current Location or type your complete address"
-                        required><?php echo e($user['address']); ?></textarea>
-
-                    <input type="hidden" id="latitude" name="latitude">
-                    <input type="hidden" id="longitude" name="longitude">
-
-                    <button type="button" onclick="useCurrentLocation()"
-                        class="mt-2 bg-green-600 text-white py-2 px-4 rounded-xl font-semibold">
-                        Use My Current Location
-                    </button>
-
-                    <p id="locationStatus" class="text-sm text-gray-500 mt-2"></p>
-                </div>
-
-                <?php if (!empty($user['profile_picture'])): ?>
-                    <div>
-                        <p class="text-sm font-semibold mb-2">Current Profile Picture</p>
-                        <img src="<?php echo BASE_URL . e($user['profile_picture']); ?>"
-                            class="w-24 h-24 object-cover rounded-xl border">
-                    </div>
-                <?php endif; ?>
-
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Valid ID</label>
-                            <input type="file" name="valid_id_file" class="w-full border rounded-xl p-3">
-                    <?php if (!empty($user['valid_id_file'])): ?>
-                        <a href="<?php echo BASE_URL . e($user['valid_id_file']); ?>" target="_blank"
-                            class="inline-block mt-2 text-blue-600 font-semibold">
-                            View Current ID
-                        </a>
-                    <?php endif; ?>
-                </div>
-
-                <button type="submit" name="save_profile"
-                    class="md:col-span-2 w-full bg-blue-600 text-white py-3 rounded-xl font-semibold">
-                    Save Profile
+            <section class="customer-profile-summary bg-white p-5 md:p-6 rounded-2xl shadow mb-5">
+                <button type="button" id="customerEditProfileTrigger" class="customer-profile-card-edit"
+                    aria-label="Edit profile">
+                    <?php echo customerIcon('edit'); ?>
                 </button>
-            </form>
+                <div class="customer-profile-hero-band" aria-hidden="true"></div>
+                <div class="customer-profile-identity">
+                    <div class="customer-profile-avatar">
+                        <?php if ($profile_picture_url !== ''): ?>
+                            <img src="<?php echo $profile_picture_url; ?>" alt="<?php echo e($customer_name); ?> profile picture">
+                        <?php else: ?>
+                            <span><?php echo e(customerInitials($customer_name)); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <span class="customer-profile-eyebrow">Customer Account</span>
+                        <h2><?php echo e($customer_name); ?></h2>
+                        <p><?php echo customerIcon('mail'); ?><?php echo e($customer_email !== '' ? $customer_email : 'No email recorded'); ?></p>
+                    </div>
+                </div>
+
+                <div class="customer-profile-summary-grid" data-profile-view-mode>
+                    <article>
+                        <span class="customer-profile-detail-icon"><?php echo customerIcon('phone'); ?></span>
+                        <span>
+                            <small>Phone</small>
+                            <strong><?php echo e($user['phone_number'] ?: 'Not set'); ?></strong>
+                        </span>
+                    </article>
+                    <article>
+                        <span class="customer-profile-detail-icon"><?php echo customerIcon('pin'); ?></span>
+                        <span>
+                            <small>Address</small>
+                            <strong><?php echo e($user['address'] ?: 'Not set'); ?></strong>
+                        </span>
+                    </article>
+                    <article>
+                        <span class="customer-profile-detail-icon"><?php echo customerIcon('orders'); ?></span>
+                        <span>
+                            <small>Valid ID</small>
+                            <?php if ($valid_id_url !== ''): ?>
+                                <a href="<?php echo $valid_id_url; ?>" target="_blank" rel="noopener noreferrer">View uploaded ID</a>
+                            <?php else: ?>
+                                <strong>Not uploaded</strong>
+                            <?php endif; ?>
+                        </span>
+                    </article>
+                    <article>
+                        <span class="customer-profile-detail-icon"><?php echo customerIcon('clock'); ?></span>
+                        <span>
+                            <small>Member Since</small>
+                            <strong><?php echo e($created_at); ?></strong>
+                        </span>
+                    </article>
+                </div>
+
+                <form action="../../../backend/actions/save_customer_profile.php" method="POST"
+                    enctype="multipart/form-data"
+                    id="customerProfileEditForm"
+                    class="customer-profile-edit-form"
+                    hidden>
+
+                    <div class="customer-profile-form-head">
+                        <div>
+                            <span class="customer-profile-eyebrow">Edit Profile</span>
+                            <h2 class="text-lg font-bold text-gray-900">Update your details</h2>
+                        </div>
+                        <button type="button" id="customerCancelEditProfile" class="customer-profile-cancel-button">Cancel</button>
+                    </div>
+
+                    <div class="customer-profile-photo-field">
+                        <input type="file" id="customerProfilePictureInput" name="profile_picture"
+                            accept="image/jpeg,image/png,image/webp" hidden>
+                        <button type="button" class="customer-profile-photo-button" id="customerProfilePictureButton"
+                            aria-label="Change profile picture">
+                            <span class="customer-profile-photo-preview" data-profile-picture-preview>
+                                <?php if ($profile_picture_url !== ''): ?>
+                                    <img src="<?php echo $profile_picture_url; ?>" alt="<?php echo e($customer_name); ?> profile picture">
+                                <?php else: ?>
+                                    <b><?php echo e(customerInitials($customer_name)); ?></b>
+                                <?php endif; ?>
+                                <span class="customer-profile-photo-overlay"><?php echo customerIcon('profile'); ?></span>
+                            </span>
+                            <span class="customer-profile-photo-copy">
+                                <strong>Change photo</strong>
+                                <small data-profile-picture-status>JPG, PNG, or WebP only.</small>
+                            </span>
+                        </button>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Full Name</label>
+                        <input type="text" name="full_name" value="<?php echo e($customer_name); ?>"
+                            class="w-full border rounded-xl p-3" minlength="2" maxlength="100"
+                            autocomplete="name" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Phone Number</label>
+                        <input type="text" name="phone_number" value="<?php echo e($user['phone_number'] ?? ''); ?>"
+                            class="w-full border rounded-xl p-3" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Address</label>
+
+                        <textarea id="address" name="address" rows="3" class="w-full border rounded-xl p-3"
+                            placeholder="Click Use My Current Location or type your complete address"
+                            required><?php echo e($user['address'] ?? ''); ?></textarea>
+
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
+
+                        <button type="button" onclick="useCurrentLocation()"
+                            class="mt-2 bg-green-600 text-white py-2 px-4 rounded-xl font-semibold">
+                            Use My Current Location
+                        </button>
+
+                        <p id="locationStatus" class="text-sm text-gray-500 mt-2"></p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Valid ID</label>
+                        <input type="file" name="valid_id_file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                            class="w-full border rounded-xl p-3">
+                        <p class="text-xs text-gray-500 mt-1">Upload only if you need to replace your verification document.</p>
+                        <?php if ($valid_id_url !== ''): ?>
+                            <a href="<?php echo $valid_id_url; ?>" target="_blank" rel="noopener noreferrer"
+                                class="inline-block mt-2 text-blue-600 font-semibold">
+                                View Current ID
+                            </a>
+                        <?php endif; ?>
+                    </div>
+
+                    <button type="submit" name="save_profile"
+                        class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold">
+                        Save Profile
+                    </button>
+                </form>
+
+            </section>
+
+            <section class="customer-profile-preferences bg-white p-5 md:p-6 rounded-2xl shadow mb-5"
+                aria-labelledby="customerAppearanceTitle">
+                <div>
+                    <span class="customer-profile-eyebrow">Appearance</span>
+                    <h2 class="text-lg font-bold text-gray-900" id="customerAppearanceTitle">Display Mode</h2>
+                    <p class="text-sm text-gray-600 mt-1">Choose the customer app theme for this browser.</p>
+                </div>
+                <button type="button" class="customer-profile-theme-toggle customer-theme-toggle" data-customer-theme-toggle
+                    aria-label="Switch to dark mode" aria-pressed="false">
+                    <span class="customer-theme-toggle__sun"><?php echo customerIcon('sun'); ?></span>
+                    <span class="customer-theme-toggle__moon"><?php echo customerIcon('moon'); ?></span>
+                </button>
+            </section>
 
             <section class="bg-white p-5 md:p-6 rounded-2xl shadow mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
                 aria-labelledby="accountSecurityTitle">
@@ -274,6 +377,75 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
     <script src="assets/js/location.js"></script>
     <script>
+        (function () {
+            const editTrigger = document.getElementById('customerEditProfileTrigger');
+            const editForm = document.getElementById('customerProfileEditForm');
+            const cancelEdit = document.getElementById('customerCancelEditProfile');
+            const profileCard = document.querySelector('.customer-profile-summary');
+            const viewMode = document.querySelector('[data-profile-view-mode]');
+            const photoButton = document.getElementById('customerProfilePictureButton');
+            const photoInput = document.getElementById('customerProfilePictureInput');
+            const photoPreview = document.querySelector('[data-profile-picture-preview]');
+            const photoStatus = document.querySelector('[data-profile-picture-status]');
+
+            if (!editTrigger || !editForm || !cancelEdit) return;
+
+            function openEditor() {
+                if (viewMode) viewMode.hidden = true;
+                editForm.hidden = false;
+                if (profileCard) profileCard.classList.add('is-editing');
+                editTrigger.setAttribute('aria-expanded', 'true');
+                (profileCard || editForm).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                const firstInput = photoButton || editForm.querySelector('input, textarea, button');
+                if (firstInput) firstInput.focus({ preventScroll: true });
+            }
+
+            function closeEditor() {
+                editForm.hidden = true;
+                if (viewMode) viewMode.hidden = false;
+                if (profileCard) profileCard.classList.remove('is-editing');
+                editTrigger.setAttribute('aria-expanded', 'false');
+                editTrigger.focus();
+            }
+
+            editTrigger.setAttribute('aria-controls', 'customerProfileEditForm');
+            editTrigger.setAttribute('aria-expanded', 'false');
+            editTrigger.addEventListener('click', openEditor);
+            cancelEdit.addEventListener('click', closeEditor);
+
+            if (photoButton && photoInput && photoPreview && photoStatus) {
+                photoButton.addEventListener('click', function () {
+                    photoInput.click();
+                });
+
+                photoInput.addEventListener('change', function () {
+                    const file = photoInput.files && photoInput.files[0];
+                    if (!file) {
+                        photoStatus.textContent = 'JPG, PNG, or WebP only.';
+                        return;
+                    }
+
+                    photoStatus.textContent = file.name + ' selected. Save profile to apply.';
+
+                    if (file.type && file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.addEventListener('load', function () {
+                            let image = photoPreview.querySelector('img');
+                            const initials = photoPreview.querySelector('b');
+                            if (!image) {
+                                image = document.createElement('img');
+                                image.alt = 'Selected profile picture preview';
+                                photoPreview.prepend(image);
+                            }
+                            if (initials) initials.hidden = true;
+                            image.src = reader.result;
+                        });
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        })();
+
         (function () {
             const trigger = document.getElementById('customerChangePasswordTrigger');
             const modal = document.getElementById('customerChangePasswordModal');

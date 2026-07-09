@@ -41,7 +41,7 @@ if (!$user_id || !in_array($account_status, $allowed, true)) {
     redirect($redirect_page);
 }
 
-$user_sql = "SELECT user_id, full_name, email, role FROM users WHERE user_id = ? AND role != 'super_admin' LIMIT 1";
+$user_sql = "SELECT user_id, full_name, email, role, account_status FROM users WHERE user_id = ? AND role != 'super_admin' LIMIT 1";
 $user_stmt = mysqli_prepare($conn, $user_sql);
 mysqli_stmt_bind_param($user_stmt, "i", $user_id);
 mysqli_stmt_execute($user_stmt);
@@ -77,7 +77,19 @@ if (mysqli_stmt_execute($stmt)) {
         rememberRevokeAllForUser($conn, $user_id);
     }
 
-    logActivity($conn, $_SESSION['user_id'], "Updated user #$user_id to $account_status", "User Management");
+    logActivity($conn, $_SESSION['user_id'], "Updated user #$user_id to $account_status", "User Management", [
+        'target_type' => 'user',
+        'target_id' => $user_id,
+        'old_value' => [
+            'account_status' => $user['account_status'] ?? null,
+        ],
+        'new_value' => [
+            'account_status' => $account_status,
+            'role' => $user['role'] ?? null,
+            'email' => $user['email'] ?? null,
+            'full_name' => $user['full_name'] ?? null,
+        ],
+    ]);
 
     $label = userStatusLabel($account_status);
     $status_message = "Your account has been set to " . $label . ".";

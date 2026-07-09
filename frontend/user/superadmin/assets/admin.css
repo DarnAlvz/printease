@@ -2926,6 +2926,12 @@ body.admin-dashboard-body .approval-btn {
     color: var(--admin-ink-soft);
 }
 
+.admin-activity-modal [data-activity-modal-old-value],
+.admin-activity-modal [data-activity-modal-new-value],
+.admin-activity-modal [data-activity-modal-user-agent] {
+    overflow-wrap: anywhere;
+}
+
 .admin-activity-modal__button {
     min-height: 48px;
     margin: 0 24px 24px;

@@ -88,6 +88,66 @@ function activityDateLabel($datetime)
     return date('M j, g:i A', $timestamp);
 }
 
+function activityAuditValueLabel($value)
+{
+    $value = trim((string) $value);
+    if ($value === '') return 'N/A';
+
+    $decoded = json_decode($value, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+        return $value;
+    }
+
+    $parts = [];
+    foreach ($decoded as $key => $item) {
+        $label = ucwords(str_replace('_', ' ', (string) $key));
+        if (is_bool($item)) {
+            $display = $item ? 'Yes' : 'No';
+        } elseif ($item === null || $item === '') {
+            $display = 'N/A';
+        } elseif (is_array($item)) {
+            $display = json_encode($item, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } else {
+            $display = (string) $item;
+        }
+        $parts[] = $label . ': ' . $display;
+    }
+
+    return implode('; ', $parts);
+}
+
+function activityBrowserSummary($user_agent)
+{
+    $user_agent = trim((string) $user_agent);
+    if ($user_agent === '') return 'N/A';
+
+    $browser = 'Browser';
+    if (stripos($user_agent, 'Edg/') !== false || stripos($user_agent, 'Edge/') !== false) {
+        $browser = 'Microsoft Edge';
+    } elseif (stripos($user_agent, 'Chrome/') !== false) {
+        $browser = 'Chrome';
+    } elseif (stripos($user_agent, 'Firefox/') !== false) {
+        $browser = 'Firefox';
+    } elseif (stripos($user_agent, 'Safari/') !== false) {
+        $browser = 'Safari';
+    }
+
+    $device = 'Unknown device';
+    if (stripos($user_agent, 'Windows') !== false) {
+        $device = 'Windows';
+    } elseif (stripos($user_agent, 'Android') !== false) {
+        $device = 'Android';
+    } elseif (stripos($user_agent, 'iPhone') !== false || stripos($user_agent, 'iPad') !== false) {
+        $device = 'iOS';
+    } elseif (stripos($user_agent, 'Mac OS') !== false || stripos($user_agent, 'Macintosh') !== false) {
+        $device = 'macOS';
+    } elseif (stripos($user_agent, 'Linux') !== false) {
+        $device = 'Linux';
+    }
+
+    return $browser . ' on ' . $device;
+}
+
 $range = strtolower(trim((string) ($_GET['range'] ?? 'today')));
 $allowed_ranges = ['today', 'yesterday', 'week'];
 if (!in_array($range, $allowed_ranges, true)) {
@@ -246,6 +306,16 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
                     $icon = activityIconName($log['module'] ?? '', $log['action'] ?? '');
                     $role_label = ucfirst(str_replace('_', ' ', (string) ($log['role'] ?? 'User')));
                     $timestamp = !empty($log['created_at']) ? date('Y-m-d H:i:s', strtotime($log['created_at'])) : 'N/A';
+                    $target_type = trim((string) ($log['target_type'] ?? ''));
+                    $target_id = trim((string) ($log['target_id'] ?? ''));
+                    $target_label = $target_type !== ''
+                        ? ucwords(str_replace('_', ' ', $target_type)) . ($target_id !== '' ? ' #' . $target_id : '')
+                        : 'N/A';
+                    $old_value = activityAuditValueLabel($log['old_value'] ?? '');
+                    $new_value = activityAuditValueLabel($log['new_value'] ?? '');
+                    $ip_address = trim((string) ($log['ip_address'] ?? '')) ?: 'N/A';
+                    $browser_summary = activityBrowserSummary($log['user_agent'] ?? '');
+                    $user_agent = trim((string) ($log['user_agent'] ?? '')) ?: 'N/A';
                 ?>
                 <button
                     type="button"
@@ -258,6 +328,12 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
                     data-action="<?php echo e($log['action']); ?>"
                     data-status="<?php echo e(activityStatusLabel($status)); ?>"
                     data-timestamp="<?php echo e($timestamp); ?>"
+                    data-target="<?php echo e($target_label); ?>"
+                    data-old-value="<?php echo e($old_value); ?>"
+                    data-new-value="<?php echo e($new_value); ?>"
+                    data-ip-address="<?php echo e($ip_address); ?>"
+                    data-browser="<?php echo e($browser_summary); ?>"
+                    data-user-agent="<?php echo e($user_agent); ?>"
                 >
                     <span class="admin-activity-item-icon"><?php echo adminIcon($icon); ?></span>
                     <span class="admin-activity-copy">
@@ -296,6 +372,18 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
             <p><strong>Module:</strong> <span data-activity-modal-module></span></p>
             <p><strong>Action:</strong> <span data-activity-modal-action></span></p>
         </section>
+        <section>
+            <h3>Audit Details</h3>
+            <p><strong>Target:</strong> <span data-activity-modal-target></span></p>
+            <p><strong>Before:</strong> <span data-activity-modal-old-value></span></p>
+            <p><strong>After:</strong> <span data-activity-modal-new-value></span></p>
+        </section>
+        <section>
+            <h3>Request Context</h3>
+            <p><strong>IP Address:</strong> <span data-activity-modal-ip-address></span></p>
+            <p><strong>Browser:</strong> <span data-activity-modal-browser></span></p>
+            <p><strong>User Agent:</strong> <span data-activity-modal-user-agent></span></p>
+        </section>
         <button type="button" class="admin-activity-modal__button" data-activity-modal-close>Close</button>
     </div>
 </div>
@@ -313,7 +401,13 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
             role: modal.querySelector('[data-activity-modal-role]'),
             timestamp: modal.querySelector('[data-activity-modal-timestamp]'),
             module: modal.querySelector('[data-activity-modal-module]'),
-            action: modal.querySelector('[data-activity-modal-action]')
+            action: modal.querySelector('[data-activity-modal-action]'),
+            target: modal.querySelector('[data-activity-modal-target]'),
+            oldValue: modal.querySelector('[data-activity-modal-old-value]'),
+            newValue: modal.querySelector('[data-activity-modal-new-value]'),
+            ipAddress: modal.querySelector('[data-activity-modal-ip-address]'),
+            browser: modal.querySelector('[data-activity-modal-browser]'),
+            userAgent: modal.querySelector('[data-activity-modal-user-agent]')
         };
 
         function closeModal() {
@@ -331,6 +425,12 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
                 fields.timestamp.textContent = item.dataset.timestamp || 'N/A';
                 fields.module.textContent = item.dataset.module || 'N/A';
                 fields.action.textContent = item.dataset.action || 'N/A';
+                fields.target.textContent = item.dataset.target || 'N/A';
+                fields.oldValue.textContent = item.dataset.oldValue || 'N/A';
+                fields.newValue.textContent = item.dataset.newValue || 'N/A';
+                fields.ipAddress.textContent = item.dataset.ipAddress || 'N/A';
+                fields.browser.textContent = item.dataset.browser || 'N/A';
+                fields.userAgent.textContent = item.dataset.userAgent || 'N/A';
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
             });

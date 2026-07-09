@@ -105,11 +105,74 @@ function showMessage() {
     }
 }
 
-function logActivity($conn, $user_id, $action, $module) {
-    $sql = "INSERT INTO activity_logs (user_id, action, module) VALUES (?, ?, ?)";
+function activityAuditValue($value) {
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    if (is_array($value) || is_object($value)) {
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    return (string) $value;
+}
+
+function activityRequestIp() {
+    $ip = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+
+    if ($ip === '') {
+        $forwarded_for = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        if ($forwarded_for !== '') {
+            $ip = trim(explode(',', $forwarded_for)[0]);
+        }
+    }
+
+    return $ip !== '' ? substr($ip, 0, 45) : null;
+}
+
+function activityRequestUserAgent() {
+    $user_agent = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    return $user_agent !== '' ? substr($user_agent, 0, 255) : null;
+}
+
+function logActivity($conn, $user_id, $action, $module, array $options = []) {
+    $target_type = trim((string) ($options['target_type'] ?? '')) ?: null;
+    $target_id = isset($options['target_id']) && $options['target_id'] !== '' ? (int) $options['target_id'] : null;
+    $old_value = activityAuditValue($options['old_value'] ?? null);
+    $new_value = activityAuditValue($options['new_value'] ?? null);
+    $ip_address = activityRequestIp();
+    $user_agent = activityRequestUserAgent();
+
+    $sql = "INSERT INTO activity_logs
+            (user_id, action, module, target_type, target_id, old_value, new_value, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, "iss", $user_id, $action, $module);
-    mysqli_stmt_execute($stmt);
+
+    if ($stmt) {
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isssissss",
+            $user_id,
+            $action,
+            $module,
+            $target_type,
+            $target_id,
+            $old_value,
+            $new_value,
+            $ip_address,
+            $user_agent
+        );
+        return mysqli_stmt_execute($stmt);
+    }
+
+    $fallback_sql = "INSERT INTO activity_logs (user_id, action, module) VALUES (?, ?, ?)";
+    $fallback_stmt = mysqli_prepare($conn, $fallback_sql);
+    if (!$fallback_stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($fallback_stmt, "iss", $user_id, $action, $module);
+    return mysqli_stmt_execute($fallback_stmt);
 }
 
 function sendNotification($conn, $user_id, $message, array $options = []) {

@@ -165,7 +165,7 @@ if ($focus_order_id > 0 && $focus_order_code !== '') {
     $focus_sort_params = [$focus_order_code];
 }
 
-$orders_sql = "SELECT o.*, u.full_name, u.email, p.payment_id, p.payment_status, p.verification_status,
+$orders_sql = "SELECT o.*, u.full_name, u.email, u.profile_picture, p.payment_id, p.payment_status, p.verification_status,
                        p.reference_number, p.ocr_reference_number, p.payment_reference_match,
                        p.ocr_payment_date, p.proof_of_payment_file, p.rejection_reason, p.created_at
                 AS payment_submitted_at
@@ -257,6 +257,70 @@ function ownerDownloadFileName(array $file)
 
     $file_name = preg_replace('/[^\w.\- ()]+/', '_', $file_name);
     return trim($file_name, '._ ') ?: 'order-file';
+}
+
+function ownerCustomerInitials($name)
+{
+    $name = trim((string) $name);
+    if ($name === '') {
+        return 'C';
+    }
+
+    $parts = preg_split('/\s+/', $name);
+    $initials = '';
+    foreach ($parts as $part) {
+        if ($part === '') {
+            continue;
+        }
+        $initials .= strtoupper(substr($part, 0, 1));
+        if (strlen($initials) >= 2) {
+            break;
+        }
+    }
+
+    return $initials !== '' ? $initials : 'C';
+}
+
+function ownerCustomerProfilePictureUrl(array $order)
+{
+    $path = trim((string) ($order['profile_picture'] ?? ''));
+    if ($path === '') {
+        return '';
+    }
+
+    if (preg_match('/^https?:\/\//i', $path)) {
+        return $path;
+    }
+
+    return BASE_URL . ltrim($path, '/');
+}
+
+function renderOwnerCustomerIdentity(array $order, $show_email = false)
+{
+    $name = trim((string) ($order['full_name'] ?? ''));
+    if ($name === '') {
+        $name = 'Customer';
+    }
+
+    $email = trim((string) ($order['email'] ?? ''));
+    $photo_url = ownerCustomerProfilePictureUrl($order);
+    ?>
+    <span class="owner-customer-identity">
+        <span class="owner-customer-avatar" aria-hidden="true">
+            <?php if ($photo_url !== ''): ?>
+                <img src="<?php echo e($photo_url); ?>" alt="">
+            <?php else: ?>
+                <b><?php echo e(ownerCustomerInitials($name)); ?></b>
+            <?php endif; ?>
+        </span>
+        <span class="owner-customer-copy">
+            <strong><?php echo e($name); ?></strong>
+            <?php if ($show_email && $email !== ''): ?>
+                <small><?php echo e($email); ?></small>
+            <?php endif; ?>
+        </span>
+    </span>
+    <?php
 }
 
 function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = false)
@@ -389,8 +453,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                             data-order-row="<?php echo e($order['order_id']); ?>">
                             <td><strong><?php echo e($order['order_code']); ?></strong></td>
                             <td>
-                                <strong><?php echo e($order['full_name']); ?></strong>
-                                <small><?php echo e($order['email']); ?></small>
+                                <?php renderOwnerCustomerIdentity($order); ?>
                             </td>
                             <td><?php echo e($first_file); ?></td>
                             <td>
@@ -526,9 +589,9 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                     <span>Order ID</span>
                                     <strong><?php echo e($order['order_code']); ?></strong>
                                 </div>
-                                <div>
+                                <div class="order-info-customer">
                                     <span>Customer</span>
-                                    <strong><?php echo e($order['full_name']); ?></strong>
+                                    <?php renderOwnerCustomerIdentity($order, true); ?>
                                 </div>
                                 <div>
                                     <span>Date</span>
@@ -704,7 +767,9 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                             <?php echo e(ownerStatusLabel($order['order_status'])); ?>
                         </span>
                     </div>
-                    <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
+                    <div class="order-card-mobile-customer">
+                        <?php renderOwnerCustomerIdentity($order); ?>
+                    </div>
                     <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>,
                         <?php echo e($order['print_type']); ?>, <?php echo e($order_page_count); ?> pages x<?php echo e($order['copies']); ?>
                     </p>

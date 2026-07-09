@@ -158,10 +158,36 @@ if (!isset($_SESSION['seen_splash'])) {
     </footer>
 
     <script>
+        const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
         if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("service-worker.js")
-                .then(() => console.log("SW registered"))
-                .catch(err => console.log("SW failed", err));
+            if (isLocalDevelopment) {
+                navigator.serviceWorker.getRegistrations()
+                    .then(registrations => {
+                        registrations.forEach(registration => {
+                            if (registration.scope.includes('/printease/')) {
+                                registration.unregister();
+                            }
+                        });
+                    })
+                    .catch(err => console.log("SW cleanup failed", err));
+
+                if ("caches" in window) {
+                    caches.keys()
+                        .then(cacheNames => {
+                            cacheNames.forEach(cacheName => {
+                                if (cacheName.startsWith('printease-')) {
+                                    caches.delete(cacheName);
+                                }
+                            });
+                        })
+                        .catch(err => console.log("Cache cleanup failed", err));
+                }
+            } else {
+                navigator.serviceWorker.register("service-worker.js")
+                    .then(() => console.log("SW registered"))
+                    .catch(err => console.log("SW failed", err));
+            }
         }
 
 
