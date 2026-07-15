@@ -41,6 +41,7 @@ ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can 
         <p class="muted">Use this setting to tell customers if your shop is ready for new print orders.</p>
 
         <form action="../../../backend/actions/update_shop_status.php" method="POST" class="form-grid" style="margin-top:20px;">
+            <?php echo csrfField(); ?>
             <div class="field full">
                 <label for="shop_status">Shop Status</label>
                 <select id="shop_status" name="shop_status" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>

@@ -27,15 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect($redirect_url);
 }
 
-$csrf_token = (string) ($_POST['csrf_token'] ?? '');
-if (
-    empty($_SESSION['admin_shop_status_csrf'])
-    || $csrf_token === ''
-    || !hash_equals($_SESSION['admin_shop_status_csrf'], $csrf_token)
-) {
-    setError("Security check failed. Please refresh the page and try again.");
-    redirect($redirect_url);
-}
+validateCsrf();
 
 $shop_id = filter_input(INPUT_POST, 'shop_id', FILTER_VALIDATE_INT);
 $status = trim((string) ($_POST['status'] ?? ''));

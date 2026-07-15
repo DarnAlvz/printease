@@ -7,10 +7,6 @@ require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/includes/admin_layout.php";
 
-if (empty($_SESSION['admin_password_csrf'])) {
-    $_SESSION['admin_password_csrf'] = bin2hex(random_bytes(32));
-}
-
 $admin_id = (int) ($_SESSION['user_id'] ?? 0);
 $admin_name = (string) ($_SESSION['full_name'] ?? 'Super Admin');
 $admin_email = (string) ($_SESSION['email'] ?? 'admin@printease.local');
@@ -58,7 +54,7 @@ adminLayoutStart('settings', 'Settings', 'Manage your administrator account and 
         </div>
 
         <form class="admin-settings-form" action="<?php echo BASE_URL; ?>backend/actions/change_admin_password.php" method="POST">
-            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_password_csrf']); ?>">
+            <?php echo csrfField(); ?>
 
             <?php if (!$uses_google_session): ?>
                 <label>

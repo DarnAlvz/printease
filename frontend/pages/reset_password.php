@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../backend/includes/session.php';
+secureSession();
 
 require_once __DIR__ . '/../../backend/config/app.php';
 require_once __DIR__ . '/../components/head.php';
@@ -81,6 +82,7 @@ if (!$can_reset) {
 
                 <?php if ($can_reset): ?>
                     <form action="../../backend/actions/reset_password_process.php" method="POST">
+                        <?php echo csrfField(); ?>
                         <div class="field-group">
                             <label for="password">New Password</label>
                             <div class="input-wrap">

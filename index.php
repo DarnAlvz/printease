@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/backend/includes/session.php';
+secureSession();
 define('DB_CONNECTION_OPTIONAL', true);
 require_once __DIR__ . '/backend/config/app.php';
 require_once __DIR__ . '/backend/includes/auth.php';
@@ -26,7 +27,6 @@ if (!isset($_SESSION['seen_splash'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="manifest" href="manifest.json">
 
 </head>
 
@@ -157,41 +157,9 @@ if (!isset($_SESSION['seen_splash'])) {
         </div>
     </footer>
 
+    <?php renderPrintEaseSWRegistration(); ?>
+
     <script>
-        const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-        if ("serviceWorker" in navigator) {
-            if (isLocalDevelopment) {
-                navigator.serviceWorker.getRegistrations()
-                    .then(registrations => {
-                        registrations.forEach(registration => {
-                            if (registration.scope.includes('/printease/')) {
-                                registration.unregister();
-                            }
-                        });
-                    })
-                    .catch(err => console.log("SW cleanup failed", err));
-
-                if ("caches" in window) {
-                    caches.keys()
-                        .then(cacheNames => {
-                            cacheNames.forEach(cacheName => {
-                                if (cacheName.startsWith('printease-')) {
-                                    caches.delete(cacheName);
-                                }
-                            });
-                        })
-                        .catch(err => console.log("Cache cleanup failed", err));
-                }
-            } else {
-                navigator.serviceWorker.register("service-worker.js")
-                    .then(() => console.log("SW registered"))
-                    .catch(err => console.log("SW failed", err));
-            }
-        }
-
-
-
         const installAppBtn = document.getElementById('installAppBtn');
         let deferredPrompt = null;
 

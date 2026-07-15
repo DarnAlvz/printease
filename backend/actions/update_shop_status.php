@@ -10,6 +10,8 @@ checkRole("shop_owner");
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
+validateCsrf();
+
 if (isset($_POST['update_status'])) {
     $owner_id = $_SESSION['user_id'];
     $shop_status = $_POST['shop_status'] ?? '';

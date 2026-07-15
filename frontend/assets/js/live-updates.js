@@ -540,6 +540,9 @@
         const notificationId = item.dataset.notificationId;
         if (!notificationId) return;
 
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = csrfMeta ? csrfMeta.content : '';
+
         fetch(endpoints.markRead, {
             method: 'POST',
             credentials: 'same-origin',
@@ -547,7 +550,7 @@
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: 'notification_id=' + encodeURIComponent(notificationId)
+            body: 'notification_id=' + encodeURIComponent(notificationId) + '&csrf_token=' + encodeURIComponent(csrfToken)
         })
             .then(function (response) { return response.json(); })
             .then(function (data) {

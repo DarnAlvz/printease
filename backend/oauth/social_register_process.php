@@ -1,8 +1,12 @@
 <?php
-session_start();
+require_once __DIR__ . "/../includes/session.php";
+secureSession();
 
 require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../includes/oauth_helpers.php";
+require_once __DIR__ . "/../includes/functions.php";
+
+validateCsrf();
 
 if (!isset($_POST['complete_social_register'])) {
     redirect(BASE_URL . "frontend/pages/login.php");
@@ -18,7 +22,14 @@ $role = $_POST['role'] ?? '';
 $allowed_roles = ['customer', 'shop_owner'];
 
 if (!in_array($role, $allowed_roles, true)) {
-    header("Location: ../../frontend/pages/social_role.php?error=invalid_role");
+    setFlash('auth_error', 'invalid_role');
+    header("Location: ../../frontend/pages/social_role.php");
+    exit();
+}
+
+if (($_POST['terms_privacy'] ?? '') !== '1') {
+    setFlash('auth_error', 'terms_required');
+    header("Location: ../../frontend/pages/social_role.php");
     exit();
 }
 
@@ -71,9 +82,16 @@ if (!$stmt) {
 
 mysqli_stmt_bind_param($stmt, "sssss", $full_name, $email, $password, $role, $account_status);
 
-if (!mysqli_stmt_execute($stmt)) {
+try {
+    $execute_ok = mysqli_stmt_execute($stmt);
+} catch (mysqli_sql_exception $e) {
+    $execute_ok = false;
+    $error_code = $e->getCode();
+}
+
+if (!$execute_ok) {
     mysqli_rollback($conn);
-    $error = mysqli_errno($conn) === 1062 ? 'duplicate_email' : 'oauth_failed';
+    $error = ($error_code ?? mysqli_errno($conn)) === 1062 ? 'duplicate_email' : 'oauth_failed';
     redirectToLoginError($error);
 }
 

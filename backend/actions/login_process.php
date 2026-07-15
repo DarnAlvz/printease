@@ -1,19 +1,19 @@
 <?php
-session_start();
+require_once __DIR__ . "/../includes/session.php";
+secureSession();
 require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/remember_auth.php";
 require_once __DIR__ . "/../includes/rate_limit.php";
 
-function redirectToLogin($query = '')
+function redirectToLogin($error = '')
 {
-    $location = "../../frontend/pages/login.php";
-    if ($query !== '') {
-        $location .= '?' . $query;
+    if ($error !== '') {
+        setFlash('auth_error', $error);
     }
 
-    header("Location: " . $location);
+    header("Location: ../../frontend/pages/login.php");
     exit();
 }
 
@@ -23,12 +23,14 @@ function recordFailedLogin(mysqli $conn, $email, $ip)
     rateLimitRecord($conn, 'login_ip', 'all', $ip, 20, 15 * 60, 15 * 60);
 }
 
+validateCsrf();
+
 if (!isset($_POST['login'])) {
     redirectToLogin();
 }
 
 if (($_POST['terms_privacy'] ?? '') !== '1') {
-    redirectToLogin('error=terms_required');
+    redirectToLogin('terms_required');
 }
 
 $email = rateLimitIdentifier($_POST['email'] ?? '');
@@ -40,7 +42,7 @@ $email_limit = rateLimitCheck($conn, 'login_email_ip', $email, $ip, 5, 15 * 60);
 $ip_limit = rateLimitCheck($conn, 'login_ip', 'all', $ip, 20, 15 * 60);
 
 if (!$email_limit['allowed'] || !$ip_limit['allowed']) {
-    redirectToLogin('error=too_many_attempts');
+    redirectToLogin('too_many_attempts');
 }
 
 $sql = "SELECT * FROM users WHERE email = ?";
@@ -51,19 +53,19 @@ $result = mysqli_stmt_get_result($stmt);
 
 if (mysqli_num_rows($result) !== 1) {
     recordFailedLogin($conn, $email, $ip);
-    redirectToLogin('error=email_not_found');
+    redirectToLogin('invalid_credentials');
 }
 
 $user = mysqli_fetch_assoc($result);
 
 if (in_array(($user['account_status'] ?? ''), ['rejected', 'inactive'], true)) {
     $error = $user['account_status'] === 'inactive' ? 'inactive' : 'rejected';
-    redirectToLogin('error=' . $error);
+    redirectToLogin($error);
 }
 
 if (!password_verify($password, $user['password'])) {
     recordFailedLogin($conn, $email, $ip);
-    redirectToLogin('error=incorrect_password');
+    redirectToLogin('invalid_credentials');
 }
 
 rateLimitClear($conn, 'login_email_ip', $email, $ip);
@@ -101,6 +103,6 @@ switch ($user['role']) {
         break;
 
     default:
-        redirectToLogin('error=invalid_role');
+        redirectToLogin('invalid_role');
 }
 ?>

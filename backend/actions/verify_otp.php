@@ -1,5 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . "/../includes/session.php";
+secureSession();
+require_once __DIR__ . "/../includes/functions.php";
+
+validateCsrf();
 
 function redirectToOtp($query = '')
 {

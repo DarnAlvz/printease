@@ -6,6 +6,8 @@ require_once __DIR__ . "/../includes/functions.php";
 
 checkRole("customer");
 
+validateCsrf();
+
 function ensureCustomerFavoriteShopsTable(mysqli $conn): void
 {
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS customer_favorite_shops (

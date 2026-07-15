@@ -82,10 +82,6 @@ function renderCustomerHead()
     renderPrintEaseIcons();
     ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#03045e">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <!-- Phase 2: <link rel="manifest" href="/printease/manifest.webmanifest"> -->
     <script>
         (function () {
             var stored = null;
@@ -99,11 +95,6 @@ function renderCustomerHead()
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/assets/customer.css'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo $css_version; ?>">
-    <script>
-        window.addEventListener('beforeinstallprompt', function (event) {
-            // Phase 2 hook: install prompting is intentionally not implemented yet.
-        });
-    </script>
     <?php
 }
 
@@ -252,5 +243,6 @@ function renderCustomerLayoutEnd(?string $active = null)
         })();
     </script>
     <script src="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/assets/js/live-updates.js'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo is_file(__DIR__ . '/../assets/js/live-updates.js') ? filemtime(__DIR__ . '/../assets/js/live-updates.js') : time(); ?>" data-printease-live data-base-url="<?php echo htmlspecialchars(printEaseAssetUrl(''), ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <?php renderPrintEaseSWRegistration(); ?>
     <?php
 }

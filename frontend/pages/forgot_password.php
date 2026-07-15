@@ -1,7 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../backend/includes/session.php';
+secureSession();
 
 require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../components/head.php';
 require_once __DIR__ . '/../components/auth_brand_panel.php';
 
@@ -73,6 +75,7 @@ if (isset($_GET['sent'], $success_messages[$_GET['sent']])) {
                 <?php endif; ?>
 
                 <form action="../../backend/actions/send_otp.php" method="POST">
+                    <?php echo csrfField(); ?>
                     <div class="field-group">
                         <label for="email">Email Address</label>
                         <div class="input-wrap">

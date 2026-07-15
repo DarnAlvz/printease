@@ -2,9 +2,10 @@
   "name": "PrintEase",
   "short_name": "Print Ease",
   "start_url": "/",
+  "scope": "/printease/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "theme_color": "#03045e",
   "icons": [
     {
       "src": "assets/images/printing-logo-192.png",
@@ -19,5 +20,4 @@
       "purpose": "any"
     }
   ]
-  
 }

@@ -1,7 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../backend/includes/session.php';
+secureSession();
 
 require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../components/head.php';
 require_once __DIR__ . '/../components/auth_brand_panel.php';
 
@@ -99,6 +101,7 @@ if (isset($_GET['sent'], $success_messages[$_GET['sent']])) {
 
                 <?php if ($can_verify): ?>
                     <form action="../../backend/actions/verify_otp.php" method="POST" data-otp-form>
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="otp" id="otp" required>
 
                         <div class="field-group">
@@ -117,6 +120,7 @@ if (isset($_GET['sent'], $success_messages[$_GET['sent']])) {
                     </form>
                 <?php elseif ($email !== ''): ?>
                     <form action="../../backend/actions/send_otp.php" method="POST">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>">
                         <button class="btn btn-primary" type="submit">Resend OTP</button>
                     </form>
@@ -127,6 +131,7 @@ if (isset($_GET['sent'], $success_messages[$_GET['sent']])) {
                 <div class="auth-link-row">
                     <?php if ($email !== ''): ?>
                         <form action="../../backend/actions/send_otp.php" method="POST">
+                            <?php echo csrfField(); ?>
                             <input type="hidden" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>">
                             <button class="text-button" type="submit">Resend OTP</button>
                         </form>

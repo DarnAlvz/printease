@@ -88,6 +88,7 @@ ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment pr
 
                 <?php if ($owner_is_verified && ($payment['verification_status'] ?? '') === 'pending'): ?>
                     <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST" style="margin-top:12px;">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="payment_id" value="<?php echo e($payment['payment_id']); ?>">
 
                         <button type="submit" name="verify_payment" class="btn btn-primary">
@@ -96,6 +97,7 @@ ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment pr
                     </form>
 
                     <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST" style="margin-top:12px;">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="payment_id" value="<?php echo e($payment['payment_id']); ?>">
                         <label for="payment-rejection-<?php echo e($payment['payment_id']); ?>" style="display:block; font-weight:600; margin-bottom:6px;">
                             Reason for rejection

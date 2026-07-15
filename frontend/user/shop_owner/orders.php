@@ -329,6 +329,7 @@ function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = fals
     <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
         class="orders-update-form orders-status-action order-modal-accept-form" data-accept-download-form
         data-order-id="<?php echo e($order['order_id']); ?>" <?php echo $hidden ? 'hidden' : ''; ?>>
+        <?php echo csrfField(); ?>
         <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
         <input type="hidden" name="order_status" value="processing">
         <?php foreach ($file_rows as $file): ?>
@@ -488,6 +489,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                     <?php if ($owner_is_verified && $order['order_status'] === 'processing'): ?>
                                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                                             class="orders-update-form orders-status-action">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                             <input type="hidden" name="order_status" value="ready_for_pickup">
                                             <button type="submit" name="update_order" class="btn order-btn-ready">Mark as
@@ -496,6 +498,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                     <?php elseif ($owner_is_verified && $order['order_status'] === 'ready_for_pickup'): ?>
                                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                                             class="orders-update-form orders-status-action">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                                             <input type="hidden" name="order_status" value="completed">
                                             <button type="submit" name="update_order" class="btn order-btn-completed">Mark as
@@ -700,6 +703,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                             <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
                                                 class="orders-update-form" data-payment-verify-form
                                                 data-payment-id="<?php echo e($order['payment_id']); ?>">
+                                                <?php echo csrfField(); ?>
                                                 <input type="hidden" name="payment_id"
                                                     value="<?php echo e($order['payment_id']); ?>">
                                                 <button type="submit" name="verify_payment" class="btn order-btn-ready">
@@ -714,6 +718,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                             <form action="<?php echo BASE_URL; ?>backend/actions/verify_payment.php" method="POST"
                                                 class="orders-update-form" data-payment-reject-form
                                                 data-payment-id="<?php echo e($order['payment_id']); ?>" hidden>
+                                                <?php echo csrfField(); ?>
                                                 <input type="hidden" name="payment_id"
                                                     value="<?php echo e($order['payment_id']); ?>">
                                                 <label for="reject-reason-<?php echo e($order['payment_id']); ?>">Reason for rejection</label>
@@ -782,6 +787,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     <?php if ($owner_is_verified && $order['order_status'] === 'processing'): ?>
                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                             class="orders-update-form orders-status-action mobile">
+                            <?php echo csrfField(); ?>
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                             <input type="hidden" name="order_status" value="ready_for_pickup">
                             <button type="submit" name="update_order" class="btn order-btn-ready">Mark as Ready</button>
@@ -789,6 +795,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     <?php elseif ($owner_is_verified && $order['order_status'] === 'ready_for_pickup'): ?>
                         <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
                             class="orders-update-form orders-status-action mobile">
+                            <?php echo csrfField(); ?>
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                             <input type="hidden" name="order_status" value="completed">
                             <button type="submit" name="update_order" class="btn order-btn-completed">Mark as Completed</button>

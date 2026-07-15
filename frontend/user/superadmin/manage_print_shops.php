@@ -7,13 +7,6 @@ require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/includes/admin_layout.php";
 
-if (empty($_SESSION['admin_shop_status_csrf'])) {
-    $_SESSION['admin_shop_status_csrf'] = bin2hex(random_bytes(32));
-}
-if (empty($_SESSION['admin_payment_settings_csrf'])) {
-    $_SESSION['admin_payment_settings_csrf'] = bin2hex(random_bytes(32));
-}
-
 function manageShopStatusLabel($status)
 {
     return match ((string) $status) {
@@ -312,14 +305,14 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
 
                                     <?php if ($status === 'pending'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_permit_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_shop_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="shop_id" value="<?php echo (int) $shop['shop_id']; ?>">
                                             <input type="hidden" name="status" value="verified">
                                             <input type="hidden" name="return_to" value="manage_print_shops.php">
                                             <button class="admin-shop-action admin-shop-action-approve" type="submit"><?php echo adminIcon('check'); ?>Approve</button>
                                         </form>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_permit_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_shop_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="shop_id" value="<?php echo (int) $shop['shop_id']; ?>">
                                             <input type="hidden" name="status" value="rejected">
                                             <input type="hidden" name="return_to" value="manage_print_shops.php">
@@ -327,7 +320,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
                                         </form>
                                     <?php elseif ($status === 'verified'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_permit_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_shop_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="shop_id" value="<?php echo (int) $shop['shop_id']; ?>">
                                             <input type="hidden" name="status" value="disabled">
                                             <input type="hidden" name="return_to" value="manage_print_shops.php">
@@ -335,7 +328,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
                                         </form>
                                     <?php else: ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_permit_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_shop_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="shop_id" value="<?php echo (int) $shop['shop_id']; ?>">
                                             <input type="hidden" name="status" value="verified">
                                             <input type="hidden" name="return_to" value="manage_print_shops.php">
@@ -419,7 +412,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
                                 <div class="admin-shop-actions">
                                     <?php if ($payment_status !== 'approved'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_payment_settings_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_payment_settings_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="settings_id" value="<?php echo (int) $setting['id']; ?>">
                                             <input type="hidden" name="status" value="approved">
                                             <button class="admin-shop-action admin-shop-action-approve" type="submit"><?php echo adminIcon('check'); ?>Approve</button>
@@ -427,7 +420,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
                                     <?php endif; ?>
                                     <?php if ($payment_status !== 'rejected'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_payment_settings_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_payment_settings_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="settings_id" value="<?php echo (int) $setting['id']; ?>">
                                             <input type="hidden" name="status" value="rejected">
                                             <button class="admin-shop-action admin-shop-action-reject" type="submit"><?php echo adminIcon('x'); ?>Reject</button>

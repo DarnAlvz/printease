@@ -1,7 +1,11 @@
 <?php
-session_start();
+require_once __DIR__ . "/../includes/session.php";
+secureSession();
 
 include "../config/db.php";
+require_once __DIR__ . "/../includes/functions.php";
+
+validateCsrf();
 
 function redirectToResetPassword($query = '')
 {
@@ -43,5 +47,6 @@ mysqli_stmt_execute($stmt);
 
 unset($_SESSION['otp'], $_SESSION['otp_email'], $_SESSION['otp_expires'], $_SESSION['otp_verified']);
 
-header("Location: ../../frontend/pages/login.php?reset=success");
+setFlash('auth_success', 'password_reset');
+header("Location: ../../frontend/pages/login.php");
 exit;

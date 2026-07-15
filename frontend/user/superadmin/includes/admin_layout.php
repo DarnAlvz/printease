@@ -108,10 +108,13 @@ function adminLayoutStart($active, $title, $subtitle = '')
                     <?php echo adminIcon('settings'); ?>
                     <span class="admin-nav-label">Settings</span>
                 </a>
-                <a class="admin-logout" href="<?php echo BASE_URL; ?>backend/actions/logout.php" title="Logout" aria-label="Logout">
-                    <?php echo adminIcon('logout'); ?>
-                    <span class="admin-nav-label">Logout</span>
-                </a>
+                <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/logout.php" style="display:inline;">
+                    <?php echo csrfField(); ?>
+                    <button class="admin-logout" type="submit" title="Logout" aria-label="Logout">
+                        <?php echo adminIcon('logout'); ?>
+                        <span class="admin-nav-label">Logout</span>
+                    </button>
+                </form>
             </div>
         </aside>
         <div class="admin-shell">
@@ -188,6 +191,7 @@ function adminLayoutEnd()
             })();
         </script>
         <script src="<?php echo BASE_URL; ?>frontend/assets/js/live-updates.js?v=<?php echo filemtime(__DIR__ . '/../../../assets/js/live-updates.js'); ?>" data-printease-live data-base-url="<?php echo e(BASE_URL); ?>"></script>
+        <?php renderPrintEaseSWRegistration(); ?>
     </body>
     </html>
     <?php

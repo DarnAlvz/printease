@@ -118,6 +118,7 @@ $order_unit_price = (float) ($order['total_amount'] ?? 0) / $order_page_count / 
 
                     <form action="<?php echo BASE_URL; ?>backend/actions/submit_payment_proof.php" method="POST"
                         enctype="multipart/form-data" class="space-y-4">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="order_id" value="<?php echo e($order_id); ?>">
 
                         <div>

@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /backend/
+Disallow: /uploads/
+Disallow: /frontend/user/
+Disallow: /frontend/components/
+
+Sitemap: http://localhost/printease/sitemap.xml

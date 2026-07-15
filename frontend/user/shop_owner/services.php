@@ -103,6 +103,7 @@ ownerLayoutStart('services', 'Paper Pricing Management', 'Manage paper types, si
             <span class="status-badge status-info">Owner Managed</span>
         </div>
         <form action="../../../backend/actions/add_service.php" method="POST" class="pricing-form-grid">
+            <?php echo csrfField(); ?>
             <div class="field">
                 <label for="paper_size">Paper Size</label>
                 <input id="paper_size" type="text" name="paper_size" list="paper-size-options"

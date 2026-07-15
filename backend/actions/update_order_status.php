@@ -10,6 +10,8 @@ checkRole("shop_owner");
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
+validateCsrf();
+
 $orders_url = BASE_URL . "frontend/user/shop_owner/orders.php";
 $is_ajax = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest';
 

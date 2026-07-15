@@ -6,6 +6,8 @@ require_once __DIR__ . "/../includes/functions.php";
 
 checkRole("shop_owner");
 
+validateCsrf();
+
 if (isset($_POST['save_profile'])) {
     $owner_id = $_SESSION['user_id'];
 
@@ -153,6 +155,10 @@ if (isset($_POST['save_profile'])) {
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
             exit();
         }
+        if (!empty($existing['shop_logo']) && $existing['shop_logo'] !== $new_logo_name) {
+            $old_logo = __DIR__ . '/../../uploads/shop_logos/' . $existing['shop_logo'];
+            if (is_file($old_logo)) @unlink($old_logo);
+        }
     }
 
     if ($has_new_gcash_qr) {
@@ -177,6 +183,11 @@ if (isset($_POST['save_profile'])) {
             setError("Failed to upload GCash QR.");
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
             exit();
+        }
+        $old_gcash = $existing['gcash_qr_file'] ?? null;
+        if (!empty($old_gcash) && $old_gcash !== $new_gcash_qr_name) {
+            $old_gcash_path = __DIR__ . '/../../uploads/gcash_qr/' . $old_gcash;
+            if (is_file($old_gcash_path)) @unlink($old_gcash_path);
         }
     }
 
@@ -208,6 +219,10 @@ if (isset($_POST['save_profile'])) {
             setError("Failed to upload business permit.");
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
             exit();
+        }
+        if (!empty($existing['business_permit_file']) && $existing['business_permit_file'] !== $new_name) {
+            $old_permit = __DIR__ . '/../../uploads/permits/' . $existing['business_permit_file'];
+            if (is_file($old_permit)) @unlink($old_permit);
         }
     }
 
@@ -428,7 +443,8 @@ if (isset($_POST['save_profile'])) {
     }
 
     if (!$stmt) {
-        die("SQL Error: " . mysqli_error($conn));
+        error_log("SQL prepare error in save_shop_profile: " . mysqli_error($conn));
+        die("A system error occurred. Please try again later.");
     }
 
     if (mysqli_stmt_execute($stmt)) {

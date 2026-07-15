@@ -7,10 +7,6 @@ require_once __DIR__ . "/../../../backend/config/app.php";
 require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/includes/admin_layout.php";
 
-if (empty($_SESSION['admin_user_status_csrf'])) {
-    $_SESSION['admin_user_status_csrf'] = bin2hex(random_bytes(32));
-}
-
 function manageUserStatusLabel($status)
 {
     return match ((string) $status) {
@@ -278,13 +274,17 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                             $last_activity = manageUserRelativeTime($last_activity_source);
                             $created_at = !empty($user['created_at']) ? date('Y-m-d', strtotime($user['created_at'])) : 'N/A';
                             $document_url = '';
-                            $document_label = 'No document uploaded';
+                            $document_type = '';
                             if ($user['role'] === 'customer' && !empty($user['valid_id_file'])) {
                                 $document_url = BASE_URL . $user['valid_id_file'];
-                                $document_label = 'View Valid ID';
+                                $document_ext = strtolower(pathinfo($user['valid_id_file'], PATHINFO_EXTENSION));
+                                $document_type = in_array($document_ext, ['jpg', 'jpeg', 'png', 'webp', 'jfif'], true) ? 'image'
+                                    : ($document_ext === 'pdf' ? 'pdf' : '');
                             } elseif ($user['role'] === 'shop_owner' && !empty($user['business_permit_file'])) {
                                 $document_url = PERMITS_URL . $user['business_permit_file'];
-                                $document_label = 'View Permit';
+                                $document_ext = strtolower(pathinfo($user['business_permit_file'], PATHINFO_EXTENSION));
+                                $document_type = in_array($document_ext, ['jpg', 'jpeg', 'png', 'webp', 'jfif'], true) ? 'image'
+                                    : ($document_ext === 'pdf' ? 'pdf' : '');
                             }
                         ?>
                         <tr>
@@ -316,41 +316,41 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                                         data-last-activity="<?php echo e($last_activity); ?>"
                                         data-created="<?php echo e($created_at); ?>"
                                         data-document-url="<?php echo e($document_url); ?>"
-                                        data-document-label="<?php echo e($document_label); ?>"
+                                        data-document-type="<?php echo e($document_type); ?>"
                                     >
                                         <?php echo adminIcon('search'); ?>View
                                     </button>
 
                                     <?php if ($status === 'verified'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" data-confirm-action="Deactivate this user? They will no longer be able to access their account.">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="inactive">
                                             <button class="admin-user-action admin-user-action-disable" type="submit" name="update_user_status"><?php echo adminIcon('shield'); ?>Deactivate</button>
                                         </form>
                                     <?php elseif ($status === 'inactive'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="verified">
                                             <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
                                         </form>
                                     <?php elseif ($status === 'pending' || $status === 'incomplete'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="verified">
                                             <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
                                         </form>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" data-confirm-action="Reject this user account?">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="rejected">
                                             <button class="admin-user-action admin-user-action-reject" type="submit" name="update_user_status"><?php echo adminIcon('x'); ?>Reject</button>
                                         </form>
                                     <?php elseif ($status === 'rejected'): ?>
                                         <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/update_user_status.php" data-confirm-action="Activate this rejected user?">
-                                            <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['admin_user_status_csrf']); ?>">
+                                            <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="verified">
                                             <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
@@ -379,7 +379,11 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             <div><dt>Last Activity</dt><dd data-user-modal-last-activity></dd></div>
             <div><dt>Date Registered</dt><dd data-user-modal-created></dd></div>
         </dl>
-        <a class="admin-user-modal__document" href="#" target="_blank" rel="noopener" data-user-modal-document>View Document</a>
+        <div class="admin-user-modal__preview" data-user-modal-preview hidden>
+            <img data-user-modal-preview-img hidden alt="Document preview">
+            <iframe data-user-modal-preview-pdf hidden title="Document PDF preview"></iframe>
+            <p data-user-modal-preview-fallback hidden class="admin-user-modal__preview-fallback">Preview is not available for this file type.</p>
+        </div>
     </div>
 </div>
 
@@ -413,12 +417,25 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             orders: modal.querySelector('[data-user-modal-orders]'),
             lastActivity: modal.querySelector('[data-user-modal-last-activity]'),
             created: modal.querySelector('[data-user-modal-created]'),
-            document: modal.querySelector('[data-user-modal-document]')
+            preview: modal.querySelector('[data-user-modal-preview]'),
+            previewImg: modal.querySelector('[data-user-modal-preview-img]'),
+            previewPdf: modal.querySelector('[data-user-modal-preview-pdf]'),
+            previewFallback: modal.querySelector('[data-user-modal-preview-fallback]')
         };
+
+        function resetPreview() {
+            fields.preview.hidden = true;
+            fields.previewImg.hidden = true;
+            fields.previewImg.src = '';
+            fields.previewPdf.hidden = true;
+            fields.previewPdf.src = '';
+            fields.previewFallback.hidden = true;
+        }
 
         function closeModal() {
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
+            resetPreview();
         }
 
         document.querySelectorAll('[data-user-view]').forEach(function (button) {
@@ -431,14 +448,24 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                 fields.lastActivity.textContent = button.dataset.lastActivity || 'N/A';
                 fields.created.textContent = button.dataset.created || 'N/A';
 
+                resetPreview();
+
                 if (button.dataset.documentUrl) {
-                    fields.document.href = button.dataset.documentUrl;
-                    fields.document.textContent = button.dataset.documentLabel || 'View Document';
-                    fields.document.classList.remove('is-disabled');
-                } else {
-                    fields.document.href = '#';
-                    fields.document.textContent = button.dataset.documentLabel || 'No document uploaded';
-                    fields.document.classList.add('is-disabled');
+                    var docUrl = button.dataset.documentUrl;
+                    var docType = button.dataset.documentType || '';
+
+                    if (docType === 'image') {
+                        fields.preview.hidden = false;
+                        fields.previewImg.hidden = false;
+                        fields.previewImg.src = docUrl;
+                    } else if (docType === 'pdf') {
+                        fields.preview.hidden = false;
+                        fields.previewPdf.hidden = false;
+                        fields.previewPdf.src = docUrl + '#toolbar=0';
+                    } else if (docUrl) {
+                        fields.preview.hidden = false;
+                        fields.previewFallback.hidden = false;
+                    }
                 }
 
                 modal.classList.add('is-open');

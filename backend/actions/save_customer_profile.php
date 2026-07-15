@@ -6,6 +6,8 @@ require_once __DIR__ . "/../includes/functions.php";
 
 checkRole("customer");
 
+validateCsrf();
+
 $customer_id = $_SESSION['user_id'];
 
 function redirectCustomerProfileError($message)
@@ -96,6 +98,10 @@ if (isset($_POST['save_profile'])) {
     ], 'profile_' . $customer_id);
 
     if ($new_profile_picture_path !== null) {
+        if (!empty($current_user['profile_picture']) && $current_user['profile_picture'] !== $new_profile_picture_path) {
+            $old_file = __DIR__ . '/../../' . $current_user['profile_picture'];
+            if (is_file($old_file)) @unlink($old_file);
+        }
         $profile_picture_path = $new_profile_picture_path;
     }
 
@@ -107,6 +113,10 @@ if (isset($_POST['save_profile'])) {
     ], 'valid_id_' . $customer_id);
 
     if ($new_valid_id_path !== null) {
+        if (!empty($current_user['valid_id_file']) && $current_user['valid_id_file'] !== $new_valid_id_path) {
+            $old_file = __DIR__ . '/../../' . $current_user['valid_id_file'];
+            if (is_file($old_file)) @unlink($old_file);
+        }
         $valid_id_path = $new_valid_id_path;
     }
 

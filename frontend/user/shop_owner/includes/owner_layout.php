@@ -140,9 +140,6 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
         setToast($floating_toast['message'], $floating_toast['status'] ?? 'info');
     }
 
-    if (empty($_SESSION['change_password_csrf'])) {
-        $_SESSION['change_password_csrf'] = bin2hex(random_bytes(32));
-    }
     $reopen_password_modal = !empty($_SESSION['reopen_change_password_modal']);
     unset($_SESSION['reopen_change_password_modal']);
     $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
@@ -259,11 +256,13 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                     <?php echo ownerIcon('key-round', 'icon nav-icon'); ?>
                     <span class="owner-nav-label">Change Password</span>
                 </button>
-                <a class="owner-logout" href="<?php echo BASE_URL; ?>backend/actions/logout.php" title="Logout"
-                    aria-label="Logout">
-                    <?php echo ownerIcon('log-out', 'icon nav-icon'); ?>
-                    <span class="owner-nav-label">Logout</span>
-                </a>
+                <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/logout.php" style="display:inline;">
+                    <?php echo csrfField(); ?>
+                    <button class="owner-logout" type="submit" title="Logout" aria-label="Logout">
+                        <?php echo ownerIcon('log-out', 'icon nav-icon'); ?>
+                        <span class="owner-nav-label">Logout</span>
+                    </button>
+                </form>
             </div>
         </aside>
 
@@ -363,7 +362,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
 
                     <form action="<?php echo BASE_URL; ?>backend/actions/change_owner_password.php" method="POST"
                         class="form-grid" id="ownerChangePasswordForm">
-                        <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['change_password_csrf']); ?>">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="return_path" value="<?php echo e($return_path); ?>">
 
                         <?php if (!$uses_google_session): ?>
@@ -824,6 +823,7 @@ function ownerLayoutEnd()
             })();
         </script>
         <script src="<?php echo BASE_URL; ?>frontend/assets/js/live-updates.js?v=<?php echo filemtime(__DIR__ . '/../../../assets/js/live-updates.js'); ?>" data-printease-live data-base-url="<?php echo e(BASE_URL); ?>"></script>
+        <?php renderPrintEaseSWRegistration(); ?>
     </body>
 
     </html>

@@ -111,7 +111,9 @@ function renderNotificationCenter(array $notifications, array $options = [])
     <script>
         (function(){
             const endpoint = '<?php echo e(printEaseAssetUrl('backend/actions/mark_notification_read.php')); ?>';
-            function mark(payload, callback){ fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},body:new URLSearchParams(payload)}).then(r=>r.json()).then(callback).catch(()=>{}); }
+            var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            var csrfToken = csrfMeta ? csrfMeta.content : '';
+            function mark(payload, callback){ payload.csrf_token = csrfToken; fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},body:new URLSearchParams(payload)}).then(r=>r.json()).then(callback).catch(()=>{}); }
             function markReadElement(item){
                 item.classList.add('is-marking-read');
                 window.setTimeout(function(){

@@ -31,18 +31,11 @@ if (!isset($_POST['change_password'])) {
 
 $customer_id = (int) $_SESSION['user_id'];
 $auth_provider = $_SESSION['auth_provider'] ?? 'password';
-$csrf_token = $_POST['csrf_token'] ?? '';
 $current_password = $_POST['current_password'] ?? '';
 $new_password = $_POST['new_password'] ?? '';
 $confirm_password = $_POST['confirm_password'] ?? '';
 
-if (
-    empty($_SESSION['customer_password_csrf'])
-    || $csrf_token === ''
-    || !hash_equals($_SESSION['customer_password_csrf'], $csrf_token)
-) {
-    redirectCustomerPassword($redirect_url, 'Your password form expired. Please try again.');
-}
+validateCsrf();
 
 if (strlen($new_password) < 8) {
     redirectCustomerPassword($redirect_url, 'Your new password must be at least 8 characters long.');
@@ -104,6 +97,5 @@ mysqli_commit($conn);
 
 session_regenerate_id(true);
 $_SESSION['auth_version'] = (int) $version_row['auth_version'];
-unset($_SESSION['customer_password_csrf']);
 redirectCustomerPassword($redirect_url, 'Your password was updated successfully.', 'success', false);
 ?>

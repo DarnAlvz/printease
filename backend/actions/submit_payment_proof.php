@@ -10,6 +10,8 @@ require_once __DIR__ . "/../includes/rate_limit.php";
 checkRole("customer");
 requireVerifiedStatus($conn);
 
+validateCsrf();
+
 if (!isset($_POST['submit_payment_proof'])) {
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 }
@@ -125,7 +127,16 @@ try {
     mysqli_stmt_execute($rejected_stmt);
     $rejected_payment = mysqli_fetch_assoc(mysqli_stmt_get_result($rejected_stmt));
 
+    $old_proof_path = null;
+
     if ($rejected_payment) {
+        $old_proof_sql = "SELECT proof_of_payment_file FROM payments WHERE payment_id = ? LIMIT 1";
+        $old_proof_stmt = mysqli_prepare($conn, $old_proof_sql);
+        mysqli_stmt_bind_param($old_proof_stmt, "i", $rejected_payment['payment_id']);
+        mysqli_stmt_execute($old_proof_stmt);
+        $old_proof_row = mysqli_fetch_assoc(mysqli_stmt_get_result($old_proof_stmt));
+        $old_proof_path = $old_proof_row['proof_of_payment_file'] ?? null;
+
         $update_sql = "UPDATE payments
                        SET active_lock_order_id = ?,
                            proof_of_payment_file = ?,
@@ -150,11 +161,16 @@ try {
                 throw new RuntimeException("Payment proof already submitted for this order.", 1062);
             }
 
-            throw new Exception("Failed to update payment proof: " . mysqli_stmt_error($stmt));
+            throw new Exception("Failed to update payment proof. Please try again.");
         }
 
         if (mysqli_stmt_affected_rows($stmt) < 1) {
             throw new Exception("Payment proof already submitted for this order.");
+        }
+
+        if (!empty($old_proof_path)) {
+            $old_file = __DIR__ . '/../../' . $old_proof_path;
+            if (is_file($old_file)) @unlink($old_file);
         }
 
     } else {
@@ -171,7 +187,7 @@ try {
                 throw new RuntimeException("Payment proof already submitted for this order.", 1062);
             }
 
-            throw new Exception("Failed to save payment proof: " . mysqli_stmt_error($stmt));
+            throw new Exception("Failed to save payment proof. Please try again.");
         }
     }
 

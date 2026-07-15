@@ -86,6 +86,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         <main class="p-4 md:p-6">
             <form action="../../../backend/actions/submit_order.php" method="POST" enctype="multipart/form-data"
                 class="customer-order-wizard bg-white p-5 md:p-6 rounded-2xl shadow" data-order-wizard novalidate>
+                <?php echo csrfField(); ?>
                 <input type="hidden" name="shop_id" value="<?php echo e($shop['shop_id']); ?>">
                 <input type="hidden" name="service_id" id="service_id">
                 <input type="hidden" name="detected_page_count" id="detected_page_count" value="1">

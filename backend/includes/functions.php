@@ -9,6 +9,18 @@ function redirect($path) {
     exit();
 }
 
+function setFlash($key, $value) {
+    if (session_status() !== PHP_SESSION_ACTIVE) return;
+    $_SESSION['flash'][$key] = $value;
+}
+
+function getFlash($key, $default = '') {
+    if (session_status() !== PHP_SESSION_ACTIVE) return $default;
+    $value = $_SESSION['flash'][$key] ?? $default;
+    unset($_SESSION['flash'][$key]);
+    return $value;
+}
+
 function normalizeToastStatus($status) {
     $status = strtolower(trim((string) $status));
 
@@ -256,6 +268,25 @@ function getPdfPageCountFromText($filePath, $fallback = 1) {
     }
 
     return $fallback;
+}
+
+function csrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrfField(): string {
+    return '<input type="hidden" name="csrf_token" value="' . e(csrfToken()) . '">';
+}
+
+function validateCsrf(): void {
+    $token = $_POST['csrf_token'] ?? '';
+    if ($token === '' || !hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
+        http_response_code(403);
+        die("Invalid security token. Please go back and try again.");
+    }
 }
 
 ?>

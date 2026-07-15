@@ -52,7 +52,8 @@ function requireCompleteCustomerProfile($conn) {
     $stmt = mysqli_prepare($conn, $sql);
 
     if (!$stmt) {
-        die("SQL Error: " . mysqli_error($conn));
+        error_log("SQL prepare error in requireCompleteCustomerProfile: " . mysqli_error($conn));
+        die("A system error occurred. Please try again later.");
     }
 
     mysqli_stmt_bind_param($stmt, "i", $customer_id);

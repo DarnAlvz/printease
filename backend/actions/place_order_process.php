@@ -10,6 +10,57 @@ checkRole("customer");
 requireVerifiedStatus($conn);
 requireCompleteCustomerProfile($conn);
 
+validateCsrf();
+
+function validatePlaceOrderUpload(array $file): bool
+{
+    if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
+        setError("Please upload a document file.");
+        return false;
+    }
+
+    $max_file_size = 25 * 1024 * 1024;
+    if (($file['size'] ?? 0) > $max_file_size) {
+        setError("Document file must be 25MB or smaller.");
+        return false;
+    }
+
+    $original_name = basename((string) ($file['name'] ?? ''));
+    $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+    if ($extension !== 'pdf') {
+        setError("Only PDF files are accepted for print orders.");
+        return false;
+    }
+
+    $tmp_name = (string) ($file['tmp_name'] ?? '');
+    if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+        setError("Please upload a valid PDF file.");
+        return false;
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($tmp_name);
+    if ($mime !== 'application/pdf') {
+        setError("Only PDF files are accepted for print orders.");
+        return false;
+    }
+
+    $handle = fopen($tmp_name, 'rb');
+    if ($handle === false) {
+        setError("Please upload a valid PDF file.");
+        return false;
+    }
+
+    $header = fread($handle, 4);
+    fclose($handle);
+
+    if ($header !== '%PDF') {
+        setError("Please upload a valid PDF file.");
+        return false;
+    }
+
+    return true;
+}
 
 if (isset($_POST['place_order'])) {
     $customer_id = $_SESSION['user_id'];
@@ -19,13 +70,17 @@ if (isset($_POST['place_order'])) {
     $copies = intval($_POST['copies']);
     $total_amount = floatval($_POST['total_amount']);
 
+    if (!isset($_FILES['order_file']) || !validatePlaceOrderUpload($_FILES['order_file'])) {
+        redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
+    }
+
     // File upload
     $upload_dir = "../../uploads/orders/";
     if (!is_dir($upload_dir)) {
-        mkdir($upload_dir, 0777, true);
+        mkdir($upload_dir, 0755, true);
     }
 
-    $file_name = time() . "_" . basename($_FILES['order_file']['name']);
+    $file_name = time() . "_" . bin2hex(random_bytes(4)) . ".pdf";
     $target_path = $upload_dir . $file_name;
     move_uploaded_file($_FILES['order_file']['tmp_name'], $target_path);
     $file_path_db = "uploads/orders/" . $file_name;

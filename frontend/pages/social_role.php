@@ -1,13 +1,16 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../backend/includes/session.php';
+secureSession();
 require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../components/head.php';
 require_once __DIR__ . '/../components/auth_brand_panel.php';
 
 $pending = $_SESSION['pending_oauth_user'] ?? null;
 
 if (!$pending || !is_array($pending)) {
-    header("Location: login.php?error=oauth_session_expired");
+    setFlash('auth_error', 'oauth_session_expired');
+    header("Location: login.php");
     exit();
 }
 
@@ -18,10 +21,13 @@ $email = $pending['email'] ?? '';
 $register_alert_message = '';
 $register_error_messages = [
     'invalid_role' => 'Please choose a valid account type.',
+    'terms_required' => 'Please agree to the Terms and Privacy Policy before continuing.',
 ];
 
-if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
-    $register_alert_message = $register_error_messages[$_GET['error']];
+$flash_error = getFlash('auth_error');
+
+if ($flash_error !== '' && isset($register_error_messages[$flash_error])) {
+    $register_alert_message = $register_error_messages[$flash_error];
 }
 ?>
 <!DOCTYPE html>
@@ -340,6 +346,145 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
                 grid-template-columns: 1fr;
             }
         }
+
+        .policy-agreement {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--navy);
+        }
+
+        .policy-agreement input {
+            margin-top: 2px;
+            accent-color: var(--navy);
+        }
+
+        .policy-link {
+            background: none;
+            border: none;
+            padding: 0;
+            color: var(--text-blue);
+            font-weight: 700;
+            font-size: inherit;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .policy-link:hover {
+            color: var(--navy);
+        }
+
+        .policy-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .policy-modal[hidden] {
+            display: none;
+        }
+
+        .policy-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, .5);
+        }
+
+        .policy-modal-panel {
+            position: relative;
+            width: min(640px, 92vw);
+            max-height: 80vh;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .policy-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 24px 28px 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .policy-modal-header .policy-modal-eyebrow {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: var(--text-blue);
+        }
+
+        .policy-modal-header h2 {
+            margin: 4px 0 2px;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--navy);
+        }
+
+        .policy-modal-header p {
+            margin: 0;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .policy-modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: #6b7280;
+        }
+
+        .policy-modal-close:hover {
+            color: var(--navy);
+        }
+
+        .policy-modal-close svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .policy-modal-body {
+            padding: 24px 28px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #374151;
+        }
+
+        .policy-modal-body section {
+            margin-bottom: 20px;
+        }
+
+        .policy-modal-body h3 {
+            margin: 0 0 8px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--navy);
+        }
+
+        .policy-modal-body p {
+            margin: 0;
+        }
+
+        .policy-modal-body ul {
+            margin: 8px 0 0;
+            padding-left: 20px;
+        }
+
+        .policy-modal-body li {
+            margin-bottom: 4px;
+        }
     </style>
 </head>
 
@@ -379,6 +524,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
                 <?php endif; ?>
 
                 <form action="../../backend/oauth/social_register_process.php" method="POST">
+                    <?php echo csrfField(); ?>
                     <span class="role-label">I want to continue as:</span>
                     <div class="role-grid">
                         <label class="role-card">
@@ -403,6 +549,14 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
                         </label>
                     </div>
 
+                    <div class="policy-agreement">
+                        <input id="terms_privacy" type="checkbox" name="terms_privacy" value="1" aria-label="I agree to the Terms and Privacy Policy" required>
+                        <span>
+                            I agree to the <button class="policy-link" type="button" data-policy-open="terms-modal">Terms</button> and
+                            <button class="policy-link" type="button" data-policy-open="privacy-modal">Privacy Policy</button>.
+                        </span>
+                    </div>
+
                     <button class="btn" type="submit" name="complete_social_register">Continue</button>
                 </form>
 
@@ -412,6 +566,113 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
             </div>
         </section>
     </main>
+
+    <div class="policy-modal" id="terms-modal" role="dialog" aria-modal="true" aria-labelledby="terms-modal-title" hidden>
+        <div class="policy-modal-backdrop" data-policy-close></div>
+        <section class="policy-modal-panel" tabindex="-1">
+            <header class="policy-modal-header">
+                <div>
+                    <p class="policy-modal-eyebrow">PrintEase</p>
+                    <h2 id="terms-modal-title">Terms of Service</h2>
+                    <p>Last updated: July 3, 2026</p>
+                </div>
+                <button class="policy-modal-close" type="button" aria-label="Close Terms of Service" data-policy-close>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div class="policy-modal-body">
+                <section>
+                    <h3>Use of PrintEase</h3>
+                    <p>PrintEase helps customers connect with print shops, place orders, track requests, and manage related transactions. By using the platform, you agree to provide accurate information and use the service only for lawful printing and business purposes.</p>
+                </section>
+
+                <section>
+                    <h3>Accounts and Security</h3>
+                    <p>You are responsible for keeping your login details secure and for activities made through your account. If you believe your account was accessed without permission, contact the PrintEase administrator as soon as possible.</p>
+                </section>
+
+                <section>
+                    <h3>Orders and Payments</h3>
+                    <p>Customers are responsible for reviewing order details before submitting them. Print shops are responsible for keeping service, price, status, and payment information accurate. Payment confirmations may be reviewed before an order is processed.</p>
+                </section>
+
+                <section>
+                    <h3>Acceptable Content</h3>
+                    <p>Do not upload or request printing of files that are illegal, harmful, abusive, fraudulent, or that violate another person's rights. PrintEase may restrict access or reject orders that appear to violate these terms.</p>
+                </section>
+
+                <section>
+                    <h3>Changes to These Terms</h3>
+                    <p>PrintEase may update these terms when platform features or policies change. Continued use of the service after updates means you accept the revised terms.</p>
+                </section>
+            </div>
+        </section>
+    </div>
+
+    <div class="policy-modal" id="privacy-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" hidden>
+        <div class="policy-modal-backdrop" data-policy-close></div>
+        <section class="policy-modal-panel" tabindex="-1">
+            <header class="policy-modal-header">
+                <div>
+                    <p class="policy-modal-eyebrow">PrintEase</p>
+                    <h2 id="privacy-modal-title">Privacy Policy</h2>
+                    <p>Last updated: July 3, 2026</p>
+                </div>
+                <button class="policy-modal-close" type="button" aria-label="Close Privacy Policy" data-policy-close>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div class="policy-modal-body">
+                <section>
+                    <h3>Information We Collect</h3>
+                    <p>PrintEase may collect account details, contact information, print order details, uploaded files, payment references, profile information, and activity needed to operate the platform.</p>
+                </section>
+
+                <section>
+                    <h3>How We Use Information</h3>
+                    <p>We use information to create and secure accounts, process orders, connect customers with print shops, send notifications, verify payment details, improve services, and support platform administration.</p>
+                </section>
+
+                <section>
+                    <h3>Sharing Information</h3>
+                    <p>Order and contact details may be shared between customers, print shop owners, and administrators when needed to complete a transaction or resolve an issue. PrintEase does not sell personal information.</p>
+                </section>
+
+                <section>
+                    <h3>Data Security</h3>
+                    <p>PrintEase uses reasonable safeguards to protect user information. No system is perfectly secure, so users should keep their passwords private and report suspicious activity promptly.</p>
+                </section>
+
+                <section>
+                    <h3>Your Choices</h3>
+                    <p>You may update your profile information through your account pages. For account concerns, corrections, or privacy questions, contact the PrintEase administrator.</p>
+                </section>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        document.querySelectorAll('[data-policy-open]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var modal = document.getElementById(button.dataset.policyOpen);
+                if (!modal) return;
+                modal.hidden = false;
+                modal.querySelector('.policy-modal-panel').focus();
+            });
+        });
+
+        document.querySelectorAll('[data-policy-close]').forEach(function (el) {
+            el.addEventListener('click', function () {
+                el.closest('.policy-modal').hidden = true;
+            });
+        });
+    </script>
 </body>
 
 </html>

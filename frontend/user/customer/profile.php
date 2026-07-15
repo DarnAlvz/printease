@@ -28,10 +28,6 @@ $customer_name = (string) ($user['full_name'] ?? ($_SESSION['full_name'] ?? 'Cus
 $customer_email = (string) ($user['email'] ?? ($_SESSION['email'] ?? ''));
 $created_at = !empty($user['created_at']) ? date('M j, Y', strtotime($user['created_at'])) : 'N/A';
 
-if (empty($_SESSION['customer_password_csrf'])) {
-    $_SESSION['customer_password_csrf'] = bin2hex(random_bytes(32));
-}
-
 $reopen_password_modal = !empty($_SESSION['reopen_customer_password_modal']);
 unset($_SESSION['reopen_customer_password_modal']);
 $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
@@ -214,6 +210,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     id="customerProfileEditForm"
                     class="customer-profile-edit-form"
                     hidden>
+                    <?php echo csrfField(); ?>
 
                     <div class="customer-profile-form-head">
                         <div>
@@ -330,13 +327,16 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 </div>
 
                 <div class="customer-profile-actions">
-                    <a class="customer-profile-logout" href="<?php echo BASE_URL; ?>backend/actions/logout.php">
-                        <span class="customer-profile-action-icon"><?php echo customerIcon('logout'); ?></span>
-                        <span>
-                            <strong>Logout</strong>
-                            <small>End your current session</small>
-                        </span>
-                    </a>
+                    <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/logout.php" style="display:inline;">
+                        <?php echo csrfField(); ?>
+                        <button class="customer-profile-logout" type="submit">
+                            <span class="customer-profile-action-icon"><?php echo customerIcon('logout'); ?></span>
+                            <span>
+                                <strong>Logout</strong>
+                                <small>End your current session</small>
+                            </span>
+                        </button>
+                    </form>
                 </div>
             </section>
         </main>
@@ -358,7 +358,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
             <form action="../../../backend/actions/change_customer_password.php" method="POST"
                 id="customerChangePasswordForm" class="space-y-4">
-                <input type="hidden" name="csrf_token" value="<?php echo e($_SESSION['customer_password_csrf']); ?>">
+                <?php echo csrfField(); ?>
 
                 <?php if (!$uses_google_session): ?>
                     <div>
@@ -436,11 +436,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     <?php endif; ?>
                 </div>
 
-                <div class="flex flex-col sm:flex-row sm:justify-end gap-3 pt-4">
-                    <a href="<?php echo $valid_id_url; ?>" target="_blank" rel="noopener noreferrer"
-                        class="px-5 py-3 rounded-xl font-semibold bg-blue-700 text-white text-center hover:bg-blue-800">
-                        Open full document
-                    </a>
+                <div class="flex justify-end gap-3 pt-4">
                     <button type="button" data-valid-id-modal-close
                         class="px-5 py-3 rounded-xl font-semibold border text-gray-700 hover:bg-gray-50">Close</button>
                 </div>

@@ -5,11 +5,22 @@ require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 require_once __DIR__ . "/../config/cloudinary.php";
 
 checkRole("customer");
 requireCompleteCustomerProfile($conn);
 requireVerifiedStatus($conn);
+
+validateCsrf();
+
+$order_customer_key = rateLimitCurrentUserKey('order');
+$order_ip = rateLimitClientIp();
+$order_rate = rateLimitCheck($conn, 'order_place', $order_customer_key, $order_ip, 10, 3600);
+if (!$order_rate['allowed']) {
+    setError("You have placed too many orders recently. Please try again later.");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
+}
 
 if (!isset($_POST['submit_order'])) {
     redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
@@ -227,7 +238,7 @@ try {
 
     $order_stmt = mysqli_prepare($conn, $order_sql);
     if (!$order_stmt) {
-        throw new Exception("Order SQL Error: " . mysqli_error($conn));
+        throw new Exception("Failed to prepare order. Please try again.");
     }
 
     $order_code = '';
@@ -260,7 +271,7 @@ try {
         }
 
         if (!isDuplicateKeyError($conn)) {
-            throw new Exception("Failed to save order: " . mysqli_stmt_error($order_stmt));
+            throw new Exception("Failed to save order. Please try again.");
         }
     }
 
@@ -276,7 +287,7 @@ try {
                  VALUES (?, ?, ?, ?)";
     $file_stmt = mysqli_prepare($conn, $file_sql);
     if (!$file_stmt)
-        throw new Exception("Uploaded file SQL Error: " . mysqli_error($conn));
+        throw new Exception("Failed to prepare file upload. Please try again.");
     mysqli_stmt_bind_param(
         $file_stmt,
         "isss",
@@ -286,7 +297,7 @@ try {
         $file_type
     );
     if (!mysqli_stmt_execute($file_stmt)) {
-        throw new Exception("Failed to save uploaded file: " . mysqli_stmt_error($file_stmt));
+        throw new Exception("Failed to save uploaded file. Please try again.");
     }
 
     // Notify shop owner
@@ -307,6 +318,7 @@ try {
         'action_label' => 'View order',
         'action_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . $order_id,
     ]);
+    rateLimitRecord($conn, 'order_place', $order_customer_key, $order_ip, 10, 3600, 3600);
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 
 } catch (Throwable $e) {

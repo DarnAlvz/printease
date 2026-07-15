@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../../backend/includes/session.php';
+secureSession();
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../components/head.php';
 require_once __DIR__ . '/../components/auth_brand_panel.php';
 
@@ -7,12 +10,16 @@ $register_alert_message = '';
 
 $register_error_messages = [
     'invalid_role' => 'Please choose a valid account type.',
+    'invalid_email' => 'Please enter a valid email address.',
     'duplicate_email' => 'That email is already registered. Please sign in or use another email.',
     'registration_failed' => 'Registration failed. Please check your details and try again.',
+    'rate_limited' => 'Too many registration attempts. Please try again in a few minutes.',
 ];
 
-if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
-    $register_alert_message = $register_error_messages[$_GET['error']];
+$flash_error = getFlash('auth_error');
+
+if ($flash_error !== '' && isset($register_error_messages[$flash_error])) {
+    $register_alert_message = $register_error_messages[$flash_error];
 }
 ?>
 <!DOCTYPE html>
@@ -534,6 +541,7 @@ if (isset($_GET['error'], $register_error_messages[$_GET['error']])) {
                 <?php endif; ?>
 
                 <form action="../../backend/actions/register_process.php" method="POST">
+                    <?php echo csrfField(); ?>
                     <span class="role-label">I want to register as:</span>
                     <div class="role-grid">
                         <label class="role-card">

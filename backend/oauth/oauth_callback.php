@@ -1,12 +1,14 @@
 <?php
-session_start();
+require_once __DIR__ . "/../includes/session.php";
+secureSession();
 
 require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/oauth.php";
 require_once __DIR__ . "/../includes/oauth_helpers.php";
 
 if (!$conn) {
-    die("Database connection failed.");
+    error_log("PrintEase OAuth: DB connection failed.");
+    redirectToLoginError('oauth_failed');
 }
 
 $provider = $_GET['provider'] ?? '';
@@ -43,6 +45,7 @@ $token_response = oauthHttpPostJson($config['token_url'], [
 ]);
 
 if (!$token_response['ok'] || empty($token_response['data']['access_token'])) {
+    error_log("[OAuth] Token exchange failed for provider=$provider: " . ($token_response['error'] ?? 'unknown'));
     redirectToLoginError('oauth_failed');
 }
 
@@ -53,6 +56,7 @@ $profile_response = oauthHttpGetJson($config['profile_url'], [
 ]);
 
 if (!$profile_response['ok']) {
+    error_log("[OAuth] Profile fetch failed for provider=$provider: " . ($profile_response['error'] ?? 'unknown'));
     redirectToLoginError('oauth_failed');
 }
 
@@ -83,6 +87,7 @@ if ($email_user) {
     }
 
     if (!linkSocialAccount($conn, $email_user['user_id'], $provider, $provider_user_id, $email)) {
+        error_log("[OAuth] linkSocialAccount failed for provider=$provider user_id={$email_user['user_id']}");
         redirectToLoginError('oauth_failed');
     }
 

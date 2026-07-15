@@ -122,6 +122,7 @@ function renderExploreFavoriteForm(array $shop, string $return_to): void
     $is_favorite = !empty($shop['is_favorite']);
     ?>
     <form method="POST" action="<?php echo BASE_URL; ?>backend/actions/toggle_favorite_shop.php" class="customer-favorite-form">
+        <?php echo csrfField(); ?>
         <input type="hidden" name="shop_id" value="<?php echo (int) $shop['shop_id']; ?>">
         <input type="hidden" name="intent" value="<?php echo $is_favorite ? 'remove' : 'add'; ?>">
         <input type="hidden" name="return_to" value="<?php echo e($return_to); ?>">

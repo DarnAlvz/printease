@@ -10,6 +10,8 @@ checkRole("shop_owner");
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
+validateCsrf();
+
 $is_ajax = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest';
 
 function paymentJsonResponse($success, $message, $extra = [], $status = 200)

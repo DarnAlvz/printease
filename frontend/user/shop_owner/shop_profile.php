@@ -109,6 +109,7 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
             <div class="shop-status-options">
                 <?php foreach ($shop_status_details as $status_value => $status_detail): ?>
                     <form action="../../../backend/actions/update_shop_status.php" method="POST">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="shop_status" value="<?php echo e($status_value); ?>">
                         <input type="hidden" name="return_to" value="shop_profile.php">
                         <button type="submit" name="update_status"
@@ -133,6 +134,7 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
 
 <form action="../../../backend/actions/save_shop_profile.php" method="POST" enctype="multipart/form-data"
     class="shop-management-form is-locked" id="shopProfileForm">
+    <?php echo csrfField(); ?>
     <input type="hidden" name="latitude" id="shopLatitude" value="<?php echo e($shop['latitude'] ?? ''); ?>"
         data-editable disabled>
     <input type="hidden" name="longitude" id="shopLongitude" value="<?php echo e($shop['longitude'] ?? ''); ?>"

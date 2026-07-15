@@ -15,7 +15,8 @@ function isAllowedOAuthProvider($provider)
 
 function redirectToLoginError($error)
 {
-    redirect(BASE_URL . "frontend/pages/login.php?error=" . urlencode($error));
+    setFlash('auth_error', $error);
+    redirect(BASE_URL . "frontend/pages/login.php");
 }
 
 function redirectLoggedInUser($conn, $user)
@@ -111,6 +112,8 @@ function oauthHttpGetJson($url, $headers = [])
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
     return oauthCurlJsonResponse($ch);
 }
@@ -123,6 +126,8 @@ function oauthHttpPostJson($url, $fields)
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($fields));
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
     curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
     return oauthCurlJsonResponse($ch);
 }
@@ -132,15 +137,24 @@ function oauthCurlJsonResponse($ch)
     $body = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
+    $errno = curl_errno($ch);
+    $url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
     curl_close($ch);
 
-    if ($body === false || $status < 200 || $status >= 300) {
+    if ($body === false) {
+        error_log("[OAuth] cURL exec failed: errno=$errno error=$error url=$url");
         return ['ok' => false, 'error' => $error ?: 'OAuth request failed.'];
+    }
+
+    if ($status < 200 || $status >= 300) {
+        error_log("[OAuth] HTTP $status from $url body=$body");
+        return ['ok' => false, 'error' => "OAuth HTTP $status: $body"];
     }
 
     $decoded = json_decode($body, true);
 
     if (!is_array($decoded)) {
+        error_log("[OAuth] Invalid JSON from $url body=$body");
         return ['ok' => false, 'error' => 'OAuth response was not valid JSON.'];
     }
 

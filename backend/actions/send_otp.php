@@ -1,9 +1,13 @@
 <?php
-session_start();
+require_once __DIR__ . "/../includes/session.php";
+secureSession();
 
 include "../config/db.php";
 require_once "../helper/mailer.php";
 require_once "../includes/rate_limit.php";
+require_once __DIR__ . "/../includes/functions.php";
+
+validateCsrf();
 
 function redirectToForgotPassword($query = '')
 {

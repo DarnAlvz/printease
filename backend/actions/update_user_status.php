@@ -22,15 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['update_user_status']
     redirect($redirect_page);
 }
 
-$csrf_token = (string) ($_POST['csrf_token'] ?? '');
-if (
-    empty($_SESSION['admin_user_status_csrf'])
-    || $csrf_token === ''
-    || !hash_equals($_SESSION['admin_user_status_csrf'], $csrf_token)
-) {
-    setError("Security check failed. Please refresh the page and try again.");
-    redirect($redirect_page);
-}
+validateCsrf();
 
 $user_id = filter_input(INPUT_POST, 'user_id', FILTER_VALIDATE_INT);
 $account_status = trim((string) ($_POST['account_status'] ?? ''));

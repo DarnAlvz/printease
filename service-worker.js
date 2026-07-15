@@ -1,13 +1,15 @@
-const CACHE_NAME = "printease-v2";
+const CACHE_NAME = "printease-v3";
+
+const BASE_PATH = self.location.pathname.replace(/\/[^\/]*$/, "/");
 
 const urlsToCache = [
-  "/printease/",
-  "/printease/index.php",
-  "/printease/manifest.json",
-  "/printease/assets/css/index.css",
-  "/printease/assets/css/tailwind.css",
-  "/printease/assets/images/printing-logo-192.png",
-  "/printease/assets/images/printing-logo-512.png"
+  BASE_PATH,
+  BASE_PATH + "index.php",
+  BASE_PATH + "manifest.json",
+  BASE_PATH + "assets/css/index.css",
+  BASE_PATH + "assets/css/tailwind.css",
+  BASE_PATH + "assets/images/printing-logo-192.png",
+  BASE_PATH + "assets/images/printing-logo-512.png"
 ];
 
 // INSTALL
@@ -39,7 +41,7 @@ self.addEventListener("fetch", event => {
   event.respondWith(
     caches.match(event.request).then(response => {
       return response || fetch(event.request).catch(() => {
-        return caches.match("/printease/index.php");
+        return caches.match(BASE_PATH + "index.php");
       });
     })
   );

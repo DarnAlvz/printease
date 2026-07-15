@@ -10,6 +10,8 @@ checkRole("shop_owner");
 requireCompleteShopProfile($conn);
 requireVerifiedStatus($conn);
 
+validateCsrf();
+
 if (!isset($_POST['add_service'])) {
     redirect(BASE_URL . "frontend/user/shop_owner/services.php");
 }

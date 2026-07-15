@@ -1,10 +1,14 @@
 <?php
 require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../../backend/includes/session.php';
+secureSession();
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../components/head.php';
 require_once __DIR__ . '/../components/auth_brand_panel.php';
 
 define('DB_CONNECTION_OPTIONAL', true);
 require_once __DIR__ . '/../../backend/config/db.php';
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../../backend/includes/auth.php';
 
 redirectIfAuthenticated($conn);
@@ -42,13 +46,12 @@ $login_alert_type = '';
 $login_alert_message = '';
 
 $login_success_messages = [
-    'success' => 'Account created successfully. You can now sign in.',
+    'registered' => 'Account created successfully. You can now sign in.',
     'password_reset' => 'Password reset successfully. You can now sign in with your new password.',
 ];
 
 $login_error_messages = [
-    'email_not_found' => 'Email not found. Please check your email address.',
-    'incorrect_password' => 'Incorrect password. Please try again.',
+    'invalid_credentials' => 'Invalid email or password. Please try again.',
     'rejected' => 'Your account has been rejected. Please contact the administrator.',
     'inactive' => 'Your account has been deactivated. Please contact the administrator.',
     'invalid_role' => 'Invalid role detected. Please contact the administrator.',
@@ -64,15 +67,15 @@ $login_error_messages = [
     'terms_required' => 'Please agree to the Terms and Privacy Policy before signing in.',
 ];
 
-if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
-    $login_alert_type = 'success';
-    $login_alert_message = $login_success_messages[$_GET['registered']];
-} elseif (isset($_GET['reset']) && $_GET['reset'] === 'success') {
-    $login_alert_type = 'success';
-    $login_alert_message = $login_success_messages['password_reset'];
-} elseif (isset($_GET['error'], $login_error_messages[$_GET['error']])) {
+$flash_error = getFlash('auth_error');
+$flash_success = getFlash('auth_success');
+
+if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
     $login_alert_type = 'error';
-    $login_alert_message = $login_error_messages[$_GET['error']];
+    $login_alert_message = $login_error_messages[$flash_error];
+} elseif ($flash_success !== '' && isset($login_success_messages[$flash_success])) {
+    $login_alert_type = 'success';
+    $login_alert_message = $login_success_messages[$flash_success];
 }
 ?>
 <!DOCTYPE html>
@@ -127,6 +130,7 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
                 <?php endif; ?>
 
                 <form id="password-login-form" action="../../backend/actions/login_process.php" method="POST">
+                    <?php echo csrfField(); ?>
                     <div class="field-group">
                         <label for="email">Email Address</label>
                         <div class="input-wrap">
@@ -192,8 +196,8 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
 
                 <div class="social-stack" aria-label="Social sign in options">
                     <form id="google-login-form" action="../../backend/oauth/oauth_start.php" method="POST">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="provider" value="google">
-                        <input id="google_terms_privacy" type="hidden" name="terms_privacy" value="">
                         <button class="btn btn-social" type="submit">
                             <svg class="google-mark" viewBox="0 0 24 24" aria-hidden="true">
                                 <path fill="#4285F4"
@@ -318,23 +322,6 @@ if (isset($_GET['registered'], $login_success_messages[$_GET['registered']])) {
                 button.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
             });
         });
-
-        var googleLoginForm = document.getElementById('google-login-form');
-        var termsCheckbox = document.getElementById('terms_privacy');
-        var googleTermsInput = document.getElementById('google_terms_privacy');
-
-        if (googleLoginForm && termsCheckbox && googleTermsInput) {
-            googleLoginForm.addEventListener('submit', function (event) {
-                if (!termsCheckbox.checked) {
-                    event.preventDefault();
-                    termsCheckbox.reportValidity();
-                    termsCheckbox.focus();
-                    return;
-                }
-
-                googleTermsInput.value = '1';
-            });
-        }
 
         var activePolicyModal = null;
         var policyModalTrigger = null;

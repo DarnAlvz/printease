@@ -20,6 +20,8 @@ if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['custome
     notificationReadResponse(false);
 }
 
+validateCsrf();
+
 $notification_id = intval($_POST['notification_id'] ?? 0);
 $user_id = (int) $_SESSION['user_id'];
 

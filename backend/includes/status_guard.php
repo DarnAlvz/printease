@@ -64,8 +64,11 @@ function requireVerifiedStatus($conn, $soft = false)
         mysqli_stmt_execute($stmt);
         $user = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
-        if (!$user)
-            die("User not found.");
+        if (!$user) {
+            setToast("Please log in again.", "warning");
+            header("Location: " . BASE_URL . "frontend/pages/login.php");
+            exit();
+        }
         $status = $user['account_status'] ?? 'pending';
 
         if ($status === 'verified')
@@ -116,7 +119,9 @@ function requireVerifiedStatus($conn, $soft = false)
         );
     }
 
-    die("Access denied.");
+    setToast("Please log in again.", "warning");
+    header("Location: " . BASE_URL . "frontend/pages/login.php");
+    exit();
 }
 
 // ------------------ TOAST FUNCTION ------------------
@@ -175,8 +180,8 @@ function showToast($message, $type = 'pending', $redirect = '')
 
         // Create toast
         const toast = document.createElement("div");
-        toast.className = "toast <?php echo $type; ?>";
-        toast.innerText = "<?php echo addslashes($message); ?>";
+        toast.className = "toast <?php echo e($type); ?>";
+        toast.innerText = <?php echo json_encode($message); ?>;
         container.appendChild(toast);
 
         // Animate in
