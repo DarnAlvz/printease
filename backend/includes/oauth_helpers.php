@@ -142,19 +142,19 @@ function oauthCurlJsonResponse($ch)
     curl_close($ch);
 
     if ($body === false) {
-        error_log("[OAuth] cURL exec failed: errno=$errno error=$error url=$url");
+        error_log("[OAuth] cURL exec failed: errno=$errno error=$error");
         return ['ok' => false, 'error' => $error ?: 'OAuth request failed.'];
     }
 
     if ($status < 200 || $status >= 300) {
-        error_log("[OAuth] HTTP $status from $url body=$body");
-        return ['ok' => false, 'error' => "OAuth HTTP $status: $body"];
+        error_log("[OAuth] HTTP $status from provider");
+        return ['ok' => false, 'error' => "OAuth HTTP $status"];
     }
 
     $decoded = json_decode($body, true);
 
     if (!is_array($decoded)) {
-        error_log("[OAuth] Invalid JSON from $url body=$body");
+        error_log("[OAuth] Invalid JSON response from provider");
         return ['ok' => false, 'error' => 'OAuth response was not valid JSON.'];
     }
 

@@ -18,11 +18,8 @@ try {
     }
 } catch (mysqli_sql_exception $exception) {
     if (!$db_connection_optional) {
-        $message = in_array($app_env, ['local', 'development', 'dev'], true)
-            ? "Connection failed: " . $exception->getMessage()
-            : "Database connection failed. Please try again later.";
-
-        die($message);
+        error_log("[PrintEase] Database connection failed: " . $exception->getMessage());
+        die("A system error occurred. Please try again later.");
     }
 }
 ?>

@@ -10,16 +10,21 @@ function requireVerifiedShop($conn) {
     $result = mysqli_stmt_get_result($stmt);
     $shop = mysqli_fetch_assoc($result);
 
+    $shop_profile_url = BASE_URL . "frontend/user/shop_owner/shop_profile.php";
+
     if (!$shop) {
-        die("Please complete your shop profile first.");
+        setFlash("toast", "Please complete your shop profile first.");
+        redirect($shop_profile_url);
     }
 
     if ($shop['permit_status'] !== 'verified') {
         if ($shop['permit_status'] === 'disabled') {
-            die("Your shop has been disabled by the Admin. Please contact support for assistance.");
+            setFlash("toast", "Your shop has been disabled by the Admin. Please contact support for assistance.");
+            redirect($shop_profile_url);
         }
 
-        die("Your shop must be verified before accessing this page.");
+        setFlash("toast", "Your shop must be verified before accessing this page.");
+        redirect($shop_profile_url);
     }
 }
 ?>
