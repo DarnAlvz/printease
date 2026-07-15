@@ -13,6 +13,13 @@
         : function (value) { return String(value).replace(/["\\]/g, '\\$&'); };
     const imageProofTypes = new Set(['jpg', 'jpeg', 'png', 'webp', 'jfif']);
     let proofZoom = 1;
+    const ownerSoundEnabledKey = 'printEaseOwnerSoundEnabled';
+    const ownerSoundSeenKey = 'printEaseOwnerSoundSeenIds';
+    const ownerSoundSeenLimit = 50;
+    let ownerSoundBaselineReady = false;
+    let ownerAudioContext = null;
+    let ownerAudioUnlocked = false;
+    let ownerSoundMemorySeenIds = [];
 
     function toInt(value) {
         return Math.max(0, Number.parseInt(value, 10) || 0);
@@ -21,6 +28,108 @@
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, function (character) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character];
+        });
+    }
+
+    function ownerSoundEnabled() {
+        try {
+            return localStorage.getItem(ownerSoundEnabledKey) !== 'false';
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function setOwnerSoundEnabled(enabled) {
+        try {
+            localStorage.setItem(ownerSoundEnabledKey, enabled ? 'true' : 'false');
+        } catch (error) { }
+    }
+
+    function getOwnerSoundSeenIds() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(ownerSoundSeenKey) || '[]');
+            return Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch (error) {
+            return ownerSoundMemorySeenIds.slice();
+        }
+    }
+
+    function saveOwnerSoundSeenIds(ids) {
+        const unique = [];
+        ids.map(String).forEach(function (id) {
+            if (id && !unique.includes(id)) unique.push(id);
+        });
+        ownerSoundMemorySeenIds = unique.slice(-ownerSoundSeenLimit);
+        try {
+            localStorage.setItem(ownerSoundSeenKey, JSON.stringify(ownerSoundMemorySeenIds));
+        } catch (error) { }
+    }
+
+    function mergeOwnerSoundSeenIds(ids) {
+        saveOwnerSoundSeenIds(getOwnerSoundSeenIds().concat(ids));
+    }
+
+    function updateOwnerSoundToggle() {
+        const toggle = document.getElementById('ownerSoundToggle');
+        if (!toggle) return;
+        const enabled = ownerSoundEnabled();
+        toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        toggle.setAttribute('aria-label', enabled ? 'Mute new order sound alerts' : 'Enable new order sound alerts');
+        toggle.title = enabled ? 'New order sound alerts on' : 'New order sound alerts muted';
+    }
+
+    function getOwnerAudioContext() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        if (!ownerAudioContext) ownerAudioContext = new AudioContextClass();
+        return ownerAudioContext;
+    }
+
+    function unlockOwnerAudio() {
+        const context = getOwnerAudioContext();
+        if (!context) return Promise.resolve(false);
+        return context.resume()
+            .then(function () {
+                ownerAudioUnlocked = context.state === 'running';
+                return ownerAudioUnlocked;
+            })
+            .catch(function () {
+                ownerAudioUnlocked = false;
+                return false;
+            });
+    }
+
+    function playOwnerOrderChime() {
+        if (!ownerSoundEnabled()) return;
+        const context = getOwnerAudioContext();
+        if (!context) return;
+
+        const play = function () {
+            if (context.state !== 'running') return;
+            const now = context.currentTime;
+            const gain = context.createGain();
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.13, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+            gain.connect(context.destination);
+
+            [0, 0.18].forEach(function (offset, index) {
+                const oscillator = context.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(index === 0 ? 784 : 988, now + offset);
+                oscillator.connect(gain);
+                oscillator.start(now + offset);
+                oscillator.stop(now + offset + 0.18);
+            });
+        };
+
+        if (ownerAudioUnlocked && context.state === 'running') {
+            play();
+            return;
+        }
+
+        unlockOwnerAudio().then(function (unlocked) {
+            if (unlocked) play();
         });
     }
 
@@ -316,6 +425,43 @@
         }).join('');
     }
 
+    function unreadOwnerOrderNotificationIds(items) {
+        return (items || []).filter(function (item) {
+            return item && item.type === 'order_new' && toInt(item.is_read) === 0 && item.id;
+        }).map(function (item) {
+            return String(item.id);
+        });
+    }
+
+    function handleOwnerOrderSoundAlerts(items) {
+        if (!document.getElementById('ownerSoundToggle')) return;
+
+        const orderIds = unreadOwnerOrderNotificationIds(items);
+        if (!orderIds.length) {
+            ownerSoundBaselineReady = true;
+            return;
+        }
+
+        if (!ownerSoundBaselineReady) {
+            mergeOwnerSoundSeenIds(orderIds);
+            ownerSoundBaselineReady = true;
+            return;
+        }
+
+        const seenIds = getOwnerSoundSeenIds();
+        const newIds = orderIds.filter(function (id) {
+            return !seenIds.includes(id);
+        });
+
+        mergeOwnerSoundSeenIds(orderIds);
+
+        if (!newIds.length) return;
+        playOwnerOrderChime();
+        if (typeof window.ownerShowToast === 'function') {
+            window.ownerShowToast('New print order received.', 'info');
+        }
+    }
+
     function applyNotificationCount(count) {
         const ownerToggle = document.getElementById('ownerNotificationToggle');
         setBadge(ownerToggle, count, '.notification-badge');
@@ -343,10 +489,33 @@
             .then(function (data) {
                 if (!data || !data.success) return;
                 applyNotificationCount(toInt(data.unread_count));
-                if (data.role === 'shop_owner') renderOwnerNotifications(data.items || []);
+                if (data.role === 'shop_owner') {
+                    renderOwnerNotifications(data.items || []);
+                    handleOwnerOrderSoundAlerts(data.items || []);
+                }
                 if (data.role === 'super_admin') renderAdminNotifications(data.items || []);
             })
             .catch(function () {});
+    }
+
+    function setupOwnerSoundToggle() {
+        const toggle = document.getElementById('ownerSoundToggle');
+        if (!toggle) return;
+
+        updateOwnerSoundToggle();
+
+        toggle.addEventListener('click', function () {
+            const enabled = !ownerSoundEnabled();
+            setOwnerSoundEnabled(enabled);
+            updateOwnerSoundToggle();
+            if (enabled) unlockOwnerAudio();
+        });
+
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
+            document.addEventListener(eventName, function () {
+                if (ownerSoundEnabled()) unlockOwnerAudio();
+            }, { once: true, passive: true });
+        });
     }
 
     function setupNotificationPolling() {
@@ -359,7 +528,7 @@
         function schedule() {
             window.setTimeout(function () {
                 refreshNotifications().finally(schedule);
-            }, document.hidden ? 60000 : 12000);
+            }, document.hidden ? 60000 : 3000);
         }
         schedule();
         document.addEventListener('visibilitychange', function () {
@@ -747,6 +916,7 @@
     }
 
     setupLiveSearch();
+    setupOwnerSoundToggle();
     setupNotificationPolling();
     setupNotificationDelegation();
     setupOwnerOrderPolling();

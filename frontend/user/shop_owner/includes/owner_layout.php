@@ -67,6 +67,7 @@ function ownerIcon($name, $class = 'icon')
         'search' => '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
         'settings' => '<path d="M12.2 2h-.4a2 2 0 0 0-2 1.8l-.1 1a7.8 7.8 0 0 0-1.4.8l-.9-.4a2 2 0 0 0-2.5.8l-.2.4a2 2 0 0 0 .4 2.6l.8.6a7.8 7.8 0 0 0 0 1.6l-.8.6a2 2 0 0 0-.4 2.6l.2.4a2 2 0 0 0 2.5.8l.9-.4a7.8 7.8 0 0 0 1.4.8l.1 1a2 2 0 0 0 2 1.8h.4a2 2 0 0 0 2-1.8l.1-1a7.8 7.8 0 0 0 1.4-.8l.9.4a2 2 0 0 0 2.5-.8l.2-.4a2 2 0 0 0-.4-2.6l-.8-.6a7.8 7.8 0 0 0 0-1.6l.8-.6a2 2 0 0 0 .4-2.6l-.2-.4a2 2 0 0 0-2.5-.8l-.9.4a7.8 7.8 0 0 0-1.4-.8l-.1-1a2 2 0 0 0-2-1.8Z"/><circle cx="12" cy="12" r="3"/>',
         'shopping-cart' => '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 2h3l3.6 12.6a2 2 0 0 0 2 1.4H18a2 2 0 0 0 2-1.5L22 7H6"/>',
+        'volume-2' => '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>',
         'store' => '<path d="M3 9h18l-2-5H5Z"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
         'trending-up' => '<path d="M3 17 9 11l4 4 8-8"/><path d="M14 7h7v7"/>',
         'upload' => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
@@ -272,6 +273,11 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                     <strong>Admin Panel</strong>
                 </div>
                 <div class="topbar-actions">
+                    <button type="button" class="owner-sound-toggle" id="ownerSoundToggle"
+                        aria-label="Mute new order sound alerts" aria-pressed="true"
+                        title="New order sound alerts on">
+                        <?php echo ownerIcon('volume-2', 'icon'); ?>
+                    </button>
                     <div class="notification-popover-wrap">
                         <button type="button" class="notification-link" id="ownerNotificationToggle"
                             aria-label="Notifications" aria-expanded="false" aria-controls="ownerNotificationPopover">

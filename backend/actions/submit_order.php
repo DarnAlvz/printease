@@ -68,6 +68,56 @@ if (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UP
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
+function validateOrderDocumentUpload(array $file)
+{
+    $max_file_size = 25 * 1024 * 1024;
+
+    if (($file['size'] ?? 0) > $max_file_size) {
+        setError("Document file must be 25MB or smaller.");
+        return false;
+    }
+
+    $original_name = basename((string) ($file['name'] ?? ''));
+    $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+    if ($extension !== 'pdf') {
+        setError("Only PDF files are accepted for print orders.");
+        return false;
+    }
+
+    $tmp_name = (string) ($file['tmp_name'] ?? '');
+    if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+        setError("Please upload a valid PDF file.");
+        return false;
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($tmp_name);
+    if ($mime !== 'application/pdf') {
+        setError("Only PDF files are accepted for print orders.");
+        return false;
+    }
+
+    $handle = fopen($tmp_name, 'rb');
+    if ($handle === false) {
+        setError("Please upload a valid PDF file.");
+        return false;
+    }
+
+    $header = fread($handle, 4);
+    fclose($handle);
+
+    if ($header !== '%PDF') {
+        setError("Please upload a valid PDF file.");
+        return false;
+    }
+
+    return true;
+}
+
+if (!validateOrderDocumentUpload($_FILES['document_file'])) {
+    redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
+}
+
 function buildCloudinaryOrderSafeName($original_name)
 {
     $original_name = basename((string) $original_name);
@@ -132,16 +182,13 @@ $original_name = basename($_FILES['document_file']['name']);
 $file_type = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
 
 $file_tmp = $_FILES['document_file']['tmp_name'];
-$is_pdf = $file_type === 'pdf';
 $cloudinary_public_id = null;
 $cloudinary_resource_type = null;
 $cloudinary_upload_copy = null;
 $transaction_started = false;
 
 try {
-    if ($is_pdf) {
-        $page_count = getPdfPageCount($file_tmp, $detected_page_count);
-    }
+    $page_count = getPdfPageCount($file_tmp, $detected_page_count);
 
     $total_amount = (float) $service['price_per_page'] * $page_count * $copies;
     $cloudinary_safe_name = buildCloudinaryOrderSafeName($original_name);

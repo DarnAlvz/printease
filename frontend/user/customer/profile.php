@@ -21,6 +21,9 @@ $user = mysqli_fetch_assoc($result);
 $account_status = $user['account_status'] ?? 'incomplete';
 $profile_picture_url = !empty($user['profile_picture']) ? BASE_URL . e($user['profile_picture']) : '';
 $valid_id_url = !empty($user['valid_id_file']) ? BASE_URL . e($user['valid_id_file']) : '';
+$valid_id_extension = strtolower(pathinfo((string) ($user['valid_id_file'] ?? ''), PATHINFO_EXTENSION));
+$valid_id_is_pdf = $valid_id_extension === 'pdf';
+$valid_id_is_image = in_array($valid_id_extension, ['jpg', 'jpeg', 'png', 'webp'], true);
 $customer_name = (string) ($user['full_name'] ?? ($_SESSION['full_name'] ?? 'Customer'));
 $customer_email = (string) ($user['email'] ?? ($_SESSION['email'] ?? ''));
 $created_at = !empty($user['created_at']) ? date('M j, Y', strtotime($user['created_at'])) : 'N/A';
@@ -76,6 +79,39 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
         body.customer-modal-open {
             overflow: hidden;
+        }
+
+        .customer-valid-id-panel {
+            width: min(100%, 720px);
+        }
+
+        .customer-valid-id-preview {
+            display: grid;
+            place-items: center;
+            min-height: 55vh;
+            max-height: 68vh;
+            overflow: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            background: #f8fafc;
+        }
+
+        .customer-valid-id-preview img,
+        .customer-valid-id-preview iframe {
+            width: 100%;
+            border: 0;
+            border-radius: 14px;
+        }
+
+        .customer-valid-id-preview img {
+            height: auto;
+            max-height: 68vh;
+            object-fit: contain;
+        }
+
+        .customer-valid-id-preview iframe {
+            min-height: 62vh;
+            background: #fff;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -156,7 +192,9 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                         <span>
                             <small>Valid ID</small>
                             <?php if ($valid_id_url !== ''): ?>
-                                <a href="<?php echo $valid_id_url; ?>" target="_blank" rel="noopener noreferrer">View uploaded ID</a>
+                                <button type="button" class="text-blue-600 font-semibold text-left"
+                                    data-valid-id-modal-open aria-haspopup="dialog"
+                                    aria-controls="customerValidIdModal">View uploaded ID</button>
                             <?php else: ?>
                                 <strong>Not uploaded</strong>
                             <?php endif; ?>
@@ -242,10 +280,10 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                             class="w-full border rounded-xl p-3">
                         <p class="text-xs text-gray-500 mt-1">Upload only if you need to replace your verification document.</p>
                         <?php if ($valid_id_url !== ''): ?>
-                            <a href="<?php echo $valid_id_url; ?>" target="_blank" rel="noopener noreferrer"
+                            <button type="button" data-valid-id-modal-open
                                 class="inline-block mt-2 text-blue-600 font-semibold">
                                 View Current ID
-                            </a>
+                            </button>
                         <?php endif; ?>
                     </div>
 
@@ -373,6 +411,43 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
         </section>
     </div>
 
+    <?php if ($valid_id_url !== ''): ?>
+        <div class="customer-modal" id="customerValidIdModal" role="dialog" aria-modal="true"
+            aria-labelledby="customerValidIdTitle" hidden>
+            <section class="customer-modal-panel customer-valid-id-panel bg-white rounded-2xl shadow-2xl p-5 md:p-6"
+                tabindex="-1">
+                <header class="flex items-start justify-between gap-4 mb-5">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900" id="customerValidIdTitle">Valid ID</h2>
+                        <p class="text-sm text-gray-600 mt-1">Review your uploaded verification document.</p>
+                    </div>
+                    <button type="button" data-valid-id-modal-close
+                        class="w-10 h-10 rounded-full text-gray-600 hover:bg-gray-100 text-2xl leading-none focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        aria-label="Close valid ID preview">&times;</button>
+                </header>
+
+                <div class="customer-valid-id-preview">
+                    <?php if ($valid_id_is_image): ?>
+                        <img src="<?php echo $valid_id_url; ?>" alt="Uploaded valid ID preview">
+                    <?php elseif ($valid_id_is_pdf): ?>
+                        <iframe src="<?php echo $valid_id_url; ?>#toolbar=0" title="Uploaded valid ID PDF preview"></iframe>
+                    <?php else: ?>
+                        <p class="text-sm text-gray-600 p-5 text-center">Preview is not available for this file type.</p>
+                    <?php endif; ?>
+                </div>
+
+                <div class="flex flex-col sm:flex-row sm:justify-end gap-3 pt-4">
+                    <a href="<?php echo $valid_id_url; ?>" target="_blank" rel="noopener noreferrer"
+                        class="px-5 py-3 rounded-xl font-semibold bg-blue-700 text-white text-center hover:bg-blue-800">
+                        Open full document
+                    </a>
+                    <button type="button" data-valid-id-modal-close
+                        class="px-5 py-3 rounded-xl font-semibold border text-gray-700 hover:bg-gray-50">Close</button>
+                </div>
+            </section>
+        </div>
+    <?php endif; ?>
+
     <?php renderCustomerLayoutEnd('profile'); ?>
 
     <script src="assets/js/location.js"></script>
@@ -444,6 +519,84 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     }
                 });
             }
+        })();
+
+        (function () {
+            const modal = document.getElementById('customerValidIdModal');
+            if (!modal) return;
+
+            const panel = modal.querySelector('.customer-modal-panel');
+            const triggers = document.querySelectorAll('[data-valid-id-modal-open]');
+            let previousFocus = null;
+
+            function focusableElements() {
+                return Array.from(modal.querySelectorAll(
+                    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]'
+                )).filter(function (element) {
+                    return !element.hidden;
+                });
+            }
+
+            function openModal() {
+                previousFocus = document.activeElement;
+                modal.hidden = false;
+                document.body.classList.add('customer-modal-open');
+                window.requestAnimationFrame(function () {
+                    modal.classList.add('is-visible');
+                    (panel || modal).focus();
+                });
+            }
+
+            function closeModal() {
+                modal.classList.remove('is-visible');
+                document.body.classList.remove('customer-modal-open');
+                window.setTimeout(function () {
+                    modal.hidden = true;
+                    if (previousFocus && typeof previousFocus.focus === 'function') {
+                        previousFocus.focus();
+                    }
+                }, 200);
+            }
+
+            triggers.forEach(function (trigger) {
+                trigger.addEventListener('click', openModal);
+            });
+
+            modal.querySelectorAll('[data-valid-id-modal-close]').forEach(function (button) {
+                button.addEventListener('click', closeModal);
+            });
+
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+
+            modal.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeModal();
+                    return;
+                }
+
+                if (event.key !== 'Tab') return;
+                const focusable = focusableElements();
+                if (focusable.length === 0) {
+                    event.preventDefault();
+                    if (panel) panel.focus();
+                    return;
+                }
+
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            });
         })();
 
         (function () {

@@ -131,10 +131,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
                     <label class="customer-order-field">
                         <span>Upload Document</span>
-                        <input type="file" name="document_file" id="document_file" required
+                        <input type="file" name="document_file" id="document_file" accept="application/pdf,.pdf" required
                             class="w-full border rounded-xl p-3">
                         <small>Each order must contain exactly one file attachment only.
-                            Only PDF files are accepted.
+                            Only PDF files up to 25MB are accepted.
                         </small>
                     </label>
                 </section>
@@ -274,6 +274,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         const paperPrice = document.querySelector("[data-paper-price]");
         const totalBreakdown = document.querySelector("[data-total-breakdown]");
         const reviewBreakdown = document.querySelector("[data-review-breakdown]");
+        const maxDocumentFileSize = 25 * 1024 * 1024;
         let currentStep = 0;
         let pageCountLoading = false;
         let pageCountRequestId = 0;
@@ -295,6 +296,19 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
         }
 
+        function validateDocumentFile(file) {
+            if (!file) {
+                return "Please upload your document before continuing.";
+            }
+            if (file.size > maxDocumentFileSize) {
+                return "Document file must be 25MB or smaller.";
+            }
+            if (!selectedFileIsPdf(file)) {
+                return "Only PDF files are accepted for print orders.";
+            }
+            return "";
+        }
+
         async function detectDocumentPages() {
             const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
             const requestId = ++pageCountRequestId;
@@ -305,9 +319,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 return;
             }
 
-            if (!selectedFileIsPdf(file)) {
+            const fileValidationMessage = validateDocumentFile(file);
+            if (fileValidationMessage) {
                 pageCountLoading = false;
-                setPageCount(1, "Non-PDF files are counted as 1 page.");
+                setPageCount(1, fileValidationMessage);
                 return;
             }
 
@@ -414,10 +429,14 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         function validateStep(step) {
             clearAlert();
 
-            if (step === 0 && (!documentFile.files || documentFile.files.length === 0)) {
-                showAlert("Please upload your document before continuing.");
-                documentFile.focus();
-                return false;
+            if (step === 0) {
+                const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
+                const fileValidationMessage = validateDocumentFile(file);
+                if (fileValidationMessage) {
+                    showAlert(fileValidationMessage);
+                    documentFile.focus();
+                    return false;
+                }
             }
 
             if (step === 1) {

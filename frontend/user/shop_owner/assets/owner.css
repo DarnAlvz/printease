@@ -363,6 +363,7 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
 .topbar-title,
 .topbar-actions,
 .owner-user,
+.owner-sound-toggle,
 .notification-link {
     display: flex;
     align-items: center;
@@ -392,6 +393,45 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
     color: #334155;
     background: transparent;
     cursor: pointer;
+}
+
+.owner-sound-toggle {
+    position: relative;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 12px;
+    color: #03045e;
+    background: #eefbff;
+    box-shadow: 0 8px 18px rgba(0, 119, 182, .14);
+    cursor: pointer;
+    transition: color .18s ease, background .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+.owner-sound-toggle:hover,
+.owner-sound-toggle:focus-visible {
+    background: #e7f7ff;
+    outline: none;
+}
+
+.owner-sound-toggle[aria-pressed="false"] {
+    color: #64748b;
+    background: transparent;
+    box-shadow: none;
+    opacity: .72;
+}
+
+.owner-sound-toggle[aria-pressed="false"]::after {
+    content: "";
+    position: absolute;
+    left: 9px;
+    right: 9px;
+    top: 50%;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transform: rotate(-38deg);
 }
 
 .notification-link:hover,
