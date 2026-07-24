@@ -127,7 +127,7 @@ if (isset($_POST['save_profile'])) {
     }
 
     if ($merchant_link !== '' && (strlen($merchant_link) > 500 || !filter_var($merchant_link, FILTER_VALIDATE_URL) || !preg_match('/^https?:\\/\\//i', $merchant_link))) {
-        setError("Please enter a valid optional payment link that starts with http:// or https://.");
+        setError("Please enter a valid optional GCash merchant link that starts with http:// or https://.");
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     }
@@ -196,6 +196,18 @@ if (isset($_POST['save_profile'])) {
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     }
+
+    $normalize_payment_value = static function ($value) {
+        return trim((string) ($value ?? ''));
+    };
+    $existing_payment_qr = $existing_payment_settings['gcash_qr_code'] ?? ($existing['gcash_qr_file'] ?? '');
+    $payment_details_changed = empty($existing_payment_settings)
+        || $has_new_gcash_qr
+        || $normalize_payment_value($existing_payment_settings['gcash_account_name'] ?? '') !== $gcash_name
+        || $normalize_payment_value($existing_payment_settings['gcash_number'] ?? '') !== $gcash_number
+        || $normalize_payment_value($existing_payment_settings['merchant_link'] ?? '') !== $merchant_link
+        || $normalize_payment_value($existing_payment_settings['instructions'] ?? '') !== $payment_instructions
+        || $normalize_payment_value($existing_payment_qr) !== $normalize_payment_value($new_gcash_qr_name);
 
     if ($has_new_permit) {
         $allowed_permit_extensions = ['jpg', 'jpeg', 'png', 'webp', 'jfif', 'pdf'];
@@ -414,9 +426,16 @@ if (isset($_POST['save_profile'])) {
                     weekend_open_time,
                     weekend_close_time
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)";
 
         $stmt = mysqli_prepare($conn, $sql);
+
+        if (!$stmt) {
+            error_log("SQL prepare error in save_shop_profile insert: " . mysqli_error($conn));
+            setError("Unable to save shop profile. Please try again.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
 
         mysqli_stmt_bind_param(
             $stmt,
@@ -442,11 +461,6 @@ if (isset($_POST['save_profile'])) {
         $activity = "Saved shop profile (pending verification)";
     }
 
-    if (!$stmt) {
-        error_log("SQL prepare error in save_shop_profile: " . mysqli_error($conn));
-        die("A system error occurred. Please try again later.");
-    }
-
     if (mysqli_stmt_execute($stmt)) {
         if (!$existing) {
             $shop_id = mysqli_insert_id($conn);
@@ -459,21 +473,39 @@ if (isset($_POST['save_profile'])) {
         mysqli_stmt_bind_param($gcash_stmt, "sssii", $gcash_name, $gcash_number, $new_gcash_qr_name, $shop_id, $owner_id);
         mysqli_stmt_execute($gcash_stmt);
 
-        $payment_settings_sql = "INSERT INTO shop_payment_settings
-            (shop_id, payment_method, merchant_link, gcash_account_name, gcash_number, gcash_qr_code, instructions, approval_status, is_active, created_at, updated_at)
-            VALUES (?, 'gcash', ?, ?, ?, ?, ?, 'pending', 1, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE
-                merchant_link = VALUES(merchant_link),
-                gcash_account_name = VALUES(gcash_account_name),
-                gcash_number = VALUES(gcash_number),
-                gcash_qr_code = VALUES(gcash_qr_code),
-                instructions = VALUES(instructions),
-                approval_status = 'pending',
-                is_active = 1,
-                updated_at = NOW()";
-        $payment_settings_stmt = mysqli_prepare($conn, $payment_settings_sql);
-        mysqli_stmt_bind_param($payment_settings_stmt, "isssss", $shop_id, $merchant_link, $gcash_name, $gcash_number, $new_gcash_qr_name, $payment_instructions);
-        mysqli_stmt_execute($payment_settings_stmt);
+        if ($payment_details_changed) {
+            $payment_settings_sql = "INSERT INTO shop_payment_settings
+                (shop_id, payment_method, merchant_link, gcash_account_name, gcash_number, gcash_qr_code, instructions, approval_status, is_active, created_at, updated_at)
+                VALUES (?, 'gcash', ?, ?, ?, ?, ?, 'pending', 1, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                    merchant_link = VALUES(merchant_link),
+                    gcash_account_name = VALUES(gcash_account_name),
+                    gcash_number = VALUES(gcash_number),
+                    gcash_qr_code = VALUES(gcash_qr_code),
+                    instructions = VALUES(instructions),
+                    approval_status = 'pending',
+                    is_active = 1,
+                    updated_at = NOW()";
+            $payment_settings_stmt = mysqli_prepare($conn, $payment_settings_sql);
+            mysqli_stmt_bind_param($payment_settings_stmt, "isssss", $shop_id, $merchant_link, $gcash_name, $gcash_number, $new_gcash_qr_name, $payment_instructions);
+            mysqli_stmt_execute($payment_settings_stmt);
+        }
+
+        $service_types = array_values(array_unique(array_filter(array_map('trim', $_POST['service_types'] ?? []))));
+        if (!in_array('Document Printing', $service_types, true)) {
+            array_unshift($service_types, 'Document Printing');
+        }
+        $del_st = mysqli_prepare($conn, "DELETE FROM shop_service_types WHERE shop_id = ?");
+        mysqli_stmt_bind_param($del_st, "i", $shop_id);
+        mysqli_stmt_execute($del_st);
+        if (!empty($service_types)) {
+            $ins_st = mysqli_prepare($conn, "INSERT INTO shop_service_types (shop_id, service_type) VALUES (?, ?)");
+            foreach ($service_types as $st) {
+                $st = substr($st, 0, 100);
+                mysqli_stmt_bind_param($ins_st, "is", $shop_id, $st);
+                mysqli_stmt_execute($ins_st);
+            }
+        }
 
         if (!$existing || $has_new_permit) {
             $pending_user_sql = "UPDATE users
@@ -495,18 +527,23 @@ if (isset($_POST['save_profile'])) {
                 'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
             ]);
         }
-        sendRoleNotification($conn, 'super_admin', 'A print shop payment setting is ready for review.', [
-            'type' => 'payment_settings_submitted',
-            'title' => 'Payment settings submitted',
-            'target_url' => BASE_URL . 'frontend/user/superadmin/manage_print_shops.php#payment-settings-review',
-            'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
-        ]);
+        if ($payment_details_changed) {
+            sendRoleNotification($conn, 'super_admin', 'A print shop payment setting is ready for review.', [
+                'type' => 'payment_settings_submitted',
+                'title' => 'Payment settings submitted',
+                'target_url' => BASE_URL . 'frontend/user/superadmin/manage_print_shops.php#payment-settings-review',
+                'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
+            ]);
+        }
         setMessage($message);
 
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     } else {
-        echo "Failed to save shop profile.";
+        error_log("SQL execute error in save_shop_profile: " . mysqli_stmt_error($stmt));
+        setError("Unable to save shop profile. Please try again.");
+        header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+        exit();
     }
 }
 ?>

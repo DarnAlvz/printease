@@ -65,6 +65,19 @@ if (mysqli_stmt_execute($stmt)) {
     $label = permitStatusLabel($status);
     $shop_name = (string) $shop['shop_name'];
 
+    $owner_id = (int) $shop['owner_id'];
+    if (in_array($status, ['verified', 'rejected', 'disabled'], true)) {
+        $user_account_status = match ($status) {
+            'verified' => 'verified',
+            'disabled' => 'inactive',
+            default => 'pending',
+        };
+        $cascade_sql = "UPDATE users SET account_status = ? WHERE user_id = ? AND role = 'shop_owner'";
+        $cascade_stmt = mysqli_prepare($conn, $cascade_sql);
+        mysqli_stmt_bind_param($cascade_stmt, "si", $user_account_status, $owner_id);
+        mysqli_stmt_execute($cascade_stmt);
+    }
+
     $status_message = "Your business permit for \"" . $shop_name . "\" has been " . $label . ".";
     if ($status === 'disabled') {
         $status_message = "Your print shop \"" . $shop_name . "\" has been disabled by the administrator. Please contact support for assistance.";

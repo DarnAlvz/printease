@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/cache.php";
 
 header('Content-Type: application/json');
 
@@ -39,6 +40,7 @@ if (!empty($_POST['mark_all'])) {
     $all_stmt = mysqli_prepare($conn, "UPDATE notifications SET is_read = 1, read_at = NOW() WHERE user_id = ? AND is_read = 0");
     mysqli_stmt_bind_param($all_stmt, 'i', $user_id);
     mysqli_stmt_execute($all_stmt);
+    cacheInvalidate("notifications:{$user_id}");
     notificationReadResponse(true, mysqli_stmt_affected_rows($all_stmt) > 0, 0);
 }
 
@@ -51,6 +53,10 @@ $stmt = mysqli_prepare($conn, $sql);
 mysqli_stmt_bind_param($stmt, "ii", $notification_id, $user_id);
 mysqli_stmt_execute($stmt);
 $updated = mysqli_stmt_affected_rows($stmt) > 0;
+
+if ($updated) {
+    cacheInvalidate("notifications:{$user_id}");
+}
 
 $exists_sql = "SELECT notification_id FROM notifications WHERE notification_id = ? AND user_id = ? LIMIT 1";
 $exists_stmt = mysqli_prepare($conn, $exists_sql);

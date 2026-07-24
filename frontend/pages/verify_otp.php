@@ -28,7 +28,7 @@ $masked_email = maskResetEmail($email);
 $can_verify = $email !== '' && !empty($_SESSION['otp']) && !empty($_SESSION['otp_expires']);
 
 $success_messages = [
-    '1' => 'OTP sent successfully. Please check your Gmail inbox.',
+    '1' => 'Verification code sent. Please check your inbox.',
 ];
 
 $error_messages = [

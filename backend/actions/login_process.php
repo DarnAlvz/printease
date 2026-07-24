@@ -65,7 +65,7 @@ if (in_array(($user['account_status'] ?? ''), ['rejected', 'inactive'], true)) {
 
 if (!password_verify($password, $user['password'])) {
     recordFailedLogin($conn, $email, $ip);
-    redirectToLogin('invalid_credentials');
+        redirectToLogin('invalid_credentials');
 }
 
 rateLimitClear($conn, 'login_email_ip', $email, $ip);

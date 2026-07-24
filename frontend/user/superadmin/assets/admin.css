@@ -2089,6 +2089,91 @@ body.admin-dashboard-body .approval-btn {
     }
 }
 
+/* ── Confirmation Modal ─────────────────────────────── */
+.admin-confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10060;
+    padding: 24px;
+    background: rgba(3, 4, 94, .38);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-confirm-modal.is-open {
+    display: flex;
+}
+
+.admin-confirm-modal__panel {
+    position: relative;
+    width: min(420px, 100%);
+    padding: 32px 28px 24px;
+    border: 1px solid #b7efff;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(3, 4, 94, .24);
+    text-align: center;
+}
+
+.admin-confirm-modal__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #fef3cd;
+    color: #856404;
+    margin-bottom: 16px;
+}
+
+.admin-confirm-modal__icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.admin-confirm-modal__panel h3 {
+    margin: 0 0 10px;
+    color: var(--admin-ink);
+    font-size: 18px;
+}
+
+.admin-confirm-modal__panel p {
+    margin: 0 0 24px;
+    color: var(--admin-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.admin-confirm-modal__actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.admin-confirm-modal__actions .btn {
+    min-height: 42px;
+    padding: 0 22px;
+    border-radius: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.admin-confirm-modal__confirm-btn {
+    color: #fff;
+    background: linear-gradient(135deg, var(--admin-blue), var(--admin-cyan));
+}
+
+.admin-confirm-modal__confirm-btn--danger {
+    background: linear-gradient(135deg, #dc3545, #a71d2a);
+}
+
+.admin-confirm-modal__confirm-btn--warning {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+}
+
 .admin-report-dashboard {
     display: grid;
     gap: 28px;
@@ -3450,6 +3535,30 @@ body.admin-dashboard-body .metric-card {
     .admin-activity-badge {
         width: fit-content;
     }
+}
+
+body.admin-body .notification-center,
+body.admin-body [data-notification-center] {
+    --notification-page-bg: transparent;
+    --notification-header-bg: #ffffff;
+    --notification-header-border: #e2e8f0;
+    --notification-title: #0f172a;
+    --notification-card-bg: #ffffff;
+    --notification-card-border: #e2e8f0;
+    --notification-card-shadow: 0 2px 8px rgba(0, 0, 0, .05);
+    --notification-unread-bg: #f0fdff;
+    --notification-accent: #05b7d3;
+    --notification-icon-bg: #e0f2fe;
+    --notification-icon-color: #0284c7;
+    --notification-message: #475569;
+    --notification-time: #64748b;
+    --notification-button-bg: #0077b6;
+    width: 100%;
+    margin: 0 auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

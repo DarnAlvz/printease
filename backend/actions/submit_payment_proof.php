@@ -61,7 +61,7 @@ mysqli_stmt_execute($order_stmt);
 $order = mysqli_fetch_assoc(mysqli_stmt_get_result($order_stmt));
 
 if (!$order) {
-    setError("Order not found.");
+    setError("Request not found.");
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 }
 
@@ -158,14 +158,14 @@ try {
 
         if (!$saved) {
             if (isDuplicateKeyError($conn)) {
-                throw new RuntimeException("Payment proof already submitted for this order.", 1062);
+                throw new RuntimeException("Payment proof already submitted for this request.", 1062);
             }
 
             throw new Exception("Failed to update payment proof. Please try again.");
         }
 
         if (mysqli_stmt_affected_rows($stmt) < 1) {
-            throw new Exception("Payment proof already submitted for this order.");
+            throw new Exception("Payment proof already submitted for this request.");
         }
 
         if (!empty($old_proof_path)) {
@@ -184,14 +184,14 @@ try {
 
         if (!$saved) {
             if (isDuplicateKeyError($conn)) {
-                throw new RuntimeException("Payment proof already submitted for this order.", 1062);
+                throw new RuntimeException("Payment proof already submitted for this request.", 1062);
             }
 
             throw new Exception("Failed to save payment proof. Please try again.");
         }
     }
 
-    sendNotification($conn, $order['owner_id'], "Payment proof submitted for order #" . $order['order_code'] . ".", [
+    sendNotification($conn, $order['owner_id'], "Payment proof submitted for request #" . $order['order_code'] . ".", [
         'type' => 'payment_submitted', 'title' => 'Payment proof submitted',
         'target_url' => BASE_URL . 'frontend/user/shop_owner/orders.php?focus_order_id=' . (int) $order_id,
         'metadata' => ['order_id' => (int) $order_id, 'order_code' => $order['order_code']],
@@ -207,8 +207,8 @@ try {
 
     cleanupPaymentProofUpload($target_path);
 
-    if ((int) $e->getCode() === 1062 || $e->getMessage() === "Payment proof already submitted for this order.") {
-        setError("Payment proof already submitted for this order.");
+    if ((int) $e->getCode() === 1062 || $e->getMessage() === "Payment proof already submitted for this request.") {
+        setError("Payment proof already submitted for this request.");
         redirect(BASE_URL . "frontend/user/customer/orders.php");
     }
 

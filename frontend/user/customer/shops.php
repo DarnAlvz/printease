@@ -56,7 +56,6 @@ if ($search !== '') {
 }
 
 $sql .= " GROUP BY ps.shop_id
-          HAVING service_count > 0
           ORDER BY CASE ps.shop_status WHEN 'available' THEN 0 ELSE 1 END, ps.shop_name ASC";
 
 $stmt = mysqli_prepare($conn, $sql);
@@ -203,7 +202,6 @@ function customerShopDirectionsUrl(array $shop): string
                         $shop_logo = trim((string) ($shop['shop_logo'] ?? ''));
                         $is_open = customerShopIsOpenNow($shop);
                         $hours_label = customerShopHoursLabel($shop);
-                        $contact = trim((string) ($shop['contact_number'] ?? '')) ?: 'No contact listed';
                         ?>
                         <article class="customer-map-shop-card customer-shops-card">
                             <div class="customer-map-shop-head">
@@ -224,14 +222,14 @@ function customerShopDirectionsUrl(array $shop): string
 
                             <div class="customer-map-shop-facts">
                                 <span><strong><?php echo $is_open ? 'Open now' : 'Closed now'; ?></strong><?php echo e($hours_label); ?></span>
-                                <span><strong><?php echo (int) $shop['service_count']; ?> services</strong><?php echo customerShopMoney($shop['starting_price']); ?> start</span>
-                                <span><strong>Contact</strong><?php echo e($contact); ?></span>
+                                <span><strong><?php echo (int) $shop['service_count']; ?> pricing option<?php echo (int) $shop['service_count'] !== 1 ? 's' : ''; ?></strong><?php echo customerShopMoney($shop['starting_price']); ?> start</span>
+                                <span><strong>Pickup only</strong>At shop counter</span>
                             </div>
 
                             <div class="customer-map-shop-actions">
                                 <a href="<?php echo BASE_URL; ?>frontend/user/customer/shopLocation.php?shop_id=<?php echo e($shop['shop_id']); ?>">View Map</a>
                                 <a href="<?php echo e(customerShopDirectionsUrl($shop)); ?>" target="_blank" rel="noopener">Directions</a>
-                                <a class="primary" href="<?php echo BASE_URL; ?>frontend/user/customer/place_order.php?shop_id=<?php echo e($shop['shop_id']); ?>">Order Now</a>
+                                <a class="primary" href="<?php echo BASE_URL; ?>frontend/user/customer/place_order.php?shop_id=<?php echo e($shop['shop_id']); ?>">Request Print</a>
                             </div>
                         </article>
                     <?php endwhile; ?>

@@ -5,7 +5,8 @@
         liveSearch: baseUrl + 'backend/actions/live_search.php',
         notifications: baseUrl + 'backend/actions/notification_feed.php',
         markRead: baseUrl + 'backend/actions/mark_notification_read.php',
-        ownerOrders: baseUrl + 'backend/actions/owner_order_feed.php'
+        ownerOrders: baseUrl + 'backend/actions/owner_order_feed.php',
+        serviceTypes: baseUrl + 'backend/actions/shop_service_type_feed.php'
     };
     const timers = new WeakMap();
     const cssEscape = window.CSS && typeof window.CSS.escape === 'function'
@@ -74,8 +75,8 @@
         if (!toggle) return;
         const enabled = ownerSoundEnabled();
         toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        toggle.setAttribute('aria-label', enabled ? 'Mute new order sound alerts' : 'Enable new order sound alerts');
-        toggle.title = enabled ? 'New order sound alerts on' : 'New order sound alerts muted';
+        toggle.setAttribute('aria-label', enabled ? 'Mute new print request sound alerts' : 'Enable new print request sound alerts');
+        toggle.title = enabled ? 'New print request sound alerts on' : 'New print request sound alerts muted';
     }
 
     function getOwnerAudioContext() {
@@ -271,14 +272,24 @@
     }
 
     function replaceLiveRegions(regions) {
+        const replaced = [];
         Object.keys(regions || {}).forEach(function (name) {
             const current = document.querySelector('[data-live-region="' + cssEscape(name) + '"]');
             if (!current) return;
             const template = document.createElement('template');
             template.innerHTML = regions[name].trim();
             const next = template.content.firstElementChild;
-            if (next) current.replaceWith(next);
+            if (next) {
+                current.replaceWith(next);
+                replaced.push(name);
+            }
         });
+        if (replaced.length) {
+            window.dispatchEvent(new CustomEvent('printease:live-regions-replaced', {
+                detail: { regions: replaced }
+            }));
+        }
+        return replaced;
     }
 
     function findSearchInput(form) {
@@ -388,6 +399,27 @@
         }).join('');
     }
 
+    function refreshLiveTarget(target, options) {
+        if (!target) return Promise.resolve(false);
+        const params = { target: target };
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.forEach(function (value, key) {
+            params[key] = value;
+        });
+
+        return fetch(buildUrl(endpoints.liveSearch, params), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (!data || !data.success) return false;
+                replaceLiveRegions(data.regions);
+                return true;
+            })
+            .catch(function () { return false; });
+    }
+
     function ownerNotificationTone(item) {
         const type = String(item && item.type || '').toLowerCase();
         const text = String(((item && item.title) || '') + ' ' + ((item && item.message) || '')).toLowerCase();
@@ -458,7 +490,7 @@
         if (!newIds.length) return;
         playOwnerOrderChime();
         if (typeof window.ownerShowToast === 'function') {
-            window.ownerShowToast('New print order received.', 'info');
+            window.ownerShowToast('New print request received.', 'info');
         }
     }
 
@@ -704,8 +736,218 @@
         });
     }
 
+    function serviceTypesHtml(types) {
+        const items = Array.isArray(types) ? types : [];
+        let html = '';
+        if (items.length > 3) {
+            html += '<span class="customer-service-tag-count">Offers ' + items.length + '</span>';
+        }
+        html += items.map(function (type, index) {
+            return '<span class="customer-service-tag"' + (index >= 3 ? ' data-extra-service-tag hidden' : '') + '>' + escapeHtml(type) + '</span>';
+        }).join('');
+        if (items.length > 3) {
+            html += '<button type="button" class="customer-service-tag-more" data-service-tags-toggle>+' + (items.length - 3) + ' more</button>';
+        }
+        return html;
+    }
+
+    function renderOwnerServiceChoice(type, checked, locked, custom) {
+        const escaped = escapeHtml(type);
+        const required = String(type).toLowerCase() === 'document printing';
+        const disabled = locked || required;
+        return '<label class="service-type-check' + (custom ? ' service-type-check--custom' : '') + '" data-service-type-choice="' + escaped + '"' + (custom ? ' data-custom-service-type="true"' : '') + '>' +
+            '<input type="checkbox" name="service_types[]" value="' + escaped + '"' + (checked || required ? ' checked' : '') + (required ? ' data-required-service="true"' : ' data-editable') + (disabled ? ' disabled' : '') + '>' +
+            '<span>' + escaped + '</span>' +
+            (required ? '<small class="service-type-lock-note">Default</small>' : '') +
+            (custom ? '<button type="button" class="remove-custom-tag"' + (locked ? ' disabled' : '') + '>&times;</button>' : '') +
+        '</label>';
+    }
+
+    function updateOwnerServiceGrid(types) {
+        const form = document.getElementById('shopProfileForm');
+        const grid = document.querySelector('[data-owner-service-grid]');
+        if (!form || !grid || form.classList.contains('is-editing')) return false;
+
+        const selectedTypes = Array.isArray(types) ? types.map(String) : [];
+        const selectedLower = new Set(selectedTypes.map(function (type) { return type.toLowerCase(); }));
+        const locked = form.classList.contains('is-locked');
+        const defaultChoices = Array.from(grid.querySelectorAll('.service-type-check:not([data-custom-service-type])'))
+            .map(function (label) {
+                const input = label.querySelector('input[name="service_types[]"]');
+                return input ? input.value : '';
+            })
+            .filter(Boolean);
+        const defaultLower = new Set(defaultChoices.map(function (type) { return type.toLowerCase(); }));
+
+        let html = defaultChoices.map(function (type) {
+            return renderOwnerServiceChoice(type, selectedLower.has(type.toLowerCase()), locked, false);
+        }).join('');
+
+        selectedTypes.forEach(function (type) {
+            if (!defaultLower.has(type.toLowerCase())) {
+                html += renderOwnerServiceChoice(type, true, locked, true);
+            }
+        });
+
+        grid.innerHTML = html;
+        return true;
+    }
+
+    function updateCustomerServiceTags(shops) {
+        (shops || []).forEach(function (shop) {
+            const shopId = String(shop.shop_id || '');
+            if (!shopId) return;
+            document.querySelectorAll('[data-shop-service-tags="' + cssEscape(shopId) + '"]').forEach(function (container) {
+                const types = Array.isArray(shop.service_types) ? shop.service_types : [];
+                const wasExpanded = container.dataset.expanded === 'true';
+                container.innerHTML = serviceTypesHtml(types);
+                container.dataset.expanded = wasExpanded ? 'true' : 'false';
+                if (wasExpanded) {
+                    container.querySelectorAll('[data-extra-service-tag]').forEach(function (tag) {
+                        tag.hidden = false;
+                    });
+                    const toggle = container.querySelector('[data-service-tags-toggle]');
+                    if (toggle) toggle.textContent = 'Show less';
+                }
+                container.hidden = types.length === 0;
+            });
+        });
+
+        if (typeof window.printEaseUpdateCustomerShopServices === 'function') {
+            window.printEaseUpdateCustomerShopServices(shops || []);
+        }
+    }
+
+    function setupServiceTypePolling() {
+        const ownerGrid = document.querySelector('[data-owner-service-grid]');
+        const customerServiceRegion = document.querySelector('[data-shop-service-tags], #shopList');
+        if (!ownerGrid && !customerServiceRegion) return;
+
+        let signature = '';
+
+        function apply(data) {
+            if (!data || !data.success || !Array.isArray(data.shops)) return false;
+            if (data.signature && data.signature === signature) return false;
+            signature = data.signature || '';
+
+            if (ownerGrid) {
+                const first = data.shops[0] || { service_types: [] };
+                updateOwnerServiceGrid(first.service_types || []);
+            }
+
+            if (customerServiceRegion) {
+                updateCustomerServiceTags(data.shops);
+            }
+
+            return true;
+        }
+
+        function fetchServices() {
+            return fetch(endpoints.serviceTypes, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (response) { return response.json(); })
+                .then(apply)
+                .catch(function () { return false; });
+        }
+
+        function poll() {
+            window.setTimeout(function () {
+                fetchServices().finally(poll);
+            }, document.hidden ? 60000 : 10000);
+        }
+
+        fetchServices().finally(poll);
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) fetchServices();
+        });
+    }
+
+    function setupCoreLivePolling() {
+        const targetConfigs = [];
+        const customerOrdersForm = document.querySelector('[data-live-target="customer_orders"]');
+        const ownerServicesForm = document.querySelector('[data-live-target="owner_services"]');
+        const placeOrderForm = document.querySelector('[data-live-target="customer_place_order"]');
+        const exploreRegion = document.querySelector('[data-live-region="customer-explore-results"]');
+
+        if (exploreRegion) {
+            targetConfigs.push({
+                key: 'customer_explore',
+                refresh: function () { return refreshLiveTarget('customer_explore'); },
+                canRefresh: function () { return !document.querySelector('.customer-busy-shop-modal.is-visible'); }
+            });
+        }
+
+        if (customerOrdersForm) {
+            targetConfigs.push({
+                key: 'customer_orders',
+                refresh: function () { return refreshLiveForm(customerOrdersForm, { updateHistory: false }); },
+                canRefresh: function () { return true; }
+            });
+        }
+
+        if (ownerServicesForm) {
+            targetConfigs.push({
+                key: 'owner_services',
+                refresh: function () { return refreshLiveForm(ownerServicesForm, { updateHistory: false }); },
+                canRefresh: function () {
+                    return !document.body.classList.contains('pricing-modal-open') &&
+                        !document.querySelector('.pricing-edit-row:not([hidden])');
+                }
+            });
+        }
+
+        if (placeOrderForm) {
+            targetConfigs.push({
+                key: 'customer_place_order',
+                refresh: function () { return refreshLiveForm(placeOrderForm, { updateHistory: false }); },
+                canRefresh: function () {
+                    const wizard = document.querySelector('[data-order-wizard]');
+                    return !wizard || wizard.dataset.liveDirty !== 'true';
+                }
+            });
+        }
+
+        if (!targetConfigs.length) return;
+
+        targetConfigs.forEach(function (config) {
+            function poll() {
+                window.setTimeout(function () {
+                    if (!config.canRefresh || config.canRefresh()) {
+                        config.refresh().finally(poll);
+                    } else {
+                        poll();
+                    }
+                }, document.hidden ? 60000 : 10000);
+            }
+            poll();
+        });
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) return;
+            targetConfigs.forEach(function (config) {
+                if (!config.canRefresh || config.canRefresh()) config.refresh();
+            });
+        });
+    }
+
     function setupDelegatedModals() {
         document.addEventListener('click', function (event) {
+            const serviceToggle = event.target.closest('[data-service-tags-toggle]');
+            if (serviceToggle) {
+                const container = serviceToggle.closest('[data-shop-service-tags]');
+                if (!container) return;
+                const expanded = container.dataset.expanded === 'true';
+                container.dataset.expanded = expanded ? 'false' : 'true';
+                container.querySelectorAll('[data-extra-service-tag]').forEach(function (tag) {
+                    tag.hidden = expanded;
+                });
+                serviceToggle.textContent = expanded
+                    ? '+' + container.querySelectorAll('[data-extra-service-tag]').length + ' more'
+                    : 'Show less';
+            }
+
             const userButton = event.target.closest('[data-user-view]');
             if (userButton) {
                 const modal = document.getElementById('adminUserModal');
@@ -836,7 +1078,7 @@
             const files = Array.from(form.querySelectorAll('[data-download-url]')).map(function (input, index) {
                 return {
                     url: input.value,
-                    name: input.dataset.downloadName || ('order-file-' + (index + 1))
+                    name: input.dataset.downloadName || ('request-file-' + (index + 1))
                 };
             }).filter(function (file) {
                 return file.url;
@@ -874,7 +1116,7 @@
 
                     return fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin' })
                         .then(function (response) {
-                            if (!response.ok) throw new Error('Order update failed.');
+                            if (!response.ok) throw new Error('Print job update failed.');
 
                             resolvedFiles.forEach(function (file, index) {
                                 window.setTimeout(function () {
@@ -902,7 +1144,7 @@
                     form.dataset.downloadStarted = 'false';
                     form.classList.remove('is-loading');
                     if (window.ownerShowToast) {
-                        window.ownerShowToast(error.message || 'Failed to update order status. Please try again.', 'error');
+                        window.ownerShowToast(error.message || 'Failed to update print job status. Please try again.', 'error');
                     }
                 });
         });
@@ -924,6 +1166,8 @@
     setupNotificationDelegation();
     setupOwnerOrderPolling();
     setupAdminActivityPolling();
+    setupServiceTypePolling();
+    setupCoreLivePolling();
     setupDelegatedModals();
 
     window.printEaseRefreshLiveSearch = function (target) {

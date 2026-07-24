@@ -421,9 +421,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                         <h2 class="text-xl font-bold text-gray-900" id="customerValidIdTitle">Valid ID</h2>
                         <p class="text-sm text-gray-600 mt-1">Review your uploaded verification document.</p>
                     </div>
-                    <button type="button" data-valid-id-modal-close
-                        class="w-10 h-10 rounded-full text-gray-600 hover:bg-gray-100 text-2xl leading-none focus:outline-none focus:ring-4 focus:ring-blue-100"
-                        aria-label="Close valid ID preview">&times;</button>
+                  
                 </header>
 
                 <div class="customer-valid-id-preview">

@@ -5,6 +5,7 @@ require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/price_records.php";
 
 checkRole("shop_owner");
 requireCompleteShopProfile($conn);
@@ -17,13 +18,13 @@ if (!isset($_POST['add_service'])) {
 }
 
 $owner_id = $_SESSION['user_id'];
-$paper_size = trim($_POST['paper_size']);
-$paper_type = trim($_POST['paper_type']);
-$print_type = trim($_POST['print_type']);
-$price_per_page = floatval($_POST['price_per_page']);
+$paper_size = trim((string) ($_POST['paper_size'] ?? $_POST['size_name'] ?? ''));
+$paper_type = trim((string) ($_POST['paper_type'] ?? ''));
+$print_type = trim((string) ($_POST['print_type'] ?? $_POST['variant'] ?? ''));
+$price_per_page = floatval($_POST['price_per_page'] ?? $_POST['price'] ?? 0);
 
-if ($paper_size === "" || $paper_type === "" || $print_type === "" || $price_per_page <= 0) {
-    setError("Please enter valid service details.");
+if ($paper_size === "" || $print_type === "" || $price_per_page <= 0) {
+    setError("Please enter a valid size, variant, pricing basis, and price.");
     redirect(BASE_URL . "frontend/user/shop_owner/services.php");
 }
 
@@ -40,6 +41,13 @@ if (!$shop) {
 
 $shop_id = $shop['shop_id'];
 
+$st_sql = "INSERT IGNORE INTO shop_service_types (shop_id, service_type) VALUES (?, 'Document Printing')";
+$st_stmt = mysqli_prepare($conn, $st_sql);
+if ($st_stmt) {
+    mysqli_stmt_bind_param($st_stmt, "i", $shop_id);
+    mysqli_stmt_execute($st_stmt);
+}
+
 $sql = "INSERT INTO shop_services 
         (shop_id, paper_size, paper_type, print_type, price_per_page) 
         VALUES (?, ?, ?, ?, ?)";
@@ -48,9 +56,10 @@ $stmt = mysqli_prepare($conn, $sql);
 mysqli_stmt_bind_param($stmt, "isssd", $shop_id, $paper_size, $paper_type, $print_type, $price_per_page);
 
 if (mysqli_stmt_execute($stmt)) {
-    setMessage("Service added successfully.");
+    syncDocumentPriceRecord($conn, $shop_id, (int) mysqli_insert_id($conn), priceRecordAdvancedFieldsFromInput($_POST));
+    setMessage("Price record added successfully.");
 } else {
-    setError("Failed to add service.");
+    setError("Failed to add price record.");
 }
 
 redirect(BASE_URL . "frontend/user/shop_owner/services.php");

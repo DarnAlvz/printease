@@ -128,8 +128,23 @@ if (isset($_POST['save_profile'])) {
         $new_status = 'incomplete';
     }
 
-    $lat = $_POST['latitude'] ?? null;
-    $lng = $_POST['longitude'] ?? null;
+    $lat_raw = trim($_POST['latitude'] ?? '');
+    $lng_raw = trim($_POST['longitude'] ?? '');
+    $lat = null;
+    $lng = null;
+
+    if ($lat_raw !== '' || $lng_raw !== '') {
+        if ($lat_raw === '' || $lng_raw === '' || !is_numeric($lat_raw) || !is_numeric($lng_raw)) {
+            redirectCustomerProfileError("Please choose a valid location on the map.");
+        }
+
+        $lat = (float) $lat_raw;
+        $lng = (float) $lng_raw;
+
+        if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+            redirectCustomerProfileError("Please choose a valid location on the map.");
+        }
+    }
 
     $sql = "UPDATE users SET 
         full_name = ?,
@@ -143,8 +158,16 @@ if (isset($_POST['save_profile'])) {
         WHERE user_id = ?";
 
     $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, "sssssddsi", $full_name, $phone, $address, $profile_picture_path, $valid_id_path, $lng, $lat, $new_status, $customer_id);
-    mysqli_stmt_execute($stmt);
+    if (!$stmt) {
+        error_log("SQL prepare error in save_customer_profile: " . mysqli_error($conn));
+        redirectCustomerProfileError("Unable to save profile. Please try again.");
+    }
+
+    mysqli_stmt_bind_param($stmt, "sssssddsi", $full_name, $phone, $address, $profile_picture_path, $valid_id_path, $lat, $lng, $new_status, $customer_id);
+    if (!mysqli_stmt_execute($stmt)) {
+        error_log("SQL execute error in save_customer_profile: " . mysqli_stmt_error($stmt));
+        redirectCustomerProfileError("Unable to save profile. Please try again.");
+    }
 
     $changed_fields = [];
     if (($current_user['full_name'] ?? '') !== $full_name) $changed_fields[] = 'full_name';

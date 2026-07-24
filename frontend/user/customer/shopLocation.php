@@ -51,7 +51,6 @@ if ($search !== '') {
 }
 
 $sql .= " GROUP BY ps.shop_id
-          HAVING service_count > 0
           ORDER BY CASE ps.shop_status WHEN 'available' THEN 0 ELSE 1 END, ps.shop_name ASC";
 
 $stmt = mysqli_prepare($conn, $sql);
@@ -99,7 +98,7 @@ while ($shop = mysqli_fetch_assoc($shops)) {
     <div class="customer-page-frame min-h-screen">
         <?php renderCustomerLayout([
             'title' => 'Explore Print Shops',
-            'subtitle' => 'Compare nearby verified shops, check availability, and start your order.'
+            'subtitle' => 'Compare nearby verified shops, check availability, and start your request.'
         ]); ?>
 
         <main class="customer-map-main">
@@ -299,7 +298,7 @@ while ($shop = mysqli_fetch_assoc($shops)) {
                         '<strong>' + escapeHtml(shop.name) + '</strong>' +
                         '<span>' + escapeHtml(shortAddress(shop)) + '</span>' +
                         '<small>' + escapeHtml(hoursLabel(shop)) + ' &middot; ' + money(shop.starting_price) + ' start</small>' +
-                        '<a href="place_order.php?shop_id=' + shop.shop_id + '">Order Now</a>' +
+                        '<a href="place_order.php?shop_id=' + shop.shop_id + '">Request Print</a>' +
                     '</div>';
                 }
 
@@ -347,13 +346,15 @@ while ($shop = mysqli_fetch_assoc($shops)) {
                         '</div>' +
                         '<div class="customer-map-shop-facts">' +
                             '<span><strong>' + (open ? 'Open now' : 'Closed now') + '</strong>' + escapeHtml(hoursLabel(shop)) + '</span>' +
-                            '<span><strong>' + shop.service_count + ' services</strong>' + money(shop.starting_price) + ' start</span>' +
-                            '<span><strong>' + escapeHtml(formatDistance(shop.distance)) + '</strong>' + escapeHtml(shop.contact || 'No contact listed') + '</span>' +
+                            '<span><strong>' + shop.service_count + ' pricing option' + (shop.service_count !== 1 ? 's' : '') + '</strong>' + money(shop.starting_price) + ' start</span>' +
+                            (customerLocation
+                                ? '<span><strong>' + escapeHtml(formatDistance(shop.distance)) + '</strong>Pickup only</span>'
+                                : '<span><strong>Pickup only</strong>At shop counter</span>') +
                         '</div>' +
                         '<div class="customer-map-shop-actions">' +
                             '<button type="button" data-focus-shop="' + shop.shop_id + '">View Map</button>' +
                             '<a href="' + directionsUrl(shop) + '" target="_blank" rel="noopener">Directions</a>' +
-                            '<a class="primary" href="place_order.php?shop_id=' + shop.shop_id + '">Order Now</a>' +
+                            '<a class="primary" href="place_order.php?shop_id=' + shop.shop_id + '">Request Print</a>' +
                         '</div>' +
                     '</article>';
                 }

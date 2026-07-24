@@ -1,7 +1,48 @@
 <?php
+require_once __DIR__ . "/cache.php";
 
 function e($value) {
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+function dbColumnExists(mysqli $conn, string $table, string $column): bool {
+    static $cache = [];
+
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $sql = "SELECT COUNT(*) AS total
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = ?
+              AND column_name = ?";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) {
+        $cache[$key] = false;
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, "ss", $table, $column);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    $cache[$key] = ((int) ($row['total'] ?? 0)) > 0;
+
+    return $cache[$key];
+}
+
+function customerOrderPrivacyColumnExists(mysqli $conn): bool {
+    return dbColumnExists($conn, 'orders', 'customer_deleted_at');
+}
+
+function customerOrderPrivacySql(mysqli $conn, string $alias = ''): string {
+    if (!customerOrderPrivacyColumnExists($conn)) {
+        return '';
+    }
+
+    $prefix = trim($alias) !== '' ? trim($alias) . '.' : '';
+    return " AND {$prefix}customer_deleted_at IS NULL";
 }
 
 function redirect($path) {
@@ -198,7 +239,13 @@ function sendNotification($conn, $user_id, $message, array $options = []) {
             VALUES (?, ?, ?, ?, ?, ?)";
     $stmt = mysqli_prepare($conn, $sql);
     mysqli_stmt_bind_param($stmt, "isssss", $user_id, $type, $title, $message, $target_url, $metadata_json);
-    return mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_execute($stmt);
+
+    if ($result) {
+        cacheInvalidate("notifications:{$user_id}");
+    }
+
+    return $result;
 }
 
 function sendRoleNotification($conn, $role, $message, array $options = []) {
@@ -208,8 +255,46 @@ function sendRoleNotification($conn, $role, $message, array $options = []) {
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
 
+    $user_ids = [];
     while ($user = mysqli_fetch_assoc($result)) {
-        sendNotification($conn, (int) $user['user_id'], $message, $options);
+        $user_ids[] = (int) $user['user_id'];
+    }
+
+    if (empty($user_ids)) {
+        return;
+    }
+
+    $type = trim((string) ($options['type'] ?? 'general')) ?: 'general';
+    $title = trim((string) ($options['title'] ?? 'Notification')) ?: 'Notification';
+    $target_url = isInternalAppUrl($options['target_url'] ?? '') ? (string) $options['target_url'] : null;
+    $metadata = $options['metadata'] ?? null;
+    $metadata_json = $metadata === null ? null : json_encode($metadata, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    $placeholders = [];
+    $params = [];
+    $types = '';
+
+    foreach ($user_ids as $uid) {
+        $placeholders[] = '(?, ?, ?, ?, ?, ?)';
+        $types .= 'isssss';
+        $params[] = $uid;
+        $params[] = $type;
+        $params[] = $title;
+        $params[] = $message;
+        $params[] = $target_url;
+        $params[] = $metadata_json;
+    }
+
+    $bulk_sql = "INSERT INTO notifications (user_id, type, title, message, target_url, metadata_json)
+                 VALUES " . implode(', ', $placeholders);
+    $bulk_stmt = mysqli_prepare($conn, $bulk_sql);
+    mysqli_stmt_bind_param($bulk_stmt, $types, ...$params);
+    $result = mysqli_stmt_execute($bulk_stmt);
+
+    if ($result) {
+        foreach ($user_ids as $uid) {
+            cacheInvalidate("notifications:{$uid}");
+        }
     }
 }
 

@@ -32,7 +32,7 @@ $unread_count = getUnreadNotificationCount($conn, $customer_id);
     <?php customerToastRender(); ?>
 
 <div class="max-w-md md:max-w-5xl mx-auto min-h-screen">
-    <?php renderCustomerLayout(['title' => 'Notifications', 'subtitle' => 'View your order updates.']); ?>
+    <?php renderCustomerLayout(['title' => 'Notifications', 'subtitle' => 'View your request updates.']); ?>
 
     <main class="customer-notification-main p-4 md:p-6">
         <?php renderNotificationCenter($notifications, ['role' => 'customer', 'unread_count' => $unread_count, 'empty_text' => "You're all caught up."]); ?>

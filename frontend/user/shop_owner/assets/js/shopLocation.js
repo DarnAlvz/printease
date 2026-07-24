@@ -3,7 +3,6 @@
     const form = document.getElementById('shopProfileForm');
     const editButton = document.getElementById('editShopProfile');
     const saveButton = document.getElementById('saveShopProfile');
-    const editables = form ? form.querySelectorAll('[data-editable]') : [];
     const editControls = form ? form.querySelectorAll('[data-edit-control]') : [];
 
     const setLocationButton = document.getElementById('setShopLocation');
@@ -199,8 +198,24 @@
         }
 
         if (coordinateNote && !latitudeInput.value) {
-            coordinateNote.textContent = 'Click Set Location on Map to detect GPS, or click the map to set the shop pin.';
+            coordinateNote.textContent = 'Use current location or click the map to place the shop pin manually.';
         }
+    }
+
+    function locationErrorMessage(error) {
+        if (!error) {
+            return 'Your device location is unavailable. Click the map manually.';
+        }
+
+        if (error.code === error.PERMISSION_DENIED) {
+            return 'Location permission is blocked. Enable it from browser site settings, then click Use My Current Location again. You can still click the map manually.';
+        }
+
+        if (error.code === error.TIMEOUT) {
+            return 'Location request timed out. Try again or click the map manually.';
+        }
+
+        return 'Your device location is unavailable. Click the map manually.';
     }
 
     function detectCurrentLocation() {
@@ -221,8 +236,8 @@
                 map.setView(latlng, 17);
                 placeMarker(latlng, true);
             },
-            function () {
-                coordinateNote.textContent = 'Location permission denied. Click the map manually to set shop location.';
+            function (error) {
+                coordinateNote.textContent = locationErrorMessage(error);
             },
             {
                 enableHighAccuracy: true,
@@ -232,11 +247,15 @@
         );
     }
 
+    function requestCurrentLocation() {
+        detectCurrentLocation();
+    }
+
     editButton.addEventListener('click', function () {
         form.classList.remove('is-locked');
         form.classList.add('is-editing');
 
-        editables.forEach(function (field) {
+        form.querySelectorAll('[data-editable]').forEach(function (field) {
             field.disabled = false;
         });
 
@@ -254,7 +273,7 @@
     if (setLocationButton) {
         setLocationButton.addEventListener('click', function () {
             enableLocationEditing();
-            detectCurrentLocation();
+            requestCurrentLocation();
         });
     }
 })();

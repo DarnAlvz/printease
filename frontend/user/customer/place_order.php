@@ -33,7 +33,7 @@ if (!$shop) {
 }
 
 if (($shop['shop_status'] ?? 'not_accepting') === 'not_accepting') {
-    setToast("This print shop is currently not accepting orders.", "warning");
+    setToast("This print shop is currently not accepting requests.", "warning");
     header("Location: explore.php?view=all");
     exit();
 }
@@ -59,6 +59,31 @@ if (empty($service_list)) {
     exit();
 }
 
+$pricing_sql = "SELECT id, service_type, option_label, unit, price
+                FROM shop_service_pricing
+                WHERE shop_id = ?
+                AND is_available = 1
+                AND service_type <> 'Document Printing'
+                ORDER BY service_type ASC, option_label ASC";
+$pricing_stmt = mysqli_prepare($conn, $pricing_sql);
+$service_pricing_list = [];
+if ($pricing_stmt) {
+    mysqli_stmt_bind_param($pricing_stmt, "i", $shop_id);
+    mysqli_stmt_execute($pricing_stmt);
+    $pricing_result = mysqli_stmt_get_result($pricing_stmt);
+    while ($row = mysqli_fetch_assoc($pricing_result)) {
+        $service_pricing_list[] = $row;
+    }
+}
+
+$customer_service_types = ['Document Printing'];
+foreach ($service_pricing_list as $pricing_row) {
+    $type = trim((string) ($pricing_row['service_type'] ?? ''));
+    if ($type !== '' && !in_array($type, $customer_service_types, true)) {
+        $customer_service_types[] = $type;
+    }
+}
+
 date_default_timezone_set('Asia/Manila');
 $min_pickup = date('Y-m-d\TH:i');
 $shop_logo_file = trim((string) ($shop['shop_logo'] ?? ''));
@@ -70,7 +95,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 <html>
 
 <head>
-    <title>Place Order</title>
+    <title>Place Request</title>
     <?php renderCustomerHead(); ?>
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -81,18 +106,27 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
     <div class="max-w-md md:max-w-5xl mx-auto min-h-screen">
 
-        <?php renderCustomerLayout(['title' => 'Place Order', 'subtitle' => 'Ordering from ' . $shop['shop_name']]); ?>
+        <?php renderCustomerLayout(['title' => 'Place Request', 'subtitle' => 'Requesting from ' . $shop['shop_name']]); ?>
 
         <main class="p-4 md:p-6">
+            <form method="GET" data-live-search-form data-live-target="customer_place_order" hidden aria-hidden="true">
+                <input type="hidden" name="shop_id" value="<?php echo e($shop_id); ?>">
+            </form>
+            <div data-live-region="customer-place-order-data" hidden
+                data-services-json="<?php echo e(json_encode($service_list)); ?>"
+                data-service-prices-json="<?php echo e(json_encode($service_pricing_list)); ?>"
+                data-service-types-json="<?php echo e(json_encode($customer_service_types)); ?>"></div>
             <form action="../../../backend/actions/submit_order.php" method="POST" enctype="multipart/form-data"
                 class="customer-order-wizard bg-white p-5 md:p-6 rounded-2xl shadow" data-order-wizard novalidate>
                 <?php echo csrfField(); ?>
                 <input type="hidden" name="shop_id" value="<?php echo e($shop['shop_id']); ?>">
+                <input type="hidden" name="order_service_type" id="order_service_type" value="Document Printing">
                 <input type="hidden" name="service_id" id="service_id">
+                <input type="hidden" name="service_pricing_id" id="service_pricing_id">
                 <input type="hidden" name="detected_page_count" id="detected_page_count" value="1">
 
-                <ol class="customer-order-steps" aria-label="Order progress">
-                    <li class="is-active" data-step-indicator="0"><span>1</span><strong>File</strong></li>
+                <ol class="customer-order-steps" aria-label="Request progress">
+                    <li class="is-active" data-step-indicator="0"><span>1</span><strong>Service</strong></li>
                     <li data-step-indicator="1"><span>2</span><strong>Settings</strong></li>
                     <li data-step-indicator="2"><span>3</span><strong>Pickup</strong></li>
                     <li data-step-indicator="3"><span>4</span><strong>Review</strong></li>
@@ -103,15 +137,15 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 <?php if ($shop_is_busy): ?>
                     <section class="customer-busy-shop-inline" role="status">
                         <strong>Notice: This shop is currently busy.</strong>
-                        <span>This shop is in high demand and has many orders at the moment, so your request may take longer than usual.</span>
+                        <span>This shop is in high demand and has many requests at the moment, so your request may take longer than usual.</span>
                     </section>
                 <?php endif; ?>
 
                 <section class="customer-order-step is-active" data-step-panel="0" aria-labelledby="orderStepFile">
                     <div class="customer-order-step-head">
                         <span>Step 1 of 4</span>
-                        <h2 id="orderStepFile">Upload your document</h2>
-                        <p>Choose the file you want this shop to print.</p>
+                        <h2 id="orderStepFile">Choose service</h2>
+                        <p>Select what you want to request from this shop.</p>
                     </div>
 
                     <div class="customer-order-shop-summary">
@@ -131,12 +165,29 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     </div>
 
                     <label class="customer-order-field">
+                        <span>Service</span>
+                        <select name="customer_service_type" id="customer_service_type" required
+                            class="w-full border rounded-xl p-3">
+                            <?php foreach ($customer_service_types as $type): ?>
+                                <option value="<?php echo e($type); ?>"><?php echo e($type); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label class="customer-order-field" data-document-upload-field>
                         <span>Upload Document</span>
                         <input type="file" name="document_file" id="document_file" accept="application/pdf,.pdf" required
                             class="w-full border rounded-xl p-3">
-                        <small>Each order must contain exactly one file attachment only.
+                        <small>Each request must contain exactly one file attachment only.
                             Only PDF files up to 25MB are accepted.
                         </small>
+                    </label>
+
+                    <label class="customer-order-field" data-other-upload-field hidden>
+                        <span>Upload File</span>
+                        <input type="file" name="service_file" id="service_file" accept="application/pdf,.pdf,image/png,image/jpeg,image/jpg" required
+                            class="w-full border rounded-xl p-3">
+                        <small>Required for this request. PDF, JPG, and PNG files up to 25MB are accepted.</small>
                     </label>
                 </section>
 
@@ -144,10 +195,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     <div class="customer-order-step-head">
                         <span>Step 2 of 4</span>
                         <h2 id="orderStepSettings">Choose print settings</h2>
-                        <p>Select the service options available from this shop.</p>
+                        <p data-settings-copy>Select the service options available from this shop.</p>
                     </div>
 
-                    <div class="customer-order-grid">
+                    <div class="customer-order-grid" data-document-settings>
                         <label class="customer-order-field">
                             <span>Paper Size</span>
                             <select id="paper_size" required class="w-full border rounded-xl p-3"></select>
@@ -177,10 +228,29 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                         </div>
                     </div>
 
+                    <div class="customer-order-grid" data-other-settings hidden>
+                        <label class="customer-order-field">
+                            <span>Service Option</span>
+                            <select id="service_option" class="w-full border rounded-xl p-3"></select>
+                        </label>
+
+                        <label class="customer-order-field">
+                            <span>Quantity</span>
+                            <input type="number" name="service_quantity" id="service_quantity" min="1" value="1"
+                                class="w-full border rounded-xl p-3">
+                        </label>
+
+                        <div class="customer-order-field">
+                            <span>Pricing Basis</span>
+                            <strong class="w-full border rounded-xl p-3 bg-gray-50 block"
+                                data-service-basis>Choose an option</strong>
+                        </div>
+                    </div>
+
                     <div class="customer-order-total">
                         <span>Estimated Total</span>
                         <strong>&#8369;<span id="total">0.00</span></strong>
-                        <small class="block text-sm text-gray-700 mt-1" data-paper-price>Paper Price: &#8369;0.00/page</small>
+                        <small class="block text-sm text-gray-700 mt-1" data-paper-price>Price: &#8369;0.00/page</small>
                         <small class="block text-sm text-gray-500 mt-1" data-total-breakdown>0 pages x 1 copy</small>
                     </div>
                 </section>
@@ -211,18 +281,19 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 <section class="customer-order-step" data-step-panel="3" aria-labelledby="orderStepReview" hidden>
                     <div class="customer-order-step-head">
                         <span>Step 4 of 4</span>
-                        <h2 id="orderStepReview">Review order</h2>
-                        <p>Check the details before submitting your print order.</p>
+                        <h2 id="orderStepReview">Review request</h2>
+                        <p>Check the details before submitting your print request.</p>
                     </div>
 
                     <div class="customer-order-review">
                         <div><span>Shop</span><strong><?php echo e($shop['shop_name']); ?></strong></div>
-                        <div><span>Document</span><strong data-review-file>Not selected</strong></div>
-                        <div><span>Paper Size</span><strong data-review-paper-size>-</strong></div>
-                        <div><span>Paper Type</span><strong data-review-paper-type>-</strong></div>
-                        <div><span>Print Type</span><strong data-review-print-type>-</strong></div>
-                        <div><span>Paper Price</span><strong data-review-paper-price>&#8369;0.00/page</strong></div>
-                        <div><span>Pages</span><strong data-review-pages>1</strong></div>
+                        <div><span>Service</span><strong data-review-service>Document Printing</strong></div>
+                        <div><span>Attachment</span><strong data-review-file>Not selected</strong></div>
+                        <div><span>Option</span><strong data-review-paper-size>-</strong></div>
+                        <div><span>Details</span><strong data-review-paper-type>-</strong></div>
+                        <div><span>Pricing Basis</span><strong data-review-print-type>-</strong></div>
+                        <div><span>Unit Price</span><strong data-review-paper-price>&#8369;0.00/page</strong></div>
+                        <div><span>Pages/Qty</span><strong data-review-pages>1</strong></div>
                         <div><span>Copies</span><strong data-review-copies>1</strong></div>
                         <div><span>Pickup</span><strong data-review-pickup>-</strong></div>
                         <div><span>Instructions</span><strong data-review-instruction>None</strong></div>
@@ -242,7 +313,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                         data-wizard-next>Next</button>
                     <button type="submit" name="submit_order" class="customer-order-submit bg-blue-600 text-white"
                         data-wizard-submit hidden>
-                        Submit Order
+                        Submit Request
                     </button>
                 </div>
             </form>
@@ -250,7 +321,8 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
     </div>
 
     <script>
-        const services = <?php echo json_encode($service_list); ?>;
+        let services = <?php echo json_encode($service_list); ?>;
+        let servicePrices = <?php echo json_encode($service_pricing_list); ?>;
 
         const wizard = document.querySelector("[data-order-wizard]");
         const indicators = Array.from(document.querySelectorAll("[data-step-indicator]"));
@@ -260,7 +332,19 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         const nextButton = document.querySelector("[data-wizard-next]");
         const submitButton = document.querySelector("[data-wizard-submit]");
         const cancelLink = document.querySelector("[data-wizard-cancel]");
+        const customerServiceType = document.getElementById("customer_service_type");
+        const orderServiceType = document.getElementById("order_service_type");
         const documentFile = document.getElementById("document_file");
+        const serviceFile = document.getElementById("service_file");
+        const documentUploadField = document.querySelector("[data-document-upload-field]");
+        const otherUploadField = document.querySelector("[data-other-upload-field]");
+        const documentSettings = document.querySelector("[data-document-settings]");
+        const otherSettings = document.querySelector("[data-other-settings]");
+        const settingsCopy = document.querySelector("[data-settings-copy]");
+        const serviceOption = document.getElementById("service_option");
+        const servicePricingId = document.getElementById("service_pricing_id");
+        const serviceQuantity = document.getElementById("service_quantity");
+        const serviceBasis = document.querySelector("[data-service-basis]");
         const paperType = document.getElementById("paper_type");
         const paperSize = document.getElementById("paper_size");
         const printType = document.getElementById("print_type");
@@ -276,9 +360,59 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         const totalBreakdown = document.querySelector("[data-total-breakdown]");
         const reviewBreakdown = document.querySelector("[data-review-breakdown]");
         const maxDocumentFileSize = 25 * 1024 * 1024;
+        const maxServiceFileSize = 25 * 1024 * 1024;
         let currentStep = 0;
         let pageCountLoading = false;
         let pageCountRequestId = 0;
+
+        function readOrderLiveData() {
+            const source = document.querySelector('[data-live-region="customer-place-order-data"]');
+            if (!source) return null;
+            try {
+                return {
+                    services: JSON.parse(source.dataset.servicesJson || "[]"),
+                    servicePrices: JSON.parse(source.dataset.servicePricesJson || "[]"),
+                    serviceTypes: JSON.parse(source.dataset.serviceTypesJson || "[]")
+                };
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function applyOrderLiveData() {
+            if (!wizard || wizard.dataset.liveDirty === "true") return;
+            const data = readOrderLiveData();
+            if (!data) return;
+
+            services = Array.isArray(data.services) ? data.services : [];
+            servicePrices = Array.isArray(data.servicePrices) ? data.servicePrices : [];
+
+            if (customerServiceType && Array.isArray(data.serviceTypes)) {
+                const currentType = customerServiceType.value || "Document Printing";
+                customerServiceType.innerHTML = data.serviceTypes.map(type =>
+                    `<option value="${escapeOptionValue(type)}">${type}</option>`
+                ).join("");
+                customerServiceType.value = data.serviceTypes.includes(currentType) ? currentType : (data.serviceTypes[0] || "Document Printing");
+            }
+
+            syncServiceMode();
+        }
+
+        if (wizard) {
+            wizard.addEventListener("input", function () {
+                wizard.dataset.liveDirty = "true";
+            }, { once: true });
+            wizard.addEventListener("change", function () {
+                wizard.dataset.liveDirty = "true";
+            }, { once: true });
+        }
+
+        window.addEventListener("printease:live-regions-replaced", function (event) {
+            const regions = event.detail && event.detail.regions ? event.detail.regions : [];
+            if (regions.includes("customer-place-order-data")) {
+                applyOrderLiveData();
+            }
+        });
 
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -297,6 +431,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
         }
 
+        function isDocumentOrder() {
+            return !customerServiceType || customerServiceType.value === "Document Printing";
+        }
+
         function validateDocumentFile(file) {
             if (!file) {
                 return "Please upload your document before continuing.";
@@ -305,7 +443,28 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 return "Document file must be 25MB or smaller.";
             }
             if (!selectedFileIsPdf(file)) {
-                return "Only PDF files are accepted for print orders.";
+                return "Only PDF files are accepted for print requests.";
+            }
+            return "";
+        }
+
+        function selectedServiceFileIsAllowed(file) {
+            if (!file) return true;
+            return file.type === "application/pdf" ||
+                file.type === "image/jpeg" ||
+                file.type === "image/png" ||
+                /\.(pdf|jpe?g|png)$/i.test(file.name || "");
+        }
+
+        function validateServiceFile(file) {
+            if (!file) {
+                return "Please upload a file for this service request.";
+            }
+            if (file.size > maxServiceFileSize) {
+                return "Attachment must be 25MB or smaller.";
+            }
+            if (!selectedServiceFileIsAllowed(file)) {
+                return "Attachment must be a PDF, JPG, or PNG file.";
             }
             return "";
         }
@@ -365,12 +524,22 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             select.innerHTML = values.map(v => `<option value="${escapeOptionValue(v)}">${v}</option>`).join("");
         }
 
+        function serviceOptionsForSelectedType() {
+            const type = customerServiceType ? customerServiceType.value : "Document Printing";
+            return servicePrices.filter(item => item.service_type === type);
+        }
+
         function selectedService() {
             return services.find(s =>
                 s.paper_size === paperSize.value &&
                 s.paper_type === paperType.value &&
                 s.print_type === printType.value
             );
+        }
+
+        function selectedServicePrice() {
+            if (!serviceOption) return null;
+            return serviceOptionsForSelectedType().find(item => String(item.id) === String(serviceOption.value));
         }
 
         function formatMoney(value) {
@@ -396,23 +565,78 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             computeTotal();
         }
 
+        function updateServiceOptions() {
+            if (!serviceOption) return;
+            const options = serviceOptionsForSelectedType();
+            serviceOption.innerHTML = options.map(item => {
+                const unit = item.unit ? " / " + item.unit : "";
+                return `<option value="${escapeOptionValue(item.id)}">${item.option_label}${unit} - \u20b1${formatMoney(item.price)}</option>`;
+            }).join("");
+            computeTotal();
+        }
+
+        function syncServiceMode() {
+            const documentMode = isDocumentOrder();
+            if (orderServiceType) orderServiceType.value = customerServiceType ? customerServiceType.value : "Document Printing";
+
+            if (documentUploadField) documentUploadField.hidden = !documentMode;
+            if (otherUploadField) otherUploadField.hidden = documentMode;
+            if (documentSettings) documentSettings.hidden = !documentMode;
+            if (otherSettings) otherSettings.hidden = documentMode;
+            if (settingsCopy) {
+                settingsCopy.textContent = documentMode
+                    ? "Select the document printing options available from this shop."
+                    : "Choose the service option and quantity for this request.";
+            }
+
+            if (documentFile) documentFile.required = documentMode;
+            if (serviceFile) serviceFile.required = !documentMode;
+            if (serviceQuantity) serviceQuantity.required = !documentMode;
+
+            if (documentMode) {
+                servicePricingId.value = "";
+                updateAll();
+                detectDocumentPages();
+            } else {
+                serviceId.value = services[0] ? services[0].service_id : "";
+                setPageCount(1, "Page count is not needed for this service.");
+                updateServiceOptions();
+            }
+        }
+
         function computeTotal() {
-            const selected = selectedService();
+            const documentMode = isDocumentOrder();
+            const selected = documentMode ? selectedService() : selectedServicePrice();
             const pages = Math.max(1, parseInt(detectedPageCount.value || "1", 10) || 1);
             const copyCount = Math.max(1, parseInt(copies.value || "1", 10) || 1);
-            const unitPrice = selected ? parseFloat(selected.price_per_page) || 0 : 0;
-            if (selected) {
+            const quantity = Math.max(1, parseInt(serviceQuantity ? serviceQuantity.value || "1" : "1", 10) || 1);
+            const unitPrice = selected ? parseFloat(documentMode ? selected.price_per_page : selected.price) || 0 : 0;
+            if (selected && documentMode) {
                 serviceId.value = selected.service_id;
+                servicePricingId.value = "";
                 total.textContent = formatMoney(unitPrice * pages * copyCount);
+            } else if (selected) {
+                servicePricingId.value = selected.id;
+                total.textContent = formatMoney(unitPrice * quantity);
             } else {
-                serviceId.value = "";
+                if (documentMode) serviceId.value = "";
+                servicePricingId.value = "";
                 total.textContent = "0.00";
             }
+            if (!documentMode && services[0]) {
+                serviceId.value = services[0].service_id;
+            }
             if (paperPrice) {
-                paperPrice.textContent = "Paper Price: \u20b1" + formatMoney(unitPrice) + "/page";
+                const basis = documentMode ? "page" : ((selected && selected.unit) ? selected.unit : "service");
+                paperPrice.textContent = "Price: \u20b1" + formatMoney(unitPrice) + "/" + basis.replace(/^per\s+/i, "");
             }
             if (totalBreakdown) {
-                totalBreakdown.textContent = "Computation: \u20b1" + formatMoney(unitPrice) + " x " + pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies") + " = \u20b1" + total.textContent;
+                totalBreakdown.textContent = documentMode
+                    ? "Computation: \u20b1" + formatMoney(unitPrice) + " x " + pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies") + " = \u20b1" + total.textContent
+                    : "Computation: \u20b1" + formatMoney(unitPrice) + " x " + quantity + " item" + (quantity === 1 ? "" : "s") + " = \u20b1" + total.textContent;
+            }
+            if (serviceBasis) {
+                serviceBasis.textContent = selected && !documentMode ? (selected.unit || "flat rate") : "per page";
             }
             updateReview();
         }
@@ -431,28 +655,40 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             clearAlert();
 
             if (step === 0) {
-                const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
-                const fileValidationMessage = validateDocumentFile(file);
+                const file = isDocumentOrder()
+                    ? (documentFile.files && documentFile.files[0] ? documentFile.files[0] : null)
+                    : (serviceFile.files && serviceFile.files[0] ? serviceFile.files[0] : null);
+                const fileValidationMessage = isDocumentOrder() ? validateDocumentFile(file) : validateServiceFile(file);
                 if (fileValidationMessage) {
                     showAlert(fileValidationMessage);
-                    documentFile.focus();
+                    (isDocumentOrder() ? documentFile : serviceFile).focus();
                     return false;
                 }
             }
 
             if (step === 1) {
-                if (pageCountLoading) {
+                if (isDocumentOrder() && pageCountLoading) {
                     showAlert("Please wait while the PDF pages are being counted.");
                     return false;
                 }
-                if (!serviceId.value || !selectedService()) {
-                    showAlert("Please choose valid print settings.");
+                if (isDocumentOrder() && (!serviceId.value || !selectedService())) {
+                    showAlert("Please choose valid document print settings.");
                     paperSize.focus();
                     return false;
                 }
-                if (parseInt(copies.value || "0") < 1) {
+                if (!isDocumentOrder() && (!servicePricingId.value || !selectedServicePrice())) {
+                    showAlert("Please choose a valid service option.");
+                    serviceOption.focus();
+                    return false;
+                }
+                if (isDocumentOrder() && parseInt(copies.value || "0") < 1) {
                     showAlert("Copies must be at least 1.");
                     copies.focus();
+                    return false;
+                }
+                if (!isDocumentOrder() && parseInt(serviceQuantity.value || "0") < 1) {
+                    showAlert("Quantity must be at least 1.");
+                    serviceQuantity.focus();
                     return false;
                 }
             }
@@ -471,27 +707,33 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         }
 
         function updateReview() {
-            const fileName = documentFile.files && documentFile.files[0] ? documentFile.files[0].name : "Not selected";
+            const documentMode = isDocumentOrder();
+            const activeFile = documentMode ? documentFile : serviceFile;
+            const fileName = activeFile.files && activeFile.files[0] ? activeFile.files[0].name : "Not selected";
             const pages = Math.max(1, parseInt(detectedPageCount.value || "1", 10) || 1);
             const copyCount = Math.max(1, parseInt(copies.value || "1", 10) || 1);
-            const selected = selectedService();
-            const unitPrice = selected ? parseFloat(selected.price_per_page) || 0 : 0;
+            const quantity = Math.max(1, parseInt(serviceQuantity ? serviceQuantity.value || "1" : "1", 10) || 1);
+            const selected = documentMode ? selectedService() : selectedServicePrice();
+            const unitPrice = selected ? parseFloat(documentMode ? selected.price_per_page : selected.price) || 0 : 0;
             const pickupText = pickupDatetime.value ? new Date(pickupDatetime.value).toLocaleString([], {
                 year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
             }) : "-";
 
+            document.querySelector("[data-review-service]").textContent = customerServiceType ? customerServiceType.value : "Document Printing";
             document.querySelector("[data-review-file]").textContent = fileName;
-            document.querySelector("[data-review-paper-size]").textContent = paperSize.value || "-";
-            document.querySelector("[data-review-paper-type]").textContent = paperType.value || "-";
-            document.querySelector("[data-review-print-type]").textContent = printType.value || "-";
-            document.querySelector("[data-review-paper-price]").textContent = "\u20b1" + formatMoney(unitPrice) + "/page";
-            document.querySelector("[data-review-pages]").textContent = String(pages);
-            document.querySelector("[data-review-copies]").textContent = String(copyCount);
+            document.querySelector("[data-review-paper-size]").textContent = documentMode ? (paperSize.value || "-") : (selected ? selected.option_label : "-");
+            document.querySelector("[data-review-paper-type]").textContent = documentMode ? (paperType.value || "-") : (selected ? selected.service_type : "-");
+            document.querySelector("[data-review-print-type]").textContent = documentMode ? (printType.value || "-") : (selected && selected.unit ? selected.unit : "flat rate");
+            document.querySelector("[data-review-paper-price]").textContent = "\u20b1" + formatMoney(unitPrice) + "/" + (documentMode ? "page" : ((selected && selected.unit) ? selected.unit.replace(/^per\s+/i, "") : "service"));
+            document.querySelector("[data-review-pages]").textContent = documentMode ? String(pages) : String(quantity);
+            document.querySelector("[data-review-copies]").textContent = documentMode ? String(copyCount) : "N/A";
             document.querySelector("[data-review-pickup]").textContent = pickupText;
             document.querySelector("[data-review-instruction]").textContent = instruction.value.trim() || "None";
             document.querySelector("[data-review-total]").textContent = total.textContent;
             if (reviewBreakdown) {
-                reviewBreakdown.textContent = "Computation: \u20b1" + formatMoney(unitPrice) + " x " + pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies") + " = \u20b1" + total.textContent;
+                reviewBreakdown.textContent = documentMode
+                    ? "Computation: \u20b1" + formatMoney(unitPrice) + " x " + pages + " page" + (pages === 1 ? "" : "s") + " x " + copyCount + " cop" + (copyCount === 1 ? "y" : "ies") + " = \u20b1" + total.textContent
+                    : "Computation: \u20b1" + formatMoney(unitPrice) + " x " + quantity + " item" + (quantity === 1 ? "" : "s") + " = \u20b1" + total.textContent;
             }
         }
 
@@ -524,7 +766,11 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         paperType.onchange = updatePrintType;
         printType.onchange = computeTotal;
         copies.oninput = computeTotal;
+        if (customerServiceType) customerServiceType.onchange = syncServiceMode;
+        if (serviceOption) serviceOption.onchange = computeTotal;
+        if (serviceQuantity) serviceQuantity.oninput = computeTotal;
         documentFile.onchange = detectDocumentPages;
+        if (serviceFile) serviceFile.onchange = updateReview;
         pickupDatetime.onchange = updateReview;
         instruction.oninput = updateReview;
 
@@ -544,7 +790,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             }
         });
 
-        updateAll();
+        syncServiceMode();
         goToStep(0);
     </script>
 

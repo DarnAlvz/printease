@@ -36,7 +36,7 @@ while ($order = mysqli_fetch_assoc($result)) {
     $owner_id = $order['owner_id'];
     $pickup_time = date("g:i A", strtotime($order['pickup_datetime']));
 
-    $message = "Reminder: Order #$order_code is scheduled for pickup at $pickup_time and is not yet ready.";
+    $message = "Reminder: Print job #$order_code is scheduled for pickup at $pickup_time and is not yet ready.";
 
     sendNotification($conn, $owner_id, $message, [
         'type' => 'pickup_reminder', 'title' => 'Pickup reminder',

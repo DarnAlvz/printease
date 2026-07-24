@@ -145,6 +145,29 @@ function renderExploreVerifiedBadge(array $shop): void
     <?php
 }
 
+function renderServiceTags(array $types, int $max = 3): void
+{
+    if (empty($types)) return;
+    $shown = array_slice($types, 0, $max);
+    $hidden = array_slice($types, $max);
+    $remaining = count($types) - $max;
+    ?>
+    <div class="customer-shop-service-tags" data-service-tags>
+        <?php foreach ($shown as $type): ?>
+            <span class="customer-service-tag"><?php echo e($type); ?></span>
+        <?php endforeach; ?>
+        <?php foreach ($hidden as $type): ?>
+            <span class="customer-service-tag" data-extra-service hidden><?php echo e($type); ?></span>
+        <?php endforeach; ?>
+        <?php if ($remaining > 0): ?>
+            <button type="button" class="customer-service-tag-more" data-service-toggle
+                data-collapsed-label="+<?php echo (int) $remaining; ?> more" data-expanded-label="Show less"
+                aria-expanded="false">+<?php echo (int) $remaining; ?> more</button>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
 function renderExploreShopCard(array $shop, string $return_to, bool $selected = false): void
 {
     $status = ($shop['shop_status'] ?? $shop['status'] ?? '') === 'available' ? 'available' : 'busy';
@@ -154,9 +177,10 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
     $shop_logo = trim((string) ($shop['shop_logo'] ?? ''));
     $logo_url = $shop_logo !== '' ? SHOP_LOGOS_URL . $shop_logo : (string) ($shop['logo_url'] ?? '');
     $is_open = customerExploreIsOpenNow($shop);
-    $contact = trim((string) ($shop['contact_number'] ?? $shop['contact'] ?? '')) ?: 'No contact listed';
+    $service_types = $shop['service_types'] ?? [];
     ?>
-    <article class="customer-map-shop-card customer-shops-card<?php echo $selected ? ' selected' : ''; ?>">
+    <article class="customer-map-shop-card customer-shops-card<?php echo $selected ? ' selected' : ''; ?>"
+        data-shop-distance-card data-shop-lat="<?php echo e($shop['latitude'] ?? ''); ?>" data-shop-lng="<?php echo e($shop['longitude'] ?? ''); ?>">
         <div class="customer-map-shop-head">
             <div class="customer-map-shop-logo">
                 <?php if ($logo_url !== ''): ?><img src="<?php echo e($logo_url); ?>" alt=""><?php else: ?><?php echo customerIcon('printer'); ?><?php endif; ?>
@@ -166,8 +190,11 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
                     <h3><?php echo e($shop_name); ?></h3>
                     <?php renderExploreVerifiedBadge($shop); ?>
                 </div>
-                <p><span aria-hidden="true">&#9679;</span><?php echo e($short_address); ?></p>
-                <?php if ($landmark !== ''): ?><small><?php echo e($landmark); ?></small><?php endif; ?>
+                <p class="customer-shop-location-line"><span aria-hidden="true">📌</span><span><?php echo e($short_address); ?></span></p>
+                <?php if ($landmark !== ''): ?>
+                    <small class="customer-shop-location-line customer-shop-landmark"><span aria-hidden="true">🏛️</span><span>Landmark: <?php echo e($landmark); ?></span></small>
+                <?php endif; ?>
+                <small class="customer-shop-location-line customer-shop-distance" data-shop-distance hidden><span aria-hidden="true">📍</span><span data-shop-distance-text></span></small>
             </div>
             <div class="customer-shop-card-tools">
                 <span class="customer-map-status <?php echo e($status); ?>"><?php echo $status === 'available' ? 'Available' : 'Busy'; ?></span>
@@ -178,15 +205,16 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
         <div class="customer-map-shop-facts">
             <span><strong><?php echo $is_open ? 'Open now' : 'Closed now'; ?></strong><?php echo e(customerExploreHoursLabel($shop)); ?></span>
             <span><strong><?php echo (int) ($shop['service_count'] ?? 0); ?> services</strong><?php echo customerExploreMoney($shop['starting_price'] ?? null); ?> start</span>
-            <span><strong>Contact</strong><?php echo e($contact); ?></span>
         </div>
+
+        <?php renderServiceTags($service_types); ?>
 
         <div class="customer-map-shop-actions">
             <a href="<?php echo e(customerExploreUrl('nearby', ['shop_id' => (int) $shop['shop_id']])); ?>">View Map</a>
             <a href="<?php echo e(customerExploreDirectionsUrl($shop)); ?>" target="_blank" rel="noopener">Directions</a>
             <a class="primary" href="place_order.php?shop_id=<?php echo (int) $shop['shop_id']; ?>"
                 data-busy-shop-link data-shop-status="<?php echo e($status); ?>"
-                data-shop-name="<?php echo e($shop_name); ?>">Order Now</a>
+                data-shop-name="<?php echo e($shop_name); ?>">Request Print</a>
         </div>
     </article>
     <?php
@@ -234,10 +262,36 @@ $shops_result = mysqli_stmt_get_result($stmt);
 
 $shops = [];
 $shop_locations = [];
+$shop_ids = [];
 while ($shop = mysqli_fetch_assoc($shops_result)) {
     $shop['is_favorite'] = !empty($shop['favorite_id']);
     $shop['is_verified'] = ($shop['permit_status'] ?? '') === 'verified';
+    $shop['service_types'] = [];
     $shops[] = $shop;
+    $shop_ids[] = (int) $shop['shop_id'];
+}
+
+if (!empty($shop_ids)) {
+    $placeholders = implode(',', array_fill(0, count($shop_ids), '?'));
+    $types_str = str_repeat('i', count($shop_ids));
+    $st_sql = "SELECT shop_id, service_type FROM shop_service_types WHERE shop_id IN ($placeholders) ORDER BY service_type ASC";
+    $st_stmt = mysqli_prepare($conn, $st_sql);
+    mysqli_stmt_bind_param($st_stmt, $types_str, ...$shop_ids);
+    mysqli_stmt_execute($st_stmt);
+    $st_result = mysqli_stmt_get_result($st_stmt);
+    $service_types_map = [];
+    while ($row = mysqli_fetch_assoc($st_result)) {
+        $service_types_map[(int) $row['shop_id']][] = (string) $row['service_type'];
+    }
+    mysqli_stmt_close($st_stmt);
+    foreach ($shops as &$shop_ref) {
+        $shop_ref['service_types'] = $service_types_map[(int) $shop_ref['shop_id']] ?? [];
+        $shop_ref['service_count'] = count($shop_ref['service_types']);
+    }
+    unset($shop_ref);
+}
+
+foreach ($shops as $shop) {
     $shop_locations[] = [
         'shop_id' => (int) $shop['shop_id'],
         'name' => (string) $shop['shop_name'],
@@ -250,6 +304,7 @@ while ($shop = mysqli_fetch_assoc($shops_result)) {
         'is_verified' => ($shop['permit_status'] ?? '') === 'verified',
         'service_count' => (int) $shop['service_count'],
         'starting_price' => $shop['starting_price'] !== null ? (float) $shop['starting_price'] : null,
+        'service_types' => $shop['service_types'],
         'lat' => (float) $shop['latitude'],
         'lng' => (float) $shop['longitude'],
         'weekday_open' => (string) ($shop['weekday_open_time'] ?? ''),
@@ -374,7 +429,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                 <small>Busy shop notice</small>
                 <h2 id="busyShopTitle">This shop is currently busy</h2>
                 <p id="busyShopMessage">
-                    Notice: This shop is currently in high demand and has many orders at the moment.
+                    Notice: This shop is currently in high demand and has many requests at the moment.
                     Your request may take longer than usual. You may continue or choose another shop.
                 </p>
                 <strong data-busy-shop-name></strong>
@@ -478,9 +533,26 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                 const resultsCountBadge = document.getElementById('resultsCountBadge');
                 const resultsPanel = document.getElementById('shopResultsPanel');
                 const resultsToggle = document.getElementById('resultsSheetToggle');
+                const locationStorageKey = 'printease_customer_location';
 
                 function escapeHtml(value) {
                     return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+                }
+                function readSavedLocation() {
+                    try {
+                        const parsed = JSON.parse(localStorage.getItem(locationStorageKey) || 'null');
+                        if (!parsed) return null;
+                        const lat = Number(parsed.lat);
+                        const lng = Number(parsed.lng);
+                        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+                    } catch (error) {
+                        return null;
+                    }
+                }
+                function clearSavedLocation() {
+                    try {
+                        localStorage.removeItem(locationStorageKey);
+                    } catch (error) {}
                 }
                 function shortAddress(shop) {
                     const preferred = String(shop.display_address || '').trim();
@@ -537,6 +609,63 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                     if (!Number.isFinite(distance)) return 'Enable location for distance';
                     return distance < 1 ? Math.round(distance * 1000) + ' m away' : distance.toFixed(1) + ' km away';
                 }
+                function applyCustomerLocation(location, persist) {
+                    customerLocation = location;
+                    if (persist) {
+                        try {
+                            localStorage.setItem(locationStorageKey, JSON.stringify(customerLocation));
+                        } catch (error) {}
+                    }
+                    shops.forEach(function (shop) { shop.distance = distanceKm(customerLocation, shop); });
+                    if (!customerMarker) {
+                        customerMarker = L.circleMarker([customerLocation.lat, customerLocation.lng], {
+                            radius: 9, color: '#fff', weight: 3, fillColor: '#0077b6', fillOpacity: 1
+                        }).addTo(map).bindPopup('Your current location');
+                    } else {
+                        customerMarker.setLatLng([customerLocation.lat, customerLocation.lng]);
+                    }
+                }
+                function clearCustomerLocation() {
+                    customerLocation = null;
+                    clearSavedLocation();
+                    shops.forEach(function (shop) { delete shop.distance; });
+                    if (customerMarker) {
+                        map.removeLayer(customerMarker);
+                        customerMarker = null;
+                    }
+                    locationStatus.textContent = 'Enable your location to sort shops by distance.';
+                    document.getElementById('useLocationButton').querySelector('span').textContent = 'Use My Location';
+                    renderList();
+                    fitVisibleShops(filteredShops());
+                }
+                function checkGeolocationPermission() {
+                    if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve(false);
+                    return navigator.permissions.query({ name: 'geolocation' })
+                        .then(function (permission) {
+                            if (permission.state === 'denied') {
+                                clearCustomerLocation();
+                                return true;
+                            }
+                            return false;
+                        })
+                        .catch(function () { return false; });
+                }
+                function watchGeolocationPermission() {
+                    if (!navigator.permissions || !navigator.permissions.query) return;
+                    navigator.permissions.query({ name: 'geolocation' })
+                        .then(function (permission) {
+                            permission.onchange = function () {
+                                if (permission.state === 'denied') {
+                                    clearCustomerLocation();
+                                }
+                            };
+                        })
+                        .catch(function () {});
+                }
+                function distanceLineHtml(shop) {
+                    const content = customerLocation && Number.isFinite(shop.distance) ? escapeHtml(formatDistance(shop.distance)) : '';
+                    return '<small class="customer-shop-location-line customer-shop-distance" data-shop-distance' + (content ? '' : ' hidden') + '><span aria-hidden="true">📍</span><span data-shop-distance-text>' + content + '</span></small>';
+                }
                 function money(value) {
                     return Number.isFinite(Number(value)) ? '&#8369;' + Number(value).toFixed(2) : 'Price unavailable';
                 }
@@ -570,12 +699,31 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                         '<span>Verified</span>' +
                     '</span>';
                 }
+                function serviceTagsHtml(shop) {
+                    const types = shop.service_types || [];
+                    if (!types.length) return '';
+                    const max = 3;
+                    let html = '<div class="customer-shop-service-tags" data-service-tags>';
+                    types.slice(0, max).forEach(function (t) {
+                        html += '<span class="customer-service-tag">' + escapeHtml(t) + '</span>';
+                    });
+                    types.slice(max).forEach(function (t) {
+                        html += '<span class="customer-service-tag" data-extra-service hidden>' + escapeHtml(t) + '</span>';
+                    });
+                    if (types.length > max) {
+                        const count = types.length - max;
+                        html += '<button type="button" class="customer-service-tag-more" data-service-toggle data-collapsed-label="+' + count + ' more" data-expanded-label="Show less" aria-expanded="false">+' + count + ' more</button>';
+                    }
+                    html += '</div>';
+                    return html;
+                }
                 function popupContent(shop) {
                     return '<div class="customer-map-popup">' +
                         '<div class="customer-map-popup-title"><strong>' + escapeHtml(shop.name) + '</strong>' + verifiedBadgeHtml(shop) + '</div>' +
                         '<span>' + escapeHtml(shortAddress(shop)) + '</span>' +
+                        serviceTagsHtml(shop) +
                         '<small>' + escapeHtml(hoursLabel(shop)) + ' &middot; ' + money(shop.starting_price) + ' start</small>' +
-                        '<a href="place_order.php?shop_id=' + shop.shop_id + '" data-busy-shop-link data-shop-status="' + escapeHtml(shop.status) + '" data-shop-name="' + escapeHtml(shop.name) + '">Order Now</a>' +
+                        '<a href="place_order.php?shop_id=' + shop.shop_id + '" data-busy-shop-link data-shop-status="' + escapeHtml(shop.status) + '" data-shop-name="' + escapeHtml(shop.name) + '">Request Print</a>' +
                     '</div>';
                 }
                 function logoHtml(shop) {
@@ -585,18 +733,19 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                 function cardHtml(shop) {
                     const selected = shop.shop_id === selectedShopId;
                     const open = isOpenNow(shop);
+                    const landmarkLine = shop.landmark ? '<small class="customer-shop-location-line customer-shop-landmark"><span aria-hidden="true">🏛️</span><span>Landmark: ' + escapeHtml(shop.landmark) + '</span></small>' : '';
                     return '<article class="customer-map-shop-card' + (selected ? ' selected' : '') + '" data-shop-card="' + shop.shop_id + '" tabindex="0">' +
                         '<div class="customer-map-shop-head">' +
                             '<div class="customer-map-shop-logo">' + logoHtml(shop) + '</div>' +
-                            '<div class="customer-map-shop-title"><div class="customer-map-shop-name"><h3>' + escapeHtml(shop.name) + '</h3>' + verifiedBadgeHtml(shop) + '</div><p><span aria-hidden="true">&#9679;</span>' + escapeHtml(shortAddress(shop)) + '</p>' + (shop.landmark ? '<small>' + escapeHtml(shop.landmark) + '</small>' : '') + '</div>' +
+                            '<div class="customer-map-shop-title"><div class="customer-map-shop-name"><h3>' + escapeHtml(shop.name) + '</h3>' + verifiedBadgeHtml(shop) + '</div><p class="customer-shop-location-line"><span aria-hidden="true">📌</span><span>' + escapeHtml(shortAddress(shop)) + '</span></p>' + landmarkLine + distanceLineHtml(shop) + '</div>' +
                             '<div class="customer-shop-card-tools"><span class="customer-map-status ' + escapeHtml(shop.status) + '">' + (shop.status === 'available' ? 'Available' : 'Busy') + '</span>' + favoriteFormHtml(shop) + '</div>' +
                         '</div>' +
                         '<div class="customer-map-shop-facts">' +
                             '<span><strong>' + (open ? 'Open now' : 'Closed now') + '</strong>' + escapeHtml(hoursLabel(shop)) + '</span>' +
                             '<span><strong>' + shop.service_count + ' services</strong>' + money(shop.starting_price) + ' start</span>' +
-                            '<span><strong>' + escapeHtml(formatDistance(shop.distance)) + '</strong>' + escapeHtml(shop.contact || 'No contact listed') + '</span>' +
                         '</div>' +
-                        '<div class="customer-map-shop-actions"><button type="button" data-focus-shop="' + shop.shop_id + '">View Map</button><a href="' + directionsUrl(shop) + '" target="_blank" rel="noopener">Directions</a><a class="primary" href="place_order.php?shop_id=' + shop.shop_id + '" data-busy-shop-link data-shop-status="' + escapeHtml(shop.status) + '" data-shop-name="' + escapeHtml(shop.name) + '">Order Now</a></div>' +
+                        serviceTagsHtml(shop) +
+                        '<div class="customer-map-shop-actions"><button type="button" data-focus-shop="' + shop.shop_id + '">View Map</button><a href="' + directionsUrl(shop) + '" target="_blank" rel="noopener">Directions</a><a class="primary" href="place_order.php?shop_id=' + shop.shop_id + '" data-busy-shop-link data-shop-status="' + escapeHtml(shop.status) + '" data-shop-name="' + escapeHtml(shop.name) + '">Request Print</a></div>' +
                     '</article>';
                 }
                 function createMarkers() {
@@ -675,15 +824,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                     button.disabled = true;
                     locationStatus.textContent = 'Waiting for location permission...';
                     navigator.geolocation.getCurrentPosition(function (position) {
-                        customerLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-                        shops.forEach(function (shop) { shop.distance = distanceKm(customerLocation, shop); });
-                        if (!customerMarker) {
-                            customerMarker = L.circleMarker([customerLocation.lat, customerLocation.lng], {
-                                radius: 9, color: '#fff', weight: 3, fillColor: '#0077b6', fillOpacity: 1
-                            }).addTo(map).bindPopup('Your current location');
-                        } else {
-                            customerMarker.setLatLng([customerLocation.lat, customerLocation.lng]);
-                        }
+                        applyCustomerLocation({ lat: position.coords.latitude, lng: position.coords.longitude }, true);
                         locationStatus.textContent = 'Nearest shops are sorted from your current location.';
                         const visible = renderList();
                         fitVisibleShops(visible);
@@ -705,6 +846,21 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                     resultsToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
                     window.setTimeout(function () { map.invalidateSize(); }, 240);
                 });
+                const savedLocation = readSavedLocation();
+                if (savedLocation) {
+                    applyCustomerLocation(savedLocation, false);
+                    locationStatus.textContent = 'Nearest shops are sorted from your saved location.';
+                    document.getElementById('useLocationButton').querySelector('span').textContent = 'Location Enabled';
+                }
+                watchGeolocationPermission();
+                checkGeolocationPermission();
+                window.addEventListener('focus', checkGeolocationPermission);
+                document.addEventListener('visibilitychange', function () {
+                    if (!document.hidden) checkGeolocationPermission();
+                });
+                window.setInterval(function () {
+                    if (!document.hidden) checkGeolocationPermission();
+                }, 15000);
                 createMarkers();
                 const initialVisible = renderList();
                 fitVisibleShops(initialVisible);
@@ -713,5 +869,134 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
             });
         </script>
     <?php endif; ?>
+    <script>
+        (function () {
+            const locationStorageKey = 'printease_customer_location';
+
+            function readSavedLocation() {
+                try {
+                    const parsed = JSON.parse(localStorage.getItem(locationStorageKey) || 'null');
+                    if (!parsed) return null;
+                    const lat = Number(parsed.lat);
+                    const lng = Number(parsed.lng);
+                    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            function clearSavedLocation() {
+                try {
+                    localStorage.removeItem(locationStorageKey);
+                } catch (error) {}
+            }
+
+            function distanceKm(from, to) {
+                const radius = 6371;
+                const dLat = (to.lat - from.lat) * Math.PI / 180;
+                const dLng = (to.lng - from.lng) * Math.PI / 180;
+                const lat1 = from.lat * Math.PI / 180;
+                const lat2 = to.lat * Math.PI / 180;
+                const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+                return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            }
+
+            function formatDistance(distance) {
+                if (!Number.isFinite(distance)) return '';
+                return distance < 1 ? Math.round(distance * 1000) + ' m away' : distance.toFixed(1) + ' km away';
+            }
+
+            function renderSavedDistances() {
+                const customerLocation = readSavedLocation();
+                if (!customerLocation) return;
+
+                document.querySelectorAll('[data-shop-distance-card]').forEach(function (card) {
+                    const lat = Number(card.dataset.shopLat);
+                    const lng = Number(card.dataset.shopLng);
+                    const target = card.querySelector('[data-shop-distance]');
+                    const textTarget = target ? target.querySelector('[data-shop-distance-text]') : null;
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !target) return;
+
+                    if (textTarget) {
+                        textTarget.textContent = formatDistance(distanceKm(customerLocation, { lat, lng }));
+                    } else {
+                        target.textContent = '📍 ' + formatDistance(distanceKm(customerLocation, { lat, lng }));
+                    }
+                    target.hidden = false;
+                });
+            }
+
+            function hideSavedDistances() {
+                document.querySelectorAll('[data-shop-distance]').forEach(function (target) {
+                    const textTarget = target.querySelector('[data-shop-distance-text]');
+                    if (textTarget) textTarget.textContent = '';
+                    target.hidden = true;
+                });
+            }
+
+            function checkGeolocationPermission() {
+                if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve(false);
+                return navigator.permissions.query({ name: 'geolocation' })
+                    .then(function (permission) {
+                        if (permission.state === 'denied') {
+                            clearSavedLocation();
+                            hideSavedDistances();
+                            return true;
+                        }
+                        renderSavedDistances();
+                        return false;
+                    })
+                    .catch(function () { return false; });
+            }
+
+            function watchGeolocationPermission() {
+                if (!navigator.permissions || !navigator.permissions.query) return;
+                navigator.permissions.query({ name: 'geolocation' })
+                    .then(function (permission) {
+                        permission.onchange = function () {
+                            if (permission.state === 'denied') {
+                                clearSavedLocation();
+                                hideSavedDistances();
+                            } else {
+                                renderSavedDistances();
+                            }
+                        };
+                    })
+                    .catch(function () {});
+            }
+
+            document.addEventListener('DOMContentLoaded', renderSavedDistances);
+            document.addEventListener('DOMContentLoaded', watchGeolocationPermission);
+            document.addEventListener('DOMContentLoaded', checkGeolocationPermission);
+            window.addEventListener('focus', checkGeolocationPermission);
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) checkGeolocationPermission();
+            });
+            window.setInterval(function () {
+                if (!document.hidden) checkGeolocationPermission();
+            }, 15000);
+            window.addEventListener('printease:live-regions-replaced', function (event) {
+                const regions = event.detail && event.detail.regions ? event.detail.regions : [];
+                if (regions.includes('customer-explore-results')) {
+                    checkGeolocationPermission();
+                }
+            });
+        })();
+
+        document.addEventListener('click', function (event) {
+            const toggle = event.target.closest('[data-service-toggle]');
+            if (!toggle) return;
+
+            const tagWrap = toggle.closest('[data-service-tags]');
+            if (!tagWrap) return;
+
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            tagWrap.querySelectorAll('[data-extra-service]').forEach(function (tag) {
+                tag.hidden = expanded;
+            });
+            toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            toggle.textContent = expanded ? toggle.dataset.collapsedLabel : toggle.dataset.expandedLabel;
+        });
+    </script>
 </body>
 </html>

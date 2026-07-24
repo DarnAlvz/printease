@@ -33,6 +33,10 @@ $targets = [
             'file' => __DIR__ . '/../../frontend/user/shop_owner/transactions.php',
             'params' => ['q', 'date_filter'],
         ],
+        'owner_services' => [
+            'file' => __DIR__ . '/../../frontend/user/shop_owner/services.php',
+            'params' => [],
+        ],
     ],
     'customer' => [
         'customer_explore' => [
@@ -42,6 +46,10 @@ $targets = [
         'customer_orders' => [
             'file' => __DIR__ . '/../../frontend/user/customer/orders.php',
             'params' => ['order_code', 'status', 'focus_order_code'],
+        ],
+        'customer_place_order' => [
+            'file' => __DIR__ . '/../../frontend/user/customer/place_order.php',
+            'params' => ['shop_id'],
         ],
     ],
 ];

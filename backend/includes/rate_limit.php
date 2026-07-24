@@ -101,8 +101,20 @@ function rateLimitFind(mysqli $conn, $action, $identifier, $ip_address)
     return mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 }
 
+function rateLimitCleanup(mysqli $conn)
+{
+    if (mt_rand(1, 10) !== 1) {
+        return;
+    }
+
+    $sql = "DELETE FROM rate_limit_events WHERE last_attempt_at < DATE_SUB(NOW(), INTERVAL 24 HOUR) LIMIT 500";
+    $conn->query($sql);
+}
+
 function rateLimitCheck(mysqli $conn, $action, $identifier, $ip_address, $max_attempts, $window_seconds, $min_interval_seconds = 0)
 {
+    rateLimitCleanup($conn);
+
     $row = rateLimitFind($conn, $action, $identifier, $ip_address);
     if (!$row) {
         return ['allowed' => true, 'retry_after' => 0, 'reason' => 'allowed'];

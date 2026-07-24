@@ -59,7 +59,7 @@ ownerLayoutStart('payments', 'Payment Verification', 'Review customer payment pr
             $proof_ext = strtolower(pathinfo((string) ($payment['proof_of_payment_file'] ?? ''), PATHINFO_EXTENSION));
             ?>
             <div style="border:1px solid #ddd; padding:15px; margin-top:15px; border-radius:12px;">
-                <p><strong>Order:</strong> <?php echo e($payment['order_code']); ?></p>
+                <p><strong>Print Job:</strong> <?php echo e($payment['order_code']); ?></p>
                 <p><strong>Customer:</strong> <?php echo e($payment['full_name']); ?></p>
                 <p><strong>Amount:</strong> &#8369;<?php echo e(number_format($payment['amount'], 2)); ?></p>
                 <p><strong>Detected Reference No.:</strong> <?php echo e($payment['ocr_reference_number'] ?: $payment['reference_number'] ?: 'Not detected'); ?></p>

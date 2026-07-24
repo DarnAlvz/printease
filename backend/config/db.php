@@ -11,11 +11,13 @@ $db_connection_optional = defined('DB_CONNECTION_OPTIONAL') && DB_CONNECTION_OPT
 $conn = null;
 
 try {
-    $conn = @new mysqli($host, $username, $password, $dbname);
+    $conn = @new mysqli('p:' . $host, $username, $password, $dbname);
 
     if ($conn->connect_error) {
         throw new mysqli_sql_exception($conn->connect_error, $conn->connect_errno);
     }
+
+    $conn->set_charset("utf8mb4");
 } catch (mysqli_sql_exception $exception) {
     if (!$db_connection_optional) {
         error_log("[PrintEase] Database connection failed: " . $exception->getMessage());

@@ -3,6 +3,7 @@
         "google/apiclient": "^2.19",
         "phpmailer/phpmailer": "^7.1",
         "thiagoalessio/tesseract_ocr": "^2.13",
-        "cloudinary/cloudinary_php": "^3.1"
+        "cloudinary/cloudinary_php": "^3.1",
+        "predis/predis": "^2.3"
     }
 }

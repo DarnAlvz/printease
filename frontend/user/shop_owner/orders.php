@@ -252,11 +252,11 @@ function ownerDownloadFileName(array $file)
 {
     $file_name = trim((string) ($file['file_name'] ?? ''));
     if ($file_name === '') {
-        $file_name = 'order-file';
+        $file_name = 'request-file';
     }
 
     $file_name = preg_replace('/[^\w.\- ()]+/', '_', $file_name);
-    return trim($file_name, '._ ') ?: 'order-file';
+    return trim($file_name, '._ ') ?: 'request-file';
 }
 
 function ownerCustomerInitials($name)
@@ -340,21 +340,21 @@ function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = fals
             <?php endif; ?>
         <?php endforeach; ?>
         <button type="submit" name="update_order" class="btn order-btn-ready">
-            Accept & Download Order
+            Accept & Download
         </button>
     </form>
     <?php
 }
 
-ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_toast);
+ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $owner_toast);
 ?>
 
-<nav class="orders-tabs" aria-label="Order status filters" data-live-region="owner-order-tabs">
+<nav class="orders-tabs" aria-label="Print job status filters" data-live-region="owner-order-tabs">
     <?php
     $tabs = [
-        'all' => ['label' => 'All Orders', 'count' => (int) $counts['total'], 'icon' => 'package'],
-        'pending' => ['label' => 'Pending', 'count' => (int) $counts['pending'], 'icon' => 'clock'],
-        'processing' => ['label' => 'Processing', 'count' => (int) $counts['processing'], 'icon' => 'trending-up'],
+        'all' => ['label' => 'All Jobs', 'count' => (int) $counts['total'], 'icon' => 'package'],
+        'pending' => ['label' => 'Pending Jobs', 'count' => (int) $counts['pending'], 'icon' => 'clock'],
+        'processing' => ['label' => 'In Progress', 'count' => (int) $counts['processing'], 'icon' => 'trending-up'],
         'ready_for_pickup' => ['label' => 'Ready for Pickup', 'count' => (int) $counts['ready_for_pickup'], 'icon' => 'package-check'],
         'completed' => ['label' => 'Completed', 'count' => (int) $counts['completed'], 'icon' => 'circle-check'],
     ];
@@ -373,25 +373,25 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
     <article class="orders-summary-card pending">
         <div class="orders-summary-icon"><?php echo ownerIcon('clock', 'icon'); ?></div>
         <strong><?php echo (int) $counts['pending']; ?></strong>
-        <h2>Pending Orders</h2>
+        <h2>Pending Jobs</h2>
         <p>Awaiting acceptance</p>
     </article>
     <article class="orders-summary-card processing">
         <div class="orders-summary-icon"><?php echo ownerIcon('trending-up', 'icon'); ?></div>
         <strong><?php echo (int) $counts['processing']; ?></strong>
-        <h2>Processing Orders</h2>
+        <h2>In Progress</h2>
         <p>Currently printing</p>
     </article>
     <article class="orders-summary-card ready">
         <div class="orders-summary-icon"><?php echo ownerIcon('package', 'icon'); ?></div>
         <strong><?php echo (int) $counts['ready_for_pickup']; ?></strong>
-        <h2>Ready Orders</h2>
+        <h2>Ready Jobs</h2>
         <p>Ready for pickup</p>
     </article>
     <article class="orders-summary-card completed">
         <div class="orders-summary-icon"><?php echo ownerIcon('circle-check', 'icon'); ?></div>
         <strong><?php echo (int) $counts['completed']; ?></strong>
-        <h2>Completed Orders</h2>
+        <h2>Completed Jobs</h2>
         <p>Successfully picked up</p>
     </article>
 </section>
@@ -401,7 +401,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
         <input type="hidden" name="status" value="<?php echo e($status_filter); ?>">
         <div class="orders-search-box">
             <?php echo ownerIcon('search', 'icon'); ?>
-            <input type="text" name="order_code" placeholder="Search by order code..."
+            <input type="text" name="order_code" placeholder="Search by request code..."
                 value="<?php echo e($search_code); ?>">
         </div>
         <button type="submit" class="orders-submit-hidden">Search</button>
@@ -414,8 +414,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 
 <?php if (empty($orders)): ?>
     <section class="owner-card empty-state" data-live-region="owner-order-results">
-        <h2>No orders found</h2>
-        <p>New customer print orders will appear here.</p>
+        <h2>No print jobs found</h2>
+        <p>New customer print requests will appear here.</p>
     </section>
 <?php else: ?>
     <?php $order_files = []; ?>
@@ -424,7 +424,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
             <table class="orders-table">
                 <thead>
                     <tr>
-                        <th>Order ID</th>
+                        <th>Request Code</th>
                         <th>Customer Name</th>
                         <th>File Name</th>
                         <th>Print Details</th>
@@ -523,8 +523,8 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                 <section class="order-modal-dialog" role="dialog" aria-modal="true"
                     aria-labelledby="order-modal-title-<?php echo e($order['order_id']); ?>">
                     <header class="order-modal-header">
-                        <h2 id="order-modal-title-<?php echo e($order['order_id']); ?>">Order Details</h2>
-                        <button type="button" class="order-modal-close" data-order-modal-close aria-label="Close order details">
+                        <h2 id="order-modal-title-<?php echo e($order['order_id']); ?>">Print Job Details</h2>
+                        <button type="button" class="order-modal-close" data-order-modal-close aria-label="Close print job details">
                             <?php echo ownerIcon('x', 'icon'); ?>
                         </button>
                     </header>
@@ -544,7 +544,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                                 <?php echo ownerIcon('file-text', 'icon-xl'); ?>
                                 <?php if (empty($file_rows)): ?>
                                     <strong>No uploaded file</strong>
-                                    <span>No file is attached to this order.</span>
+                                    <span>No file is attached to this print job.</span>
                                 <?php else: ?>
                                     <strong><?php echo e(count($file_rows) > 1 ? count($file_rows) . ' Uploaded Files' : 'PDF Document'); ?></strong>
                                     <?php foreach ($file_rows as $file): ?>
@@ -586,10 +586,10 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                         </section>
 
                         <section class="order-modal-section">
-                            <h3>Order Information</h3>
+                            <h3>Print Job Information</h3>
                             <div class="order-info-list">
                                 <div>
-                                    <span>Order ID</span>
+                                    <span>Request Code</span>
                                     <strong><?php echo e($order['order_code']); ?></strong>
                                 </div>
                                 <div class="order-info-customer">
@@ -807,7 +807,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 
         <footer class="orders-pagination">
             <p>Showing <strong><?php echo (int) $showing_start; ?>-<?php echo (int) $showing_end; ?></strong> of
-                <?php echo (int) $filtered_total; ?> orders
+                <?php echo (int) $filtered_total; ?> jobs
             </p>
             <div>
                 <?php if ($page > 1): ?>
@@ -1122,7 +1122,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     .map(function (input, index) {
                         return {
                             url: input.value,
-                            name: input.dataset.downloadName || ('order-file-' + (index + 1))
+                            name: input.dataset.downloadName || ('request-file-' + (index + 1))
                         };
                     })
                     .filter(function (file) {
@@ -1139,7 +1139,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
 
                 try {
                     if (!files.length) {
-                        throw new Error('No downloadable file found for this order.');
+                        throw new Error('No downloadable file found for this print job.');
                     }
 
                     const resolvedFiles = [];
@@ -1173,7 +1173,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     }
 
                     if (submitButton) {
-                        submitButton.textContent = 'Accepting order...';
+                        submitButton.textContent = 'Accepting job...';
                     }
 
                     const formData = new FormData(form);
@@ -1193,7 +1193,7 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     });
 
                     if (!response.ok || !data || !data.success) {
-                        throw new Error((data && data.message) || 'Order update failed.');
+                        throw new Error((data && data.message) || 'Print job update failed.');
                     }
 
                     const orderId = data.order_id || form.dataset.orderId;
@@ -1234,14 +1234,14 @@ ownerLayoutStart('orders', 'Order Management', '', $notif_count, $shop, $owner_t
                     }, Math.max(1200, resolvedFiles.length * 350));
 
                     if (window.ownerShowToast) {
-                        window.ownerShowToast('Order accepted and downloads started.', 'success');
+                        window.ownerShowToast('Print job accepted and downloads started.', 'success');
                     }
                 } catch (error) {
                     form.dataset.downloadStarted = 'false';
                     form.classList.remove('is-loading');
                     if (submitButton) {
                         submitButton.disabled = false;
-                        submitButton.textContent = 'Accept & Download Order';
+                        submitButton.textContent = 'Accept & Download';
                     }
                     if (window.ownerShowToast) {
                         window.ownerShowToast(error.message || 'Download failed. Please open the file preview link and download manually.', 'error');

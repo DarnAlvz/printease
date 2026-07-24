@@ -32,20 +32,49 @@ if ($shop) {
 $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
 $shop_status = $shop['shop_status'] ?? 'available';
 $shop_location = ownerShopLocation($shop);
+$service_count = 0;
+$shop_service_types = [];
+if ($shop) {
+    $svc_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS total FROM shop_services WHERE shop_id = ?");
+    mysqli_stmt_bind_param($svc_stmt, "i", $shop['shop_id']);
+    mysqli_stmt_execute($svc_stmt);
+    $service_count = (int) (mysqli_fetch_assoc(mysqli_stmt_get_result($svc_stmt))['total'] ?? 0);
+
+    $st_stmt = mysqli_prepare($conn, "SELECT service_type FROM shop_service_types WHERE shop_id = ?");
+    mysqli_stmt_bind_param($st_stmt, "i", $shop['shop_id']);
+    mysqli_stmt_execute($st_stmt);
+    $st_result = mysqli_stmt_get_result($st_stmt);
+while ($st_row = mysqli_fetch_assoc($st_result)) {
+        $shop_service_types[] = $st_row['service_type'];
+    }
+}
+$shop_service_types[] = 'Document Printing';
+$shop_service_types = array_values(array_unique(array_filter($shop_service_types)));
+$allowed_service_types = [
+    'Document Printing',
+    'Photocopy',
+    'Photo Printing',
+    'Tarpaulin Printing',
+    'Lamination',
+    'Binding',
+    'Scanning',
+    'ID Printing',
+    'Invitation / Card Printing',
+];
 $shop_status_details = [
     'available' => [
-        'label' => 'Accepting Orders',
-        'description' => 'Customers can place orders and checkout normally.',
+        'label' => 'Accepting Print Requests',
+        'description' => 'Customers can submit print requests and checkout normally.',
         'icon' => 'circle-check',
     ],
     'busy' => [
         'label' => 'Busy',
-        'description' => 'Customers can still order, but they will know demand is high.',
+        'description' => 'Customers can still submit requests, but they will know demand is high.',
         'icon' => 'clock-3',
     ],
     'not_accepting' => [
-        'label' => 'Not Accepting Orders',
-        'description' => 'Customers cannot place new orders until your status changes.',
+        'label' => 'Not Accepting Print Requests',
+        'description' => 'Customers cannot submit new print requests until your status changes.',
         'icon' => 'circle-pause',
     ],
 ];
@@ -75,7 +104,7 @@ $weekend_open_time = shopTimeValue($shop['weekend_open_time'] ?? '');
 $weekend_close_time = shopTimeValue($shop['weekend_close_time'] ?? '');
 $payment_approval_status = $payment_settings['approval_status'] ?? 'pending';
 $payment_qr_code = $payment_settings['gcash_qr_code'] ?? ($shop['gcash_qr_file'] ?? '');
-$payment_instructions = $payment_settings['instructions'] ?? 'Pay the exact order total using this GCash account, then upload your reference number and payment screenshot.';
+$payment_instructions = $payment_settings['instructions'] ?? 'Pay the exact print request total using this GCash account, then upload your reference number and payment screenshot.';
 
 $weekday_hours_label = ($weekday_open_time && $weekday_close_time)
     ? shopTimeLabel($weekday_open_time) . " - " . shopTimeLabel($weekday_close_time)
@@ -132,6 +161,27 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     <?php endif; ?>
 </section>
 
+<?php if ($shop && $service_count === 0): ?>
+<section class="owner-card shop-services-banner" style="border-left: 4px solid #f59e0b; background: #fffbeb; margin-bottom: 20px;">
+    <div style="display: flex; align-items: flex-start; gap: 14px; padding: 4px 0;">
+        <?php echo ownerIcon('file-text', 'icon'); ?>
+        <div style="flex: 1;">
+            <h3 style="margin: 0 0 4px; font-size: 15px;">Add Paper Pricing to Go Live</h3>
+            <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+                Your shop profile is complete, but customers won't see your shop until you add at least one paper size and print price.
+                Also make sure to select your Services Offered below so customers know what you offer.
+            </p>
+            <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                <a href="services.php" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <?php echo ownerIcon('plus', 'icon-sm'); ?>
+                    Add Paper Pricing
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
+
 <form action="../../../backend/actions/save_shop_profile.php" method="POST" enctype="multipart/form-data"
     class="shop-management-form is-locked" id="shopProfileForm">
     <?php echo csrfField(); ?>
@@ -141,78 +191,123 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
         data-editable disabled>
 
     <div class="shop-management-grid">
-        <section class="owner-card shop-profile-card">
-            <div class="card-head">
-                <div>
-                    <h2>Shop Profile</h2>
-                    <p class="card-note">Review your logo, permit, and location preview.</p>
-                </div>
-                <span class="status-badge <?php echo ownerStatusClass($permit_status); ?>">
-                    <?php
-                    $permit_icon = $permit_status === 'verified'
-                        ? 'circle-check'
-                        : ($permit_status === 'rejected' ? 'triangle-alert' : 'clock');
-                    echo ownerIcon($permit_icon, 'icon-sm');
-                    ?>
-                    <?php echo e(ownerStatusLabel($permit_status)); ?>
-                </span>
-            </div>
-
-            <div class="shop-logo-upload-row">
-                <div class="shop-logo-frame" data-shop-logo-preview="profile">
-                    <?php if (!empty($shop['shop_logo'])): ?>
-                        <img src="<?php echo SHOP_LOGOS_URL . e($shop['shop_logo']); ?>" class="shop-logo-profile"
-                            alt="<?php echo e($shop['shop_name']); ?> logo">
-                    <?php else: ?>
-                        <div class="shop-logo-empty"><?php echo ownerIcon('store', 'icon-xl'); ?></div>
-                    <?php endif; ?>
-                </div>
-                <div class="shop-logo-actions">
-                    <label for="shop_logo" class="btn btn-navy upload-logo-btn is-disabled" data-edit-control>
-                        <?php echo ownerIcon('upload', 'icon'); ?>
-                        Upload Logo
-                    </label>
-                    <input id="shop_logo" class="file-input-hidden" type="file" name="shop_logo"
-                        accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
-                    <p class="card-note">Recommended: 500x500px, PNG or JPG</p>
-                </div>
-            </div>
-
-            <div class="shop-location-block">
-                <h3>Shop Location</h3>
-                <div class="location-display">
-                    <?php echo ownerIcon('map-pin', 'icon'); ?>
-                    <span>
-                        <?php echo e($shop_location['primary']); ?>
-                        <?php if ($shop_location['landmark'] !== ''): ?>
-                            <small>
-                                <?php echo e($shop_location['landmark']); ?>
-                            </small>
-                        <?php endif; ?>
+        <div class="shop-management-main">
+            <section class="owner-card shop-profile-card">
+                <div class="card-head">
+                    <div>
+                        <h2>Shop Profile</h2>
+                        <p class="card-note">Review your logo, permit, and location preview.</p>
+                    </div>
+                    <span class="status-badge <?php echo ownerStatusClass($permit_status); ?>">
+                        <?php
+                        $permit_icon = $permit_status === 'verified'
+                            ? 'circle-check'
+                            : ($permit_status === 'rejected' ? 'triangle-alert' : 'clock');
+                        echo ownerIcon($permit_icon, 'icon-sm');
+                        ?>
+                        <?php echo e(ownerStatusLabel($permit_status)); ?>
                     </span>
                 </div>
-                <button type="button" class="location-map-button" id="setShopLocation" data-editable disabled>
-                    Set Location on Map
-                </button>
-                <div class="location-map-preview owner-location-map" id="ownerShopMap" aria-label="Shop map picker">
-                </div>
-                <div class="location-coordinate-note" id="shopCoordinateNote">
-                    <?php if (!empty($shop['latitude']) && !empty($shop['longitude'])): ?>
-                        Pin saved at <?php echo e($shop['latitude']); ?>, <?php echo e($shop['longitude']); ?>
-                    <?php else: ?>
-                        No exact shop pin saved yet.
-                    <?php endif; ?>
-                </div>
-            </div>
 
-            <?php if (!empty($shop['business_permit_file'])): ?>
-                <div class="permit-preview-block">
-                    <p class="card-note">Business Permit</p>
-                    <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview"
-                        alt="Business permit">
+                <div class="shop-logo-upload-row">
+                    <div class="shop-logo-frame" data-shop-logo-preview="profile">
+                        <?php if (!empty($shop['shop_logo'])): ?>
+                            <img src="<?php echo SHOP_LOGOS_URL . e($shop['shop_logo']); ?>" class="shop-logo-profile"
+                                alt="<?php echo e($shop['shop_name']); ?> logo">
+                        <?php else: ?>
+                            <div class="shop-logo-empty"><?php echo ownerIcon('store', 'icon-xl'); ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="shop-logo-actions">
+                        <label for="shop_logo" class="btn btn-navy upload-logo-btn is-disabled" data-edit-control>
+                            <?php echo ownerIcon('upload', 'icon'); ?>
+                            Upload Logo
+                        </label>
+                        <input id="shop_logo" class="file-input-hidden" type="file" name="shop_logo"
+                            accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
+                        <p class="card-note">Recommended: 500x500px, PNG or JPG</p>
+                    </div>
                 </div>
-            <?php endif; ?>
-        </section>
+
+                <div class="shop-location-block">
+                    <h3>Shop Location</h3>
+                    <div class="location-display">
+                        <?php echo ownerIcon('map-pin', 'icon'); ?>
+                        <span>
+                            <?php echo e($shop_location['primary']); ?>
+                            <?php if ($shop_location['landmark'] !== ''): ?>
+                                <small>
+                                    <?php echo e($shop_location['landmark']); ?>
+                                </small>
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                    <button type="button" class="location-map-button" id="setShopLocation" data-editable disabled>
+                        Use My Current Location
+                    </button>
+                    <div class="location-map-preview owner-location-map" id="ownerShopMap" aria-label="Shop map picker">
+                    </div>
+                    <div class="location-coordinate-note" id="shopCoordinateNote">
+                        <?php if (!empty($shop['latitude']) && !empty($shop['longitude'])): ?>
+                            Pin saved at <?php echo e($shop['latitude']); ?>, <?php echo e($shop['longitude']); ?>
+                        <?php else: ?>
+                            No exact shop pin saved yet.
+                        <?php endif; ?>
+                    </div>
+                    <p class="card-note">Use current location or click the map to place the shop pin manually. If permission was denied before, reset location permission in the browser address bar.</p>
+                </div>
+
+                <?php if (!empty($shop['business_permit_file'])): ?>
+                    <div class="permit-preview-block">
+                        <p class="card-note">Business Permit</p>
+                        <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview"
+                            alt="Business permit">
+                    </div>
+                <?php endif; ?>
+            </section>
+
+            <section class="owner-card shop-services-card">
+                <div class="card-head">
+                    <div>
+                        <h2>Services Offered</h2>
+                        <p class="card-note">Select the services your shop provides.</p>
+                    </div>
+                </div>
+
+                <div class="service-types-grid" data-owner-service-grid data-editable disabled>
+                    <?php foreach ($allowed_service_types as $type): ?>
+                        <?php $is_document_printing = $type === 'Document Printing'; ?>
+                        <label class="service-type-check" data-service-type-choice="<?php echo e($type); ?>">
+                            <input type="checkbox" name="service_types[]"
+                                value="<?php echo e($type); ?>"
+                                <?php echo ($is_document_printing || in_array($type, $shop_service_types, true)) ? 'checked' : ''; ?>
+                                <?php echo $is_document_printing ? 'disabled data-required-service="true"' : 'data-editable disabled'; ?>>
+                            <span><?php echo e($type); ?></span>
+                            <?php if ($is_document_printing): ?>
+                                <small class="service-type-lock-note">Default</small>
+                            <?php endif; ?>
+                        </label>
+                    <?php endforeach; ?>
+                    <?php foreach ($shop_service_types as $st): ?>
+                        <?php if (!in_array($st, $allowed_service_types, true)): ?>
+                            <label class="service-type-check service-type-check--custom" data-service-type-choice="<?php echo e($st); ?>" data-custom-service-type="true">
+                                <input type="checkbox" name="service_types[]" value="<?php echo e($st); ?>" checked data-editable disabled>
+                                <span><?php echo e($st); ?></span>
+                                <button type="button" class="remove-custom-tag">&times;</button>
+                            </label>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+                <input type="hidden" name="service_types[]" value="Document Printing">
+                <div class="service-types-custom-row" data-editable disabled>
+                    <input type="text" id="customServiceType" placeholder="Add another service (e.g., Bookbinding)"
+                        data-editable disabled>
+                    <button type="button" id="addCustomServiceBtn" class="btn btn-soft" data-editable disabled>
+                        <?php echo ownerIcon('plus', 'icon-sm'); ?> Add
+                    </button>
+                </div>
+            </section>
+        </div>
 
         <div class="shop-management-side">
             <section class="owner-card shop-details-card">
@@ -275,11 +370,11 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                     </div>
 
                     <div class="field full">
-                        <label for="merchant_link">Optional GCash Payment Link</label>
+                        <label for="merchant_link">Optional GCash Merchant Link</label>
                         <input id="merchant_link" type="url" name="merchant_link"
                             value="<?php echo e($payment_settings['merchant_link'] ?? ''); ?>"
                             placeholder="https://..." data-editable disabled>
-                        <span class="muted">Optional. Use this only if your GCash account has an official payment link.</span>
+                        <span class="muted">Optional. Enter your official GCash merchant/payment link if available. Customers can still pay using your GCash QR code.</span>
                     </div>
 
                     <div class="field full">
@@ -323,70 +418,54 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                             <span class="muted">Required when completing a new shop profile.</span>
                         <?php endif; ?>
                     </div>
+
                 </div>
             </section>
 
-            <section class="bg-white rounded-2xl shadow-md p-5 border border-gray-100">
-
-                <!-- Header -->
-                <div class="flex items-center justify-between mb-4">
+            <section class="owner-card">
+                <div class="card-head">
                     <div>
-                        <h2 class="text-lg font-bold text-gray-800">Operating Hours</h2>
-                        <p class="text-sm text-gray-500">Set shop availability schedule</p>
+                        <h2>Operating Hours</h2>
+                        <p class="card-note">Set shop availability schedule.</p>
                     </div>
                 </div>
 
-                <!-- GRID -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="shop-hours-grid">
 
-                    <!-- WEEKDAY -->
-                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="font-semibold text-blue-700">Weekday Hours</h3>
-                            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                                Mon - Fri
-                            </span>
+                    <div class="shop-hours-day">
+                        <div class="shop-hours-day-head">
+                            <h3>Weekday Hours</h3>
+                            <span class="shop-hours-badge shop-hours-badge--blue">Mon - Fri</span>
                         </div>
 
-                        <div class="flex gap-2 items-center">
+                        <div class="shop-hours-times">
                             <input type="time" name="weekday_open_time" value="<?php echo e($weekday_open_time); ?>"
-                                data-editable disabled
-                                class="w-25 text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-300">
-
-                            <span class="text-gray-500 text-sm">to</span>
-
+                                data-editable disabled>
+                            <span>to</span>
                             <input type="time" name="weekday_close_time" value="<?php echo e($weekday_close_time); ?>"
-                                data-editable disabled
-                                class="w-25 text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-300">
+                                data-editable disabled>
                         </div>
 
-                        <p class="text-m text-gray-500 mt-2">
+                        <p class="shop-hours-preview">
                             <?php echo e($weekday_hours_label ?? 'Not set'); ?>
                         </p>
                     </div>
 
-                    <!-- WEEKEND -->
-                    <div class="bg-green-50 border border-green-100 rounded-xl p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="font-semibold text-green-700">Weekend Hours</h3>
-                            <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                                Sat - Sun
-                            </span>
+                    <div class="shop-hours-day">
+                        <div class="shop-hours-day-head">
+                            <h3>Weekend Hours</h3>
+                            <span class="shop-hours-badge shop-hours-badge--green">Sat - Sun</span>
                         </div>
 
-                        <div class="flex gap-2 items-center">
+                        <div class="shop-hours-times">
                             <input type="time" name="weekend_open_time" value="<?php echo e($weekend_open_time); ?>"
-                                data-editable disabled
-                                class="w-25 text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-green-300">
-
-                            <span class="text-gray-500 text-sm">to</span>
-
+                                data-editable disabled>
+                            <span>to</span>
                             <input type="time" name="weekend_close_time" value="<?php echo e($weekend_close_time); ?>"
-                                data-editable disabled
-                                class="w-25 text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-green-300">
+                                data-editable disabled>
                         </div>
 
-                        <p class="text-m text-gray-500 mt-2">
+                        <p class="shop-hours-preview">
                             <?php echo e($weekend_hours_label ?? 'Not set'); ?>
                         </p>
                     </div>
@@ -404,7 +483,120 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     </div>
 </form>
 
-<script src="assets/js/shopLocation.js"></script>
+<script>
+(function () {
+    var form = document.getElementById('shopProfileForm');
+    if (!form) return;
+
+    var rules = [
+        { name: 'shop_name', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter a shop name.' },
+        { name: 'shop_address', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter the complete shop address.' },
+        { name: 'gcash_name', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter the GCash account name.' },
+        { name: 'gcash_number', test: function (v) { return /^[0-9+\-\s]{7,30}$/.test(v.trim()); }, msg: 'Please enter a valid GCash number (7-30 digits).' },
+        { name: 'payment_instructions', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter payment instructions.' }
+    ];
+
+    function validateField(rule) {
+        var input = form.querySelector('[name="' + rule.name + '"]');
+        if (!input) return true;
+        var field = input.closest('.field');
+        var errorEl = field ? field.querySelector('.field-error') : null;
+        var valid = rule.test(input.value);
+
+        if (field) {
+            field.classList.toggle('has-error', !valid);
+        }
+        if (errorEl) {
+            errorEl.textContent = valid ? '' : rule.msg;
+        }
+        return valid;
+    }
+
+    form.addEventListener('submit', function (event) {
+        var firstError = null;
+        rules.forEach(function (rule) {
+            var valid = validateField(rule);
+            if (!valid && !firstError) {
+                firstError = form.querySelector('[name="' + rule.name + '"]');
+            }
+        });
+        if (firstError) {
+            event.preventDefault();
+            firstError.focus();
+        }
+    });
+
+    rules.forEach(function (rule) {
+        var input = form.querySelector('[name="' + rule.name + '"]');
+        if (!input) return;
+        input.addEventListener('blur', function () { validateField(rule); });
+        input.addEventListener('input', function () {
+            var field = input.closest('.field');
+            if (field && field.classList.contains('has-error')) {
+                validateField(rule);
+            }
+        });
+    });
+})();
+</script>
+
+<script>
+(function () {
+    var addBtn = document.getElementById('addCustomServiceBtn');
+    var customInput = document.getElementById('customServiceType');
+    var serviceGrid = document.querySelector('[data-owner-service-grid]');
+    var form = document.getElementById('shopProfileForm');
+    if (!addBtn || !customInput || !serviceGrid) return;
+
+    function escapeAttr(value) {
+        return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function addCustomService() {
+        var value = customInput.value.trim();
+        if (!value) return;
+
+        var existing = document.querySelectorAll('input[name="service_types[]"]');
+        for (var i = 0; i < existing.length; i++) {
+            if (existing[i].value.toLowerCase() === value.toLowerCase()) {
+                customInput.value = '';
+                customInput.focus();
+                return;
+            }
+        }
+
+        var label = document.createElement('label');
+        label.className = 'service-type-check service-type-check--custom';
+        label.dataset.serviceTypeChoice = value;
+        label.dataset.customServiceType = 'true';
+        label.innerHTML = '<input type="checkbox" name="service_types[]" value="' + escapeAttr(value) + '" checked data-editable>' +
+            '<span>' + escapeHtml(value) + '</span>' +
+            '<button type="button" class="remove-custom-tag">&times;</button>';
+        serviceGrid.appendChild(label);
+
+        customInput.value = '';
+        customInput.focus();
+    }
+
+    addBtn.addEventListener('click', addCustomService);
+    customInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); addCustomService(); }
+    });
+
+    serviceGrid.addEventListener('click', function (e) {
+        if (e.target.classList.contains('remove-custom-tag')) {
+            e.preventDefault();
+            e.target.closest('.service-type-check').remove();
+        }
+    });
+})();
+</script>
+
+<script src="assets/js/shopLocation.js?v=<?php echo filemtime(__DIR__ . '/assets/js/shopLocation.js'); ?>"></script>
 
 
 <?php ownerLayoutEnd(); ?>

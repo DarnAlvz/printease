@@ -91,7 +91,7 @@ if (isset($_POST['verify_payment'])) {
 
     mysqli_commit($conn);
 
-    $verified_message = "Your payment for order #" . $payment['order_code'] . " has been verified.";
+    $verified_message = "Your payment for request #" . $payment['order_code'] . " has been verified.";
 
     sendNotification($conn, $payment['customer_id'], $verified_message, [
         'type' => 'payment_verified', 'title' => 'Payment verified',
@@ -153,7 +153,7 @@ if (isset($_POST['reject_payment'])) {
         redirect($payment_redirect);
     }
 
-    sendNotification($conn, $payment['customer_id'], "Your payment proof for order #" . $payment['order_code'] . " was rejected. Reason: " . $reason, [
+    sendNotification($conn, $payment['customer_id'], "Your payment proof for request #" . $payment['order_code'] . " was rejected. Reason: " . $reason, [
         'type' => 'payment_rejected', 'title' => 'Payment proof rejected',
         'target_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . (int) $payment['order_id'],
         'metadata' => ['order_id' => (int) $payment['order_id'], 'order_code' => $payment['order_code'], 'reason' => $reason],

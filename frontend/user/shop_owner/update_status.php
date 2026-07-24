@@ -27,7 +27,7 @@ mysqli_stmt_bind_param($stmt, "i", $owner_id);
 mysqli_stmt_execute($stmt);
 $shop = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
-ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can place orders with your print shop.', $notif_count, $shop, $owner_toast);
+ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can submit print requests with your print shop.', $notif_count, $shop, $owner_toast);
 ?>
 
 <div class="content-grid">
@@ -38,7 +38,7 @@ ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can 
                 <?php echo e(ownerStatusLabel($shop['shop_status'] ?? 'pending')); ?>
             </span>
         </div>
-        <p class="muted">Use this setting to tell customers if your shop is ready for new print orders.</p>
+        <p class="muted">Use this setting to tell customers if your shop is ready for new print requests.</p>
 
         <form action="../../../backend/actions/update_shop_status.php" method="POST" class="form-grid" style="margin-top:20px;">
             <?php echo csrfField(); ?>
@@ -47,7 +47,7 @@ ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can 
                 <select id="shop_status" name="shop_status" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
                     <option value="available" <?php if (($shop['shop_status'] ?? '') == 'available') echo 'selected'; ?>>Available</option>
                     <option value="busy" <?php if (($shop['shop_status'] ?? '') == 'busy') echo 'selected'; ?>>Busy</option>
-                    <option value="not_accepting" <?php if (($shop['shop_status'] ?? '') == 'not_accepting') echo 'selected'; ?>>Not Accepting Orders</option>
+                    <option value="not_accepting" <?php if (($shop['shop_status'] ?? '') == 'not_accepting') echo 'selected'; ?>>Not Accepting Print Requests</option>
                 </select>
             </div>
             <div class="field full">
@@ -61,15 +61,15 @@ ownerLayoutStart('status', 'Update Shop Status', 'Control whether customers can 
         <div class="status-list">
             <div>
                 <span class="status-badge status-success">Available</span>
-                <p class="muted">Customers can place new orders normally.</p>
+                <p class="muted">Customers can submit new print requests normally.</p>
             </div>
             <div>
                 <span class="status-badge status-info">Busy</span>
                 <p class="muted">Your shop remains visible, but customers can see demand is high.</p>
             </div>
             <div>
-                <span class="status-badge status-danger">Not Accepting Orders</span>
-                <p class="muted">Customers are prevented from placing new orders.</p>
+                <span class="status-badge status-danger">Not Accepting Print Requests</span>
+                <p class="muted">Customers are prevented from submitting new print requests.</p>
             </div>
         </div>
     </aside>

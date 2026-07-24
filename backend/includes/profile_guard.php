@@ -8,7 +8,7 @@ function requireCompleteShopProfile($conn) {
 
     $owner_id = $_SESSION['user_id'];
 
-    $sql = "SELECT shop_name, shop_address, contact_number, business_permit_file 
+    $sql = "SELECT shop_name, shop_address, business_permit_file, permit_status 
             FROM print_shops 
             WHERE owner_id = ? 
             LIMIT 1";
@@ -23,12 +23,29 @@ function requireCompleteShopProfile($conn) {
         !$shop ||
         empty($shop['shop_name']) ||
         empty($shop['shop_address']) ||
-        empty($shop['contact_number']) ||
         empty($shop['business_permit_file'])
     ) {
         $_SESSION['owner_toast'] = [
             'status' => 'incomplete',
             'message' => 'Please complete your shop profile before accessing this feature.',
+        ];
+        header("Location: " . BASE_URL . "frontend/user/shop_owner/shop_profile.php");
+        exit();
+    }
+
+    $permit_status = $shop['permit_status'] ?? 'pending';
+
+    if ($permit_status !== 'verified') {
+        $message = match ($permit_status) {
+            'pending' => 'Your shop profile is submitted and waiting for  Admin approval.',
+            'rejected' => 'Your shop profile was rejected. Please update your details or contact the  Admin.',
+            'disabled' => 'Your shop has been disabled by the Admin. Please contact support for assistance.',
+            default => 'Your shop profile is not yet verified. Please wait for  Admin approval.',
+        };
+
+        $_SESSION['owner_toast'] = [
+            'status' => $permit_status,
+            'message' => $message,
         ];
         header("Location: " . BASE_URL . "frontend/user/shop_owner/shop_profile.php");
         exit();

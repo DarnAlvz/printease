@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/cache.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/status_guard.php";
 
@@ -40,7 +41,7 @@ function finishOrderStatusRequest($success, $message, $redirect_url, $http_statu
 
 if (!isset($_POST['update_order'])) {
     if ($is_ajax) {
-        finishOrderStatusRequest(false, "Invalid order update request.", $orders_url, 400);
+        finishOrderStatusRequest(false, "Invalid print job update request.", $orders_url, 400);
     }
 
     redirect($orders_url);
@@ -53,7 +54,7 @@ $order_status = $_POST['order_status'] ?? '';
 $allowed = ['pending', 'processing', 'ready_for_pickup', 'completed'];
 
 if (!in_array($order_status, $allowed)) {
-    finishOrderStatusRequest(false, "Invalid order status.", $orders_url, 400);
+    finishOrderStatusRequest(false, "Invalid print job status.", $orders_url, 400);
 }
 
 $get_sql = "SELECT o.customer_id, o.order_code, o.order_status, ps.shop_id
@@ -69,7 +70,7 @@ mysqli_stmt_execute($get_stmt);
 $order = mysqli_fetch_assoc(mysqli_stmt_get_result($get_stmt));
 
 if (!$order) {
-    finishOrderStatusRequest(false, "Order not found or unauthorized.", $orders_url, 404);
+    finishOrderStatusRequest(false, "Print job not found or unauthorized.", $orders_url, 404);
 }
 
 if ($order_status === 'processing') {
@@ -86,7 +87,7 @@ if ($order_status === 'processing') {
     $paid_payment = mysqli_fetch_assoc(mysqli_stmt_get_result($payment_stmt));
 
     if (!$paid_payment) {
-        finishOrderStatusRequest(false, "Verify the payment before accepting this order.", $orders_url, 422);
+        finishOrderStatusRequest(false, "Verify the payment before accepting this print job.", $orders_url, 422);
     }
 }
 
@@ -97,25 +98,27 @@ mysqli_stmt_bind_param($update_stmt, "sis", $order_status, $order_id, $current_o
 
 if (mysqli_stmt_execute($update_stmt)) {
     if (mysqli_stmt_affected_rows($update_stmt) < 1) {
-        finishOrderStatusRequest(false, "This order was already updated elsewhere. Please refresh and try again.", $orders_url, 409);
+        finishOrderStatusRequest(false, "This print job was already updated elsewhere. Please refresh and try again.", $orders_url, 409);
     }
 
     $status_label = ucfirst(str_replace('_', ' ', $order_status));
     $order_code = $order['order_code'] ?: $order_id;
 
-    sendNotification($conn, $order['customer_id'], "Your order #$order_code is now $status_label.", [
-        'type' => 'order_status', 'title' => 'Order status updated',
+    sendNotification($conn, $order['customer_id'], "Your request #$order_code is now $status_label.", [
+        'type' => 'order_status', 'title' => 'Request status updated',
         'target_url' => BASE_URL . "frontend/user/customer/orders.php?focus_order_id=$order_id",
         'metadata' => ['order_id' => $order_id, 'order_code' => $order_code, 'status' => $order_status],
     ]);
 
-    logActivity($conn, $owner_id, "Updated order #$order_code status to $status_label", "Order Management");
+    cacheInvalidate("owner_order:{$order['shop_id']}");
 
-    finishOrderStatusRequest(true, "Order status updated successfully.", $orders_url, 200, [
+    logActivity($conn, $owner_id, "Updated print job #$order_code status to $status_label", "Print Job Management");
+
+    finishOrderStatusRequest(true, "Print job status updated successfully.", $orders_url, 200, [
         'order_id' => $order_id,
         'order_status' => $order_status,
     ]);
 } else {
-    finishOrderStatusRequest(false, "Failed to update order status.", $orders_url, 500);
+    finishOrderStatusRequest(false, "Failed to update print job status.", $orders_url, 500);
 }
 ?>

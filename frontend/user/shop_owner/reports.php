@@ -271,7 +271,7 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     echo "\xEF\xBB\xBF";
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Order Code', 'Customer', 'Email', 'Paper Size', 'Paper Type', 'Print Type', 'Copies', 'Order Status', 'Payment Status', 'Order Amount', 'Paid Amount', 'Order Date']);
+    fputcsv($output, ['Job Code', 'Customer', 'Email', 'Paper Size', 'Paper Type', 'Print Type', 'Copies', 'Job Status', 'Payment Status', 'Job Amount', 'Paid Amount', 'Job Date']);
     while ($order = mysqli_fetch_assoc($export_result)) {
         fputcsv($output, array_map('reportCsvValue', [
             $order['order_code'], $order['full_name'], $order['email'], $order['paper_size'],
@@ -336,10 +336,10 @@ ownerLayoutStart('reports', 'Reports', 'Review shop performance, sales, customer
 <section class="report-summary-grid" aria-label="Report summary">
     <?php
     $summary_cards = [
-        ['label' => 'Total Orders', 'value' => number_format((int) $summary['total_orders']), 'icon' => 'package', 'class' => 'orders'],
+        ['label' => 'Total Print Jobs', 'value' => number_format((int) $summary['total_orders']), 'icon' => 'package', 'class' => 'orders'],
         ['label' => 'Completed', 'value' => number_format((int) $summary['completed_orders']) . ' (' . $completion_rate . '%)', 'icon' => 'circle-check', 'class' => 'completed'],
         ['label' => 'Unique Customers', 'value' => number_format((int) $summary['unique_customers']), 'icon' => 'users', 'class' => 'customers'],
-        ['label' => 'Average Paid Order', 'value' => ownerMoney($summary['average_paid']), 'icon' => 'calculator', 'class' => 'average'],
+        ['label' => 'Average Paid Job', 'value' => ownerMoney($summary['average_paid']), 'icon' => 'calculator', 'class' => 'average'],
     ];
     foreach ($summary_cards as $card): ?>
         <article class="report-summary-card <?php echo e($card['class']); ?>">
@@ -352,7 +352,7 @@ ownerLayoutStart('reports', 'Reports', 'Review shop performance, sales, customer
 <section class="report-analytics-grid">
     <article class="owner-card report-revenue-card">
         <div class="card-head">
-            <div><h2>Paid Revenue Trend</h2><p class="card-note">Revenue from paid orders created within the selected period.</p></div>
+            <div><h2>Paid Revenue Trend</h2><p class="card-note">Revenue from paid print jobs created within the selected period.</p></div>
             <strong><?php echo ownerMoney($summary['paid_revenue']); ?></strong>
         </div>
         <div class="report-chart-wrap">
@@ -376,7 +376,7 @@ ownerLayoutStart('reports', 'Reports', 'Review shop performance, sales, customer
     </article>
 
     <article class="owner-card report-status-card">
-        <h2>Order Status</h2>
+        <h2>Print Job Status</h2>
         <p class="card-note">Distribution for <?php echo e($range_label); ?>.</p>
         <div class="report-status-list">
             <?php
@@ -397,7 +397,7 @@ ownerLayoutStart('reports', 'Reports', 'Review shop performance, sales, customer
     <?php foreach ($top_print_data as $title => $rows): ?>
         <article class="owner-card report-ranking-card">
             <h2><?php echo e($title); ?></h2>
-            <?php if (empty($rows)): ?><p class="muted">No order data for this period.</p><?php else: ?>
+            <?php if (empty($rows)): ?><p class="muted">No print job data for this period.</p><?php else: ?>
                 <ol><?php $top_total = max(1, (int) $rows[0]['total']); foreach ($rows as $row): ?>
                     <li><div><span><?php echo e($row['label']); ?></span><strong><?php echo (int) $row['total']; ?></strong></div><div class="progress"><b style="width:<?php echo round(((int) $row['total'] / $top_total) * 100); ?>%"></b></div></li>
                 <?php endforeach; ?></ol>
@@ -407,20 +407,20 @@ ownerLayoutStart('reports', 'Reports', 'Review shop performance, sales, customer
 </section>
 
 <section class="owner-card report-customers-card">
-    <div class="card-head"><div><h2>Top Customers</h2><p class="card-note">Ranked by paid spending, then order count.</p></div></div>
+    <div class="card-head"><div><h2>Top Customers</h2><p class="card-note">Ranked by paid spending, then print job count.</p></div></div>
     <?php if (empty($top_customers)): ?><div class="empty-state"><p>No customer activity for this period.</p></div><?php else: ?>
         <div class="report-customer-list"><?php foreach ($top_customers as $index => $customer): ?>
-            <div><span class="report-rank"><?php echo $index + 1; ?></span><div><strong><?php echo e($customer['full_name']); ?></strong><small><?php echo e($customer['email']); ?></small></div><span><?php echo (int) $customer['order_count']; ?> orders</span><strong><?php echo ownerMoney($customer['spending']); ?></strong></div>
+            <div><span class="report-rank"><?php echo $index + 1; ?></span><div><strong><?php echo e($customer['full_name']); ?></strong><small><?php echo e($customer['email']); ?></small></div><span><?php echo (int) $customer['order_count']; ?> print jobs</span><strong><?php echo ownerMoney($customer['spending']); ?></strong></div>
         <?php endforeach; ?></div>
     <?php endif; ?>
 </section>
 
 <section class="report-orders-card">
-    <div class="report-table-head"><div><h2>Order Report</h2><p>Showing <?php echo $showing_start; ?>-<?php echo $showing_end; ?> of <?php echo $filtered_total; ?> orders</p></div></div>
+    <div class="report-table-head"><div><h2>Print Job Report</h2><p>Showing <?php echo $showing_start; ?>-<?php echo $showing_end; ?> of <?php echo $filtered_total; ?> print jobs</p></div></div>
     <?php if (empty($orders)): ?>
-        <div class="empty-state"><h2>No orders found</h2><p>Try another date range or wait for new orders.</p></div>
+        <div class="empty-state"><h2>No print jobs found</h2><p>Try another date range or wait for new print requests.</p></div>
     <?php else: ?>
-        <div class="owner-table-wrap"><table class="report-table"><thead><tr><th>Order</th><th>Customer</th><th>Print Details</th><th>Copies</th><th>Order Status</th><th>Payment</th><th>Amount</th><th>Date</th></tr></thead><tbody>
+        <div class="owner-table-wrap"><table class="report-table"><thead><tr><th>Print Job</th><th>Customer</th><th>Print Details</th><th>Copies</th><th>Job Status</th><th>Payment</th><th>Amount</th><th>Date</th></tr></thead><tbody>
             <?php foreach ($orders as $order): $payment_label = reportPaymentLabel($order['paid_amount'], $order['payment_status'], $order['verification_status']); ?>
                 <tr><td><strong><?php echo e($order['order_code']); ?></strong></td><td><strong><?php echo e($order['full_name']); ?></strong><small><?php echo e($order['email']); ?></small></td><td><span><?php echo e($order['paper_size'] ?: 'Not set'); ?></span><small><?php echo e(trim(($order['paper_type'] ?: '') . ' ' . ($order['print_type'] ?: '')) ?: 'Not set'); ?></small></td><td><?php echo (int) $order['copies']; ?></td><td><span class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>"><?php echo e(ownerStatusLabel($order['order_status'])); ?></span></td><td><span class="status-badge <?php echo $payment_label === 'Paid' ? 'status-success' : ($payment_label === 'Rejected' ? 'status-danger' : 'status-warning'); ?>"><?php echo e($payment_label); ?></span></td><td><strong><?php echo ownerMoney($order['total_amount']); ?></strong></td><td><?php echo e(date('M d, Y', strtotime($order['created_at']))); ?></td></tr>
             <?php endforeach; ?>

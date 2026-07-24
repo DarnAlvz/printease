@@ -181,7 +181,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
 <section class="transactions-ui">
     <div class="transactions-prepaid-pill">
         <?php echo ownerIcon('circle-check', 'icon-sm'); ?>
-        <span>All orders are prepaid via GCash</span>
+        <span>All print jobs are prepaid via GCash</span>
     </div>
 
     <section class="transactions-stat-grid" aria-label="Transaction summary">
@@ -195,7 +195,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
         <article class="transactions-stat-card">
             <span class="transactions-stat-icon paid"><?php echo ownerIcon('circle-check', 'icon'); ?></span>
             <div>
-                <p>Total Paid Orders</p>
+                <p>Total Paid Jobs</p>
                 <strong><?php echo (int) $summary['total_transactions']; ?></strong>
             </div>
         </article>
@@ -213,7 +213,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
             <input type="hidden" name="date_filter" value="<?php echo e($date_filter); ?>">
             <label class="transactions-search-box">
                 <?php echo ownerIcon('search', 'icon'); ?>
-                <input type="text" name="q" placeholder="Search by order code, customer, or payment method" value="<?php echo e($search); ?>">
+                <input type="text" name="q" placeholder="Search by job code, customer, or payment method" value="<?php echo e($search); ?>">
             </label>
             <button type="submit" class="transactions-submit-hidden">Search</button>
             <?php if ($search !== ''): ?>
@@ -242,7 +242,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
     <?php if (empty($transactions)): ?>
         <section class="owner-card empty-state transactions-empty-state" data-live-region="owner-transaction-results">
             <h2>No transactions found</h2>
-            <p>Paid customer orders will appear here once payments are recorded.</p>
+            <p>Paid customer print jobs will appear here once payments are recorded.</p>
         </section>
     <?php else: ?>
         <section class="transactions-table-card" data-live-region="owner-transaction-results">
@@ -250,7 +250,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
                 <table class="transactions-table">
                     <thead>
                         <tr>
-                            <th>Order Code</th>
+                            <th>Job Code</th>
                             <th>Customer</th>
                             <th>Print Details</th>
                             <th>Payment Method</th>
@@ -358,7 +358,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
 
     <section class="transactions-total-bar" aria-label="Transaction totals" data-live-region="owner-transaction-totals">
         <div>
-            <span>Total Orders</span>
+            <span>Total Print Jobs</span>
             <strong><?php echo (int) $summary['total_transactions']; ?></strong>
         </div>
         <div>
@@ -366,7 +366,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
             <strong><?php echo ownerMoney($summary['total_revenue']); ?></strong>
         </div>
         <div>
-            <span>Average Order</span>
+            <span>Average Job</span>
             <strong><?php echo ownerMoney($summary['average_transaction']); ?></strong>
         </div>
     </section>

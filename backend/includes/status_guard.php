@@ -75,12 +75,14 @@ function requireVerifiedStatus($conn, $soft = false)
             return true;
 
         $message = match ($status) {
-            'pending' => 'Your account is pending verification by the Admin.',
+            'pending' => 'Your profile is submitted and waiting for Super Admin approval.',
             'inactive' => 'Your account has been deactivated by the Admin. Please contact support.',
             default => 'Your account has been rejected. Please contact support.',
         };
 
-        showToast($message, $status, "dashboard.php");
+        setToast($message, $status);
+        header("Location: " . BASE_URL . "frontend/user/customer/dashboard.php");
+        exit();
     }
 
     // ------------------ SHOP OWNER ------------------

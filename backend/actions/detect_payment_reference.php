@@ -34,7 +34,7 @@ $ip = rateLimitClientIp();
 $customer_key = rateLimitCurrentUserKey();
 
 if ($order_id <= 0) {
-    paymentReferenceJson(false, 'Invalid order.');
+    paymentReferenceJson(false, 'Invalid request.');
 }
 
 $order_sql = "SELECT o.order_id
@@ -47,7 +47,7 @@ mysqli_stmt_execute($order_stmt);
 $order = mysqli_fetch_assoc(mysqli_stmt_get_result($order_stmt));
 
 if (!$order) {
-    paymentReferenceJson(false, 'Order not found.');
+    paymentReferenceJson(false, 'Request not found.');
 }
 
 $ocr_customer_limit = rateLimitCheck($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60);

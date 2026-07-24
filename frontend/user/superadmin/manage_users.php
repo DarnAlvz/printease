@@ -326,6 +326,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                                             <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="inactive">
+                                            <input type="hidden" name="update_user_status" value="1">
                                             <button class="admin-user-action admin-user-action-disable" type="submit" name="update_user_status"><?php echo adminIcon('shield'); ?>Deactivate</button>
                                         </form>
                                     <?php elseif ($status === 'inactive'): ?>
@@ -346,6 +347,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                                             <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="rejected">
+                                            <input type="hidden" name="update_user_status" value="1">
                                             <button class="admin-user-action admin-user-action-reject" type="submit" name="update_user_status"><?php echo adminIcon('x'); ?>Reject</button>
                                         </form>
                                     <?php elseif ($status === 'rejected'): ?>
@@ -353,6 +355,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                                             <?php echo csrfField(); ?>
                                             <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
                                             <input type="hidden" name="account_status" value="verified">
+                                            <input type="hidden" name="update_user_status" value="1">
                                             <button class="admin-user-action admin-user-action-activate" type="submit" name="update_user_status"><?php echo adminIcon('check'); ?>Activate</button>
                                         </form>
                                     <?php endif; ?>
@@ -387,6 +390,20 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
     </div>
 </div>
 
+<div class="admin-confirm-modal" id="adminConfirmModal" aria-hidden="true">
+    <div class="admin-confirm-modal__panel" role="alertdialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmMessage">
+        <span class="admin-confirm-modal__icon" id="adminConfirmIcon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>
+        </span>
+        <h3 id="adminConfirmTitle">Are you sure?</h3>
+        <p id="adminConfirmMessage"></p>
+        <div class="admin-confirm-modal__actions">
+            <button type="button" class="btn btn-soft" id="adminConfirmCancel">Cancel</button>
+            <button type="button" class="btn admin-confirm-modal__confirm-btn" id="adminConfirmOk">Confirm</button>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
         const selectAll = document.querySelector('[data-admin-user-select-all]');
@@ -400,10 +417,63 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
 
         document.querySelectorAll('[data-confirm-action]').forEach(function (form) {
             form.addEventListener('submit', function (event) {
-                if (!window.confirm(form.dataset.confirmAction)) {
-                    event.preventDefault();
-                }
+                event.preventDefault();
+                var isReject = form.querySelector('.admin-user-action-reject') !== null;
+                openConfirmModal(
+                    form.dataset.confirmAction,
+                    isReject ? 'reject' : 'deactivate',
+                    function () { form.submit(); }
+                );
             });
+        });
+
+        var confirmModal = document.getElementById('adminConfirmModal');
+        var confirmTitle = document.getElementById('adminConfirmTitle');
+        var confirmMessage = document.getElementById('adminConfirmMessage');
+        var confirmIcon = document.getElementById('adminConfirmIcon');
+        var confirmOk = document.getElementById('adminConfirmOk');
+        var confirmCancel = document.getElementById('adminConfirmCancel');
+        var confirmCallback = null;
+
+        function openConfirmModal(message, type, onConfirm) {
+            confirmMessage.textContent = message;
+            confirmCallback = onConfirm;
+
+            if (type === 'reject') {
+                confirmTitle.textContent = 'Reject Account?';
+                confirmOk.textContent = 'Reject';
+                confirmOk.className = 'btn admin-confirm-modal__confirm-btn admin-confirm-modal__confirm-btn--danger';
+                confirmIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
+            } else {
+                confirmTitle.textContent = 'Deactivate Account?';
+                confirmOk.textContent = 'Deactivate';
+                confirmOk.className = 'btn admin-confirm-modal__confirm-btn admin-confirm-modal__confirm-btn--warning';
+                confirmIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>';
+            }
+
+            confirmModal.classList.add('is-open');
+            confirmModal.setAttribute('aria-hidden', 'false');
+            confirmOk.focus();
+        }
+
+        function closeConfirmModal() {
+            confirmModal.classList.remove('is-open');
+            confirmModal.setAttribute('aria-hidden', 'true');
+            confirmCallback = null;
+        }
+
+        confirmOk.addEventListener('click', function () {
+            if (typeof confirmCallback === 'function') confirmCallback();
+            closeConfirmModal();
+        });
+        confirmCancel.addEventListener('click', closeConfirmModal);
+        confirmModal.addEventListener('click', function (event) {
+            if (event.target === confirmModal) closeConfirmModal();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && confirmModal.classList.contains('is-open')) {
+                closeConfirmModal();
+            }
         });
 
         const modal = document.getElementById('adminUserModal');

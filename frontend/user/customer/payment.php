@@ -22,7 +22,7 @@ $sql = "SELECT o.*, ps.shop_name, sps.gcash_account_name, sps.gcash_number, sps.
         LEFT JOIN shop_payment_settings sps ON sps.shop_id = ps.shop_id
             AND sps.approval_status = 'approved'
             AND sps.is_active = 1
-        WHERE o.order_id = ? AND o.customer_id = ?
+        WHERE o.order_id = ? AND o.customer_id = ?" . customerOrderPrivacySql($conn, 'o') . "
         LIMIT 1";
 $stmt = mysqli_prepare($conn, $sql);
 mysqli_stmt_bind_param($stmt, "ii", $order_id, $customer_id);
@@ -30,7 +30,7 @@ mysqli_stmt_execute($stmt);
 $order = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
 if (!$order) {
-    setError("Order not found.");
+    setError("Request not found.");
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 }
 
@@ -70,7 +70,7 @@ $order_unit_price = (float) ($order['total_amount'] ?? 0) / $order_page_count / 
                 </div>
 
                 <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-gray-700 space-y-1">
-                    <strong class="block text-gray-900 mb-1">Order Price Breakdown</strong>
+                    <strong class="block text-gray-900 mb-1">Request Price Breakdown</strong>
                     <p><strong>Paper:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?></p>
                     <p><strong>Print:</strong> <?php echo e(customerPaymentPrintType($order['print_type'])); ?></p>
                     <p><strong>Paper Price:</strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?>/page</p>

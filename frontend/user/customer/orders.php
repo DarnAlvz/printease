@@ -36,7 +36,7 @@ function customerOrdersUrl($status_tab, $search = '')
 
 function countCustomerOrdersByTab($conn, $customer_id, $status_tab)
 {
-    $sql = "SELECT COUNT(*) AS total FROM orders WHERE customer_id = ?";
+    $sql = "SELECT COUNT(*) AS total FROM orders WHERE customer_id = ?" . customerOrderPrivacySql($conn);
 
     if ($status_tab === 'active') {
         $sql .= " AND COALESCE(NULLIF(order_status, ''), 'pending') IN ('pending', 'processing', 'ready_for_pickup')";
@@ -72,7 +72,7 @@ $sql = "SELECT o.*, ps.shop_name,
             ORDER BY p2.created_at DESC, p2.payment_id DESC
             LIMIT 1
         )
-        WHERE o.customer_id = ?";
+        WHERE o.customer_id = ?" . customerOrderPrivacySql($conn, 'o');
 
 if ($status_tab === 'active') {
     $sql .= " AND COALESCE(NULLIF(o.order_status, ''), 'pending') IN ('pending', 'processing', 'ready_for_pickup')";
@@ -108,6 +108,49 @@ function displayPrintType($print_type)
 {
     $print_type = trim((string) $print_type);
     return $print_type === '' || $print_type === '0' ? 'Not specified' : $print_type;
+}
+
+function customerOrderServiceName(array $order)
+{
+    $instruction = trim((string) ($order['customer_instruction'] ?? ''));
+    if (preg_match('/Service request:\s*([^-\.]+?)\s*-/i', $instruction, $matches)) {
+        return trim($matches[1]);
+    }
+
+    $paper_type = trim((string) ($order['paper_type'] ?? ''));
+    $document_paper_types = [
+        'standard',
+        'bond',
+        'bond paper',
+        'glossy',
+        'matte',
+        'plain',
+        'regular',
+        'specialty',
+    ];
+
+    if ($paper_type !== '' && !in_array(strtolower($paper_type), $document_paper_types, true)) {
+        return $paper_type;
+    }
+
+    return 'Document Printing';
+}
+
+function customerOrderPaymentLabel(array $order)
+{
+    if (($order['payment_status'] ?? '') === 'paid' && ($order['verification_status'] ?? '') === 'verified') {
+        return 'Paid';
+    }
+
+    if (($order['verification_status'] ?? '') === 'pending') {
+        return 'For Verification';
+    }
+
+    if (($order['verification_status'] ?? '') === 'rejected') {
+        return 'Rejected';
+    }
+
+    return 'Waiting for Payment';
 }
 
 function customerOrderUnitPrice(array $order)
@@ -159,7 +202,7 @@ function formatDateTime12Hour($datetime)
 <html>
 
 <head>
-    <title>My Orders</title>
+    <title>My Requests</title>
     <?php renderCustomerHead(); ?>
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css">
 </head>
@@ -170,17 +213,17 @@ function formatDateTime12Hour($datetime)
     <div class="max-w-md md:max-w-6xl mx-auto min-h-screen">
 
         <div class="max-w-md md:max-w-6xl mx-auto min-h-screen">
-            <?php renderCustomerLayout(['title' => 'My Orders', 'subtitle' => 'Track your print requests and payments.']); ?>
+            <?php renderCustomerLayout(['title' => 'My Requests', 'subtitle' => 'Track your print requests and payments.']); ?>
 
             <main class="p-4 md:p-6">
                 <form method="GET" class="flex gap-2 mb-4" data-live-search-form data-live-target="customer_orders" data-live-min="1">
                     <input type="hidden" name="status" value="<?php echo e($status_tab); ?>">
                     <input type="text" name="order_code" value="<?php echo e($search); ?>"
-                        placeholder="Search order code" class="flex-1 border rounded-xl p-3">
+                        placeholder="Search request code" class="flex-1 border rounded-xl p-3">
                     <button class="bg-blue-600 text-white px-4 rounded-xl">Search</button>
                 </form>
 
-                <nav class="grid grid-cols-2 gap-2 mb-4" aria-label="Order filters" data-live-region="customer-order-tabs">
+                <nav class="grid grid-cols-2 gap-2 mb-4" aria-label="Request filters" data-live-region="customer-order-tabs">
                     <?php
                     $order_tabs = [
                         'active' => 'Active',
@@ -201,9 +244,9 @@ function formatDateTime12Hour($datetime)
 
                 <?php if (mysqli_num_rows($result) == 0): ?>
                     <div class="bg-white p-5 rounded-2xl shadow text-center" data-live-region="customer-order-results">
-                        <p class="text-gray-500">No orders found.</p>
-                        <a href="explore.php?view=all" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Order
-                            Now</a>
+                        <p class="text-gray-500">No requests found.</p>
+                        <a href="explore.php?view=all" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Request
+                            Print</a>
                     </div>
                 <?php else: ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-live-region="customer-order-results">
@@ -213,6 +256,14 @@ function formatDateTime12Hour($datetime)
                             $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
                             $order_copies = max(1, (int) ($order['copies'] ?? 1));
                             $order_unit_price = customerOrderUnitPrice($order);
+                            $order_service_name = customerOrderServiceName($order);
+                            $is_document_request = $order_service_name === 'Document Printing';
+                            $order_instruction = trim((string) ($order['customer_instruction'] ?? ''));
+                            $order_instruction = trim((string) preg_replace('/^Service request:.*?\.\s*/is', '', $order_instruction));
+                            if ($order_instruction === '') {
+                                $order_instruction = 'No instruction provided';
+                            }
+                            $order_payment_label = customerOrderPaymentLabel($order);
                             $file_stmt = mysqli_prepare($conn, "SELECT * FROM uploaded_files WHERE order_id = ? LIMIT 1");
                             mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                             mysqli_stmt_execute($file_stmt);
@@ -238,42 +289,45 @@ function formatDateTime12Hour($datetime)
                                     </span>
                                 </div>
 
-                                <div class="mt-4 text-sm text-gray-700 space-y-1">
-                                    <p><strong>Instruction:</strong>
-                                        <?php if (!empty($order['customer_instruction'])): ?>
-                                            <?php echo e($order['customer_instruction']); ?>
-                                        <?php else: ?>
-                                            No instruction provided
-                                        <?php endif; ?>
+                                <div class="customer-request-details mt-4 text-sm text-gray-700" data-request-details>
+                                    <div class="customer-request-detail-row">
+                                        <strong>Service:</strong>
+                                        <span><?php echo e($order_service_name); ?></span>
+                                    </div>
+                                    <div class="customer-request-detail-row">
+                                        <strong>Instruction:</strong>
+                                        <span><?php echo e($order_instruction); ?></span>
+                                    </div>
+                                    <div class="customer-request-detail-row">
+                                        <strong>Pickup:</strong>
+                                        <span><?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></span>
+                                    </div>
+                                    <div class="customer-request-detail-row">
+                                        <strong>Total:</strong>
+                                        <span>&#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></span>
+                                    </div>
+                                    <div class="customer-request-detail-row">
+                                        <strong>Payment:</strong>
+                                        <span><?php echo e($order_payment_label); ?></span>
+                                    </div>
+
+                                    <div class="customer-request-more space-y-1" data-request-more hidden>
+                                    <p><strong><?php echo $is_document_request ? 'Paper:' : 'Option:'; ?></strong> <?php echo e($order['paper_size']); ?><?php if ($is_document_request && !empty($order['paper_type'])): ?>,
+                                        <?php echo e($order['paper_type']); ?><?php endif; ?>
                                     </p>
-                                    <p><strong>Paper:</strong> <?php echo e($order['paper_size']); ?>,
-                                        <?php echo e($order['paper_type']); ?>
-                                    </p>
-                                    <p><strong>Print:</strong> <?php echo e(displayPrintType($order['print_type'])); ?></p>
+                                    <p><strong><?php echo $is_document_request ? 'Print:' : 'Charged By:'; ?></strong> <?php echo e(displayPrintType($order['print_type'])); ?></p>
                                     <p><strong>Pages:</strong> <?php echo e($order_page_count); ?></p>
                                     <p><strong>Copies:</strong> <?php echo e($order_copies); ?></p>
-                                    <p><strong>Volume:</strong> <?php echo e($order_page_count); ?> x <?php echo e($order_copies); ?></p>
-                                    <p><strong>Paper Price:</strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?>/page</p>
+                                    <p><strong><?php echo $is_document_request ? 'Paper Price:' : 'Price:'; ?></strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?><?php echo $is_document_request ? '/page' : ' ' . e(displayPrintType($order['print_type'])); ?></p>
                                     <p><strong>Computation:</strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?> x <?php echo e($order_page_count); ?> page<?php echo $order_page_count === 1 ? '' : 's'; ?> x <?php echo e($order_copies); ?> cop<?php echo $order_copies === 1 ? 'y' : 'ies'; ?> = &#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></p>
-                                    <p><strong>Pickup:</strong>
-                                        <?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></p>
-                                    <p><strong>Total:</strong> ₱<?php echo e(number_format($order['total_amount'], 2)); ?></p>
-                                    <p><strong>Payment:</strong>
-                                        <?php
-                                        if (($order['payment_status'] ?? '') === 'paid' && ($order['verification_status'] ?? '') === 'verified') {
-                                            echo "Paid";
-                                        } elseif (($order['verification_status'] ?? '') === 'pending') {
-                                            echo "For Verification";
-                                        } elseif (($order['verification_status'] ?? '') === 'rejected') {
-                                            echo "Rejected";
-                                        } else {
-                                            echo "Waiting for Payment";
-                                        }
-                                        ?>
-                                    </p>
                                     <?php if (!empty($order['reference_number'])): ?>
                                         <p><strong>GCash Ref:</strong> <?php echo e($order['reference_number']); ?></p>
                                     <?php endif; ?>
+                                    </div>
+
+                                    <button type="button" class="customer-request-more-toggle" data-request-toggle aria-expanded="false">
+                                        Show more
+                                    </button>
                                 </div>
 
                                 <?php if (!empty($order['proof_of_payment_file'])): ?>
@@ -321,6 +375,22 @@ function formatDateTime12Hour($datetime)
                                         Pay Now
                                     </a>
                                 <?php endif; ?>
+
+                                <?php if ($status_tab === 'completed'): ?>
+                                    <form action="<?php echo BASE_URL; ?>backend/actions/delete_customer_completed_order.php"
+                                        method="POST"
+                                        class="mt-3"
+                                        data-delete-request-form>
+                                        <?php echo csrfField(); ?>
+                                        <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
+                                        <input type="hidden" name="delete_completed_order" value="1">
+                                        <button type="button"
+                                            data-open-delete-request
+                                            class="w-full border border-red-200 text-red-600 bg-red-50 py-3 rounded-xl font-semibold hover:bg-red-100 transition">
+                                            Remove
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
                             </div>
                         <?php endwhile; ?>
                     </div>
@@ -330,11 +400,97 @@ function formatDateTime12Hour($datetime)
 
         <?php renderCustomerLayoutEnd('orders'); ?>
 
+        <div class="customer-request-delete-modal" data-delete-request-modal hidden>
+            <div class="customer-request-delete-backdrop" data-close-delete-request></div>
+            <section class="customer-request-delete-panel" role="dialog" aria-modal="true" aria-labelledby="deleteRequestTitle" tabindex="-1">
+                <div class="customer-request-delete-icon" aria-hidden="true">!</div>
+                <div class="customer-request-delete-copy">
+                    <h2 id="deleteRequestTitle">Remove completed request?</h2>
+                    <p>This only hides the completed request from your history. The print shop keeps the record for payment and service tracking.</p>
+                </div>
+                <div class="customer-request-delete-actions">
+                    <button type="button" class="customer-request-delete-cancel" data-close-delete-request>Cancel</button>
+                    <button type="button" class="customer-request-delete-confirm" data-confirm-delete-request>Remove Request</button>
+                </div>
+            </section>
+        </div>
+
         <script>
             const focusedOrder = document.getElementById('focused-order');
             if (focusedOrder) {
                 focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
+
+            document.addEventListener('click', function (event) {
+                const toggle = event.target.closest('[data-request-toggle]');
+                if (!toggle) return;
+
+                const details = toggle.closest('[data-request-details]');
+                const more = details ? details.querySelector('[data-request-more]') : null;
+                if (!more) return;
+
+                const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+                more.hidden = isExpanded;
+                toggle.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+                toggle.textContent = isExpanded ? 'Show more' : 'Show less';
+            });
+
+            (function () {
+                const modal = document.querySelector('[data-delete-request-modal]');
+                const panel = modal ? modal.querySelector('.customer-request-delete-panel') : null;
+                const confirmButton = modal ? modal.querySelector('[data-confirm-delete-request]') : null;
+                let pendingForm = null;
+
+                function openDeleteModal(form) {
+                    pendingForm = form;
+                    modal.hidden = false;
+                    document.body.classList.add('customer-request-delete-open');
+                    window.setTimeout(function () {
+                        modal.classList.add('is-visible');
+                        if (panel) panel.focus();
+                    }, 10);
+                }
+
+                function closeDeleteModal() {
+                    modal.classList.remove('is-visible');
+                    document.body.classList.remove('customer-request-delete-open');
+                    pendingForm = null;
+                    window.setTimeout(function () {
+                        modal.hidden = true;
+                    }, 160);
+                }
+
+                if (modal) {
+                    document.addEventListener('click', function (event) {
+                        const openButton = event.target.closest('[data-open-delete-request]');
+                        if (openButton) {
+                            event.preventDefault();
+                            openDeleteModal(openButton.closest('[data-delete-request-form]'));
+                            return;
+                        }
+
+                        if (event.target.closest('[data-close-delete-request]')) {
+                            event.preventDefault();
+                            closeDeleteModal();
+                        }
+                    });
+
+                    document.addEventListener('keydown', function (event) {
+                        if (event.key === 'Escape' && !modal.hidden) {
+                            closeDeleteModal();
+                        }
+                    });
+
+                    if (confirmButton) {
+                        confirmButton.addEventListener('click', function () {
+                            if (!pendingForm) return;
+                            confirmButton.disabled = true;
+                            confirmButton.textContent = 'Removing...';
+                            pendingForm.submit();
+                        });
+                    }
+                }
+            })();
         </script>
 
 </body>

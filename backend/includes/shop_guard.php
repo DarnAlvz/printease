@@ -17,13 +17,20 @@ function requireVerifiedShop($conn) {
         redirect($shop_profile_url);
     }
 
-    if ($shop['permit_status'] !== 'verified') {
-        if ($shop['permit_status'] === 'disabled') {
+    $permit_status = $shop['permit_status'] ?? 'pending';
+
+    if ($permit_status !== 'verified') {
+        if ($permit_status === 'disabled') {
             setFlash("toast", "Your shop has been disabled by the Admin. Please contact support for assistance.");
             redirect($shop_profile_url);
         }
 
-        setFlash("toast", "Your shop must be verified before accessing this page.");
+        if ($permit_status === 'rejected') {
+            setFlash("toast", "Your shop profile was rejected. Please update your details or contact the Super Admin.");
+            redirect($shop_profile_url);
+        }
+
+        setFlash("toast", "Your shop profile is submitted and waiting for Super Admin approval.");
         redirect($shop_profile_url);
     }
 }

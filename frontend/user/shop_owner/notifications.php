@@ -23,7 +23,7 @@ ownerLayoutStart('notifications', 'Notifications', 'Review recent shop alerts, o
 ?>
 
 <section class="owner-card">
-    <?php renderNotificationCenter($notifications, ['role' => 'owner', 'unread_count' => $unread_count, 'empty_text' => 'Order, payment, and permit updates will appear here.']); ?>
+    <?php renderNotificationCenter($notifications, ['role' => 'owner', 'unread_count' => $unread_count, 'empty_text' => 'Print job, payment, and permit updates will appear here.']); ?>
 </section>
 
 <?php ownerLayoutEnd(); ?>

@@ -47,8 +47,8 @@ function customerNavigationItems()
     return [
         'home' => ['label' => 'Home', 'path' => 'dashboard.php', 'icon' => 'home'],
         'explore' => ['label' => 'Explore', 'path' => 'explore.php', 'icon' => 'explore'],
-        'order' => ['label' => 'Order', 'path' => 'explore.php?view=all', 'icon' => 'plus'],
-        'orders' => ['label' => 'Orders', 'path' => 'orders.php', 'icon' => 'orders'],
+        'order' => ['label' => 'Request', 'path' => 'explore.php?view=all', 'icon' => 'plus'],
+        'orders' => ['label' => 'Requests', 'path' => 'orders.php', 'icon' => 'orders'],
         'profile' => ['label' => 'Profile', 'path' => 'profile.php', 'icon' => 'profile'],
     ];
 }
@@ -94,6 +94,7 @@ function renderCustomerHead()
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/components/notification-center.css'), ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/assets/customer.css'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo $css_version; ?>">
     <?php
 }
@@ -145,6 +146,9 @@ function renderCustomerLayout(array $options)
     $page_title = $welcome_label !== '' ? 'Customer Dashboard' : $title;
     $profile_url = $identity['profile_picture'] !== '' ? printEaseAssetUrl($identity['profile_picture']) : '';
     ?>
+    <div class="customer-offline-banner" data-customer-offline-banner role="status" hidden>
+        You are offline. You can continue editing drafts, but submission requires internet.
+    </div>
     <header class="customer-topbar">
         <a class="customer-topbar-brand" href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/dashboard.php'), ENT_QUOTES, 'UTF-8'); ?>" aria-label="PrintEase customer home">
            <?php echo customerIcon('printer'); ?><strong><?php echo htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8'); ?></strong>
@@ -176,7 +180,7 @@ function renderCustomerLayoutEnd(?string $active = null)
         <a href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/' . $item['path']), ENT_QUOTES, 'UTF-8'); ?>"
             class="customer-bottom-nav__item<?php echo $key === 'order' ? ' customer-bottom-nav__order' : ''; ?><?php echo $active === $key ? ' is-active active' : ''; ?>"
             data-route="<?php echo htmlspecialchars($key, ENT_QUOTES, 'UTF-8'); ?>"
-            aria-label="<?php echo htmlspecialchars($key === 'order' ? 'Start order' : $item['label'], ENT_QUOTES, 'UTF-8'); ?>"
+            aria-label="<?php echo htmlspecialchars($key === 'order' ? 'Start print request' : $item['label'], ENT_QUOTES, 'UTF-8'); ?>"
             <?php echo $active === $key ? 'aria-current="page"' : ''; ?>>
             <?php if ($key === 'order'): ?>
                 <span class="customer-bottom-nav__order-icon"><?php echo customerIcon($item['icon'], 'customer-bottom-nav-icon'); ?></span>
@@ -197,6 +201,7 @@ function renderCustomerLayoutEnd(?string $active = null)
     <script>
         (function () {
             var themeToggle = document.querySelector('[data-customer-theme-toggle]');
+            var offlineBanner = document.querySelector('[data-customer-offline-banner]');
 
             function setCustomerTheme(theme) {
                 var isDark = theme === 'dark';
@@ -240,6 +245,17 @@ function renderCustomerLayoutEnd(?string $active = null)
                     item.removeAttribute('aria-current');
                 }
             });
+
+            function updateCustomerOnlineState() {
+                if (!offlineBanner) return;
+                var isOffline = navigator.onLine === false;
+                offlineBanner.hidden = !isOffline;
+                document.body.classList.toggle('is-offline', isOffline);
+            }
+
+            updateCustomerOnlineState();
+            window.addEventListener('online', updateCustomerOnlineState);
+            window.addEventListener('offline', updateCustomerOnlineState);
         })();
     </script>
     <script src="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/assets/js/live-updates.js'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo is_file(__DIR__ . '/../assets/js/live-updates.js') ? filemtime(__DIR__ . '/../assets/js/live-updates.js') : time(); ?>" data-printease-live data-base-url="<?php echo htmlspecialchars(printEaseAssetUrl(''), ENT_QUOTES, 'UTF-8'); ?>"></script>

@@ -185,7 +185,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
 
     $nav = [
         ['key' => 'dashboard', 'href' => 'dashboard.php', 'label' => 'Dashboard', 'icon' => 'layout-dashboard'],
-        ['key' => 'orders', 'href' => 'orders.php', 'label' => 'Orders', 'icon' => 'shopping-cart'],
+        ['key' => 'orders', 'href' => 'orders.php', 'label' => 'Print Jobs', 'icon' => 'shopping-cart'],
         ['key' => 'profile', 'href' => 'shop_profile.php', 'label' => 'Shop Management', 'icon' => 'store'],
         ['key' => 'services', 'href' => 'services.php', 'label' => 'Paper Pricing', 'icon' => 'file-text'],
         ['key' => 'transactions', 'href' => 'transactions.php', 'label' => 'Transactions', 'icon' => 'badge-dollar-sign'],
@@ -204,6 +204,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="<?php echo BASE_URL; ?>frontend/components/notification-center.css">
         <script>
             try {
                 if (sessionStorage.getItem('ownerSidebarHold') === '1') {
@@ -273,8 +274,8 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                 </div>
                 <div class="topbar-actions">
                     <button type="button" class="owner-sound-toggle" id="ownerSoundToggle"
-                        aria-label="Mute new order sound alerts" aria-pressed="true"
-                        title="New order sound alerts on">
+                        aria-label="Mute new print request sound alerts" aria-pressed="true"
+                        title="New print request sound alerts on">
                         <?php echo ownerIcon('volume-2', 'icon'); ?>
                     </button>
                     <div class="notification-popover-wrap">

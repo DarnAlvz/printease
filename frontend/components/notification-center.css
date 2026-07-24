@@ -1,0 +1,245 @@
+.notification-center,
+[data-notification-center] {
+    --notification-page-bg: transparent;
+    --notification-header-bg: #ffffff;
+    --notification-header-border: #e2e8f0;
+    --notification-title: #0f172a;
+    --notification-card-bg: #ffffff;
+    --notification-card-border: #e2e8f0;
+    --notification-card-shadow: 0 2px 8px rgba(0, 0, 0, .05);
+    --notification-unread-bg: #f0fdff;
+    --notification-accent: #06b6d4;
+    --notification-icon-bg: #e0f2fe;
+    --notification-icon-color: #0284c7;
+    --notification-message: #475569;
+    --notification-time: #64748b;
+    --notification-button-bg: #0ea5e9;
+    width: 100%;
+    margin: 0 auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.notification-center-head {
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.notification-center-head h2 {
+    margin: 0;
+    color: var(--notification-title);
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.notification-mark-all {
+    min-height: 44px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 999px;
+    color: #ffffff;
+    background: var(--notification-button-bg);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .2s ease, background .2s ease, opacity .2s ease;
+}
+
+.notification-mark-all:hover:not(:disabled) {
+    transform: scale(1.02);
+    box-shadow: none;
+}
+
+.notification-mark-all:active:not(:disabled) {
+    transform: scale(.98);
+}
+
+.notification-mark-all:disabled {
+    opacity: .7;
+    cursor: not-allowed;
+}
+
+.app-notification-list {
+    display: grid;
+    gap: 16px;
+}
+
+.app-notification.notification-tone-info {
+    --notification-tone-accent: #2563eb;
+    --notification-tone-bg: #eff6ff;
+    --notification-tone-icon-bg: #dbeafe;
+    --notification-tone-icon-color: #1d4ed8;
+    --notification-tone-hover: #93c5fd;
+}
+
+.app-notification.notification-tone-success {
+    --notification-tone-accent: #16a34a;
+    --notification-tone-bg: #ecfdf5;
+    --notification-tone-icon-bg: #dcfce7;
+    --notification-tone-icon-color: #15803d;
+    --notification-tone-hover: #86efac;
+}
+
+.app-notification.notification-tone-danger {
+    --notification-tone-accent: #dc2626;
+    --notification-tone-bg: #fef2f2;
+    --notification-tone-icon-bg: #fee2e2;
+    --notification-tone-icon-color: #b91c1c;
+    --notification-tone-hover: #fca5a5;
+}
+
+.app-notification {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--notification-card-border);
+    border-left-width: 1px;
+    border-radius: 16px;
+    color: var(--notification-title);
+    background: var(--notification-card-bg);
+    box-shadow: var(--notification-card-shadow);
+    text-decoration: none;
+    transition: transform .2s ease, border-color .2s ease, background .3s ease, box-shadow .2s ease, opacity .16s ease;
+}
+
+.app-notification:hover {
+    border-color: var(--notification-tone-hover, var(--notification-card-border));
+    transform: translateY(-2px);
+}
+
+.app-notification.is-marking-read {
+    opacity: .78;
+}
+
+.app-notification.is-unread {
+    border-left: 4px solid var(--notification-tone-accent, var(--notification-accent));
+    background: var(--notification-tone-bg, var(--notification-unread-bg));
+}
+
+.app-notification.is-unread .app-notification-title {
+    font-weight: 700;
+}
+
+.app-notification-icon,
+.notification-empty-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    color: var(--notification-tone-icon-color, var(--notification-icon-color));
+    background: var(--notification-tone-icon-bg, var(--notification-icon-bg));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.app-notification-icon i,
+.notification-empty-icon i {
+    width: 22px;
+    height: 22px;
+}
+
+.app-notification-content {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.app-notification-title {
+    margin: 0;
+    color: var(--notification-title);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-notification-new {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--notification-tone-accent, var(--notification-accent));
+    flex: 0 0 auto;
+}
+
+.app-notification-message {
+    margin: 0;
+    color: var(--notification-message);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+}
+
+.app-notification-time {
+    color: var(--notification-time);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.notification-empty {
+    min-height: 320px;
+    padding: 42px 20px;
+    border: 1px dashed var(--notification-card-border);
+    border-radius: 16px;
+    color: var(--notification-message);
+    background: var(--notification-card-bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-shadow: var(--notification-card-shadow);
+}
+
+.notification-empty strong {
+    margin-top: 16px;
+    color: var(--notification-title);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.notification-empty p {
+    margin: 6px 0 0;
+    color: var(--notification-message);
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .notification-center-head {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .notification-mark-all {
+        align-self: flex-start;
+    }
+
+    .app-notification {
+        grid-template-columns: 44px minmax(0, 1fr);
+    }
+
+    .app-notification-time {
+        grid-column: 2;
+    }
+}
+
+@media (max-width: 640px) {
+    .notification-center-head { align-items: flex-start; }
+    .app-notification { padding: 14px; }
+    .app-notification-icon { width: 38px; height: 38px; }
+    .app-notification-icon i { width: 18px; height: 18px; }
+    .notification-empty { min-height: 240px; padding: 32px 16px; }
+}

@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../backend/includes/session.php';
 secureSession();
 
 require_once __DIR__ . '/../../backend/config/app.php';
+require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../components/head.php';
 require_once __DIR__ . '/../components/auth_brand_panel.php';
 
@@ -16,8 +17,8 @@ $success_messages = [
 
 $error_messages = [
     'session_expired' => 'Your reset session has expired. Please request a new OTP.',
-    'weak_password' => 'Use at least 8 characters for your new password.',
-    'server' => 'We could not update your password right now. Please try again.',
+    'weak_password' => 'Password must be at least 8 characters long.',
+    'server' => 'An unexpected error occurred. Please try again.',
 ];
 
 if (!$can_reset) {

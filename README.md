@@ -25,3 +25,7 @@ Leave `TRUSTED_PROXIES` unset for Laragon, XAMPP, shared hosting, or any setup w
 
 Important note: kapag may bagong Tailwind classes kang dinagdag sa PHP files, run this again:
     npm run build:tailwind
+
+## Manual Testing
+
+Use `docs/END_TO_END_MANUAL_TEST_PLAN.md` to test the full customer, shop owner, and super admin workflow before final defense.

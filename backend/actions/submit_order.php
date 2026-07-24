@@ -18,7 +18,7 @@ $order_customer_key = rateLimitCurrentUserKey('order');
 $order_ip = rateLimitClientIp();
 $order_rate = rateLimitCheck($conn, 'order_place', $order_customer_key, $order_ip, 10, 3600);
 if (!$order_rate['allowed']) {
-    setError("You have placed too many orders recently. Please try again later.");
+    setError("You have submitted too many requests recently. Please try again later.");
     redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
@@ -29,9 +29,12 @@ if (!isset($_POST['submit_order'])) {
 $customer_id = $_SESSION['user_id'];
 $shop_id = intval($_POST['shop_id']);
 $service_id = intval($_POST['service_id']);
-$copies = intval($_POST['copies']);
+$order_service_type = trim((string) ($_POST['order_service_type'] ?? $_POST['customer_service_type'] ?? 'Document Printing'));
+$is_document_order = $order_service_type === '' || $order_service_type === 'Document Printing';
+$service_pricing_id = intval($_POST['service_pricing_id'] ?? 0);
+$copies = $is_document_order ? intval($_POST['copies'] ?? 1) : max(1, intval($_POST['service_quantity'] ?? 1));
 $order_status = 'pending';
-$instruction = trim($_POST['customer_instruction']);
+$instruction = trim((string) ($_POST['customer_instruction'] ?? ''));
 
 // Basic validation - cant pick past date and time  
 $pickup_datetime = $_POST['pickup_datetime'];
@@ -46,11 +49,25 @@ if ($pickup_timestamp === false || $pickup_timestamp < $current_timestamp) {
 }
 
 if ($copies < 1 || empty($pickup_datetime)) {
-    setError("Invalid order details.");
+    setError("Invalid request details.");
     redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
-if ($shop_id <= 0 || $service_id <= 0) {
+if ($shop_id <= 0) {
+    setError("Invalid shop or service selected.");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
+}
+
+if (!$is_document_order && $service_id <= 0) {
+    $fallback_sql = "SELECT service_id FROM shop_services WHERE shop_id = ? AND is_available = 1 ORDER BY service_id ASC LIMIT 1";
+    $fallback_stmt = mysqli_prepare($conn, $fallback_sql);
+    mysqli_stmt_bind_param($fallback_stmt, "i", $shop_id);
+    mysqli_stmt_execute($fallback_stmt);
+    $fallback = mysqli_fetch_assoc(mysqli_stmt_get_result($fallback_stmt));
+    $service_id = (int) ($fallback['service_id'] ?? 0);
+}
+
+if ($service_id <= 0) {
     setError("Invalid shop or service selected.");
     redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
@@ -74,7 +91,32 @@ if (!$service || $service['permit_status'] !== 'verified' || $service['shop_stat
     redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
-if (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UPLOAD_ERR_OK) {
+$service_price = null;
+if (!$is_document_order) {
+    if ($service_pricing_id <= 0) {
+        setError("Please select a valid service option.");
+        redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
+    }
+
+    $pricing_sql = "SELECT id, service_type, option_label, unit, price
+                    FROM shop_service_pricing
+                    WHERE id = ?
+                    AND shop_id = ?
+                    AND is_available = 1
+                    AND service_type <> 'Document Printing'
+                    LIMIT 1";
+    $pricing_stmt = mysqli_prepare($conn, $pricing_sql);
+    mysqli_stmt_bind_param($pricing_stmt, "ii", $service_pricing_id, $shop_id);
+    mysqli_stmt_execute($pricing_stmt);
+    $service_price = mysqli_fetch_assoc(mysqli_stmt_get_result($pricing_stmt));
+
+    if (!$service_price) {
+        setToast("Selected service option is not available.", "warning");
+        redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
+    }
+}
+
+if ($is_document_order && (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UPLOAD_ERR_OK)) {
     setError("Please upload a document file.");
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
@@ -91,7 +133,7 @@ function validateOrderDocumentUpload(array $file)
     $original_name = basename((string) ($file['name'] ?? ''));
     $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
     if ($extension !== 'pdf') {
-        setError("Only PDF files are accepted for print orders.");
+        setError("Only PDF files are accepted for print requests.");
         return false;
     }
 
@@ -104,7 +146,7 @@ function validateOrderDocumentUpload(array $file)
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($tmp_name);
     if ($mime !== 'application/pdf') {
-        setError("Only PDF files are accepted for print orders.");
+        setError("Only PDF files are accepted for print requests.");
         return false;
     }
 
@@ -125,7 +167,58 @@ function validateOrderDocumentUpload(array $file)
     return true;
 }
 
-if (!validateOrderDocumentUpload($_FILES['document_file'])) {
+function validateServiceUpload(array $file)
+{
+    $max_file_size = 25 * 1024 * 1024;
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        setError("Please upload a file for this service request.");
+        return false;
+    }
+
+    if ($error !== UPLOAD_ERR_OK) {
+        setError("Please upload a valid attachment.");
+        return false;
+    }
+
+    if (($file['size'] ?? 0) > $max_file_size) {
+        setError("Attachment must be 25MB or smaller.");
+        return false;
+    }
+
+    $original_name = basename((string) ($file['name'] ?? ''));
+    $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+    if (!in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+        setError("Attachment must be a PDF, JPG, or PNG file.");
+        return false;
+    }
+
+    $tmp_name = (string) ($file['tmp_name'] ?? '');
+    if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+        setError("Please upload a valid attachment.");
+        return false;
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($tmp_name);
+    $allowed_mimes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!in_array($mime, $allowed_mimes, true)) {
+        setError("Attachment must be a PDF, JPG, or PNG file.");
+        return false;
+    }
+
+    return true;
+}
+
+$active_upload_key = $is_document_order ? 'document_file' : 'service_file';
+$has_upload = isset($_FILES[$active_upload_key]) && (int) ($_FILES[$active_upload_key]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+if ($is_document_order && !validateOrderDocumentUpload($_FILES['document_file'])) {
+    redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
+}
+
+if (!$is_document_order && (!isset($_FILES['service_file']) || !validateServiceUpload($_FILES['service_file']))) {
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
@@ -166,12 +259,12 @@ function createCloudinaryOrderUploadCopy($source_path, $safe_name)
 
     $temp_dir = $root . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'order_upload_tmp';
     if (!is_dir($temp_dir) && !mkdir($temp_dir, 0755, true)) {
-        throw new Exception("Could not prepare order upload temp directory.");
+        throw new Exception("Could not prepare request upload temp directory.");
     }
 
     $temp_dir_real = realpath($temp_dir);
     if ($temp_dir_real === false || !is_dir($temp_dir_real)) {
-        throw new Exception("Order upload temp directory is not available.");
+        throw new Exception("Request upload temp directory is not available.");
     }
 
     $target_path = $temp_dir_real . DIRECTORY_SEPARATOR . $safe_name;
@@ -189,43 +282,58 @@ function isDuplicateKeyError($conn)
 
 $page_count = 1;
 $detected_page_count = max(1, min(10000, (int) ($_POST['detected_page_count'] ?? 1)));
-$original_name = basename($_FILES['document_file']['name']);
-$file_type = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
-
-$file_tmp = $_FILES['document_file']['tmp_name'];
+$original_name = $has_upload ? basename($_FILES[$active_upload_key]['name']) : '';
+$file_type = $has_upload ? strtolower(pathinfo($original_name, PATHINFO_EXTENSION)) : '';
+$file_tmp = $has_upload ? $_FILES[$active_upload_key]['tmp_name'] : '';
 $cloudinary_public_id = null;
 $cloudinary_resource_type = null;
 $cloudinary_upload_copy = null;
 $transaction_started = false;
 
 try {
-    $page_count = getPdfPageCount($file_tmp, $detected_page_count);
-
-    $total_amount = (float) $service['price_per_page'] * $page_count * $copies;
-    $cloudinary_safe_name = buildCloudinaryOrderSafeName($original_name);
-    $cloudinary_upload_copy = createCloudinaryOrderUploadCopy($file_tmp, $cloudinary_safe_name);
-
-    $uploadResult = $cloudinary->uploadApi()->upload(
-        $cloudinary_upload_copy,
-        [
-            "folder" => "printease/orders",
-            "resource_type" => "raw",
-            "public_id" => $cloudinary_safe_name,
-            "use_filename" => false,
-            "unique_filename" => false
-        ]
-    );
-
-    if ($cloudinary_upload_copy && is_file($cloudinary_upload_copy)) {
-        unlink($cloudinary_upload_copy);
-        $cloudinary_upload_copy = null;
+    if ($is_document_order) {
+        $page_count = getPdfPageCount($file_tmp, $detected_page_count);
+        $total_amount = (float) $service['price_per_page'] * $page_count * $copies;
+        $order_paper_size = $service['paper_size'];
+        $order_paper_type = $service['paper_type'];
+        $order_print_type = $service['print_type'];
+    } else {
+        $page_count = 1;
+        $total_amount = (float) $service_price['price'] * $copies;
+        $order_paper_size = $service_price['option_label'];
+        $order_paper_type = $service_price['service_type'];
+        $order_print_type = !empty($service_price['unit']) ? $service_price['unit'] : 'flat rate';
+        $instruction_prefix = "Service request: {$service_price['service_type']} - {$service_price['option_label']} ({$order_print_type}).";
+        $instruction = trim($instruction_prefix . ($instruction !== '' ? "\n\n" . $instruction : ''));
     }
 
-    $db_path = $uploadResult['secure_url'] ?? '';
-    $cloudinary_public_id = $uploadResult['public_id'] ?? null;
-    $cloudinary_resource_type = $uploadResult['resource_type'] ?? 'auto';
-    if ($db_path === '') {
-        throw new Exception("Cloudinary upload did not return a file URL.");
+    $db_path = '';
+    if ($has_upload) {
+        $cloudinary_safe_name = buildCloudinaryOrderSafeName($original_name);
+        $cloudinary_upload_copy = createCloudinaryOrderUploadCopy($file_tmp, $cloudinary_safe_name);
+
+        $uploadResult = $cloudinary->uploadApi()->upload(
+            $cloudinary_upload_copy,
+            [
+                "folder" => "printease/orders",
+                "resource_type" => "raw",
+                "public_id" => $cloudinary_safe_name,
+                "use_filename" => false,
+                "unique_filename" => false
+            ]
+        );
+
+        if ($cloudinary_upload_copy && is_file($cloudinary_upload_copy)) {
+            unlink($cloudinary_upload_copy);
+            $cloudinary_upload_copy = null;
+        }
+
+        $db_path = $uploadResult['secure_url'] ?? '';
+        $cloudinary_public_id = $uploadResult['public_id'] ?? null;
+        $cloudinary_resource_type = $uploadResult['resource_type'] ?? 'auto';
+        if ($db_path === '') {
+            throw new Exception("Cloudinary upload did not return a file URL.");
+        }
     }
 
     mysqli_begin_transaction($conn);
@@ -238,7 +346,7 @@ try {
 
     $order_stmt = mysqli_prepare($conn, $order_sql);
     if (!$order_stmt) {
-        throw new Exception("Failed to prepare order. Please try again.");
+        throw new Exception("Failed to prepare request. Please try again.");
     }
 
     $order_code = '';
@@ -249,9 +357,9 @@ try {
         $customer_id,
         $shop_id,
         $service_id,
-        $service['paper_size'],
-        $service['paper_type'],
-        $service['print_type'],
+        $order_paper_size,
+        $order_paper_type,
+        $order_print_type,
         $copies,
         $page_count,
         $instruction,
@@ -271,39 +379,42 @@ try {
         }
 
         if (!isDuplicateKeyError($conn)) {
-            throw new Exception("Failed to save order. Please try again.");
+            throw new Exception("Failed to save request. Please try again.");
         }
     }
 
     if (!$order_inserted) {
-        throw new Exception("Could not generate a unique order code. Please try again.");
+        throw new Exception("Could not generate a unique request code. Please try again.");
     }
 
     $order_id = mysqli_insert_id($conn);
 
 
-    // Insert uploaded file
-    $file_sql = "INSERT INTO uploaded_files (order_id, file_name, file_path, file_type)
-                 VALUES (?, ?, ?, ?)";
-    $file_stmt = mysqli_prepare($conn, $file_sql);
-    if (!$file_stmt)
-        throw new Exception("Failed to prepare file upload. Please try again.");
-    mysqli_stmt_bind_param(
-        $file_stmt,
-        "isss",
-        $order_id,
-        $original_name,
-        $db_path,
-        $file_type
-    );
-    if (!mysqli_stmt_execute($file_stmt)) {
-        throw new Exception("Failed to save uploaded file. Please try again.");
+    if ($has_upload) {
+        // Insert uploaded file
+        $file_sql = "INSERT INTO uploaded_files (order_id, file_name, file_path, file_type)
+                     VALUES (?, ?, ?, ?)";
+        $file_stmt = mysqli_prepare($conn, $file_sql);
+        if (!$file_stmt)
+            throw new Exception("Failed to prepare file upload. Please try again.");
+        mysqli_stmt_bind_param(
+            $file_stmt,
+            "isss",
+            $order_id,
+            $original_name,
+            $db_path,
+            $file_type
+        );
+        if (!mysqli_stmt_execute($file_stmt)) {
+            throw new Exception("Failed to save uploaded file. Please try again.");
+        }
     }
 
     // Notify shop owner
-    if (!sendNotification($conn, $service['owner_id'], "New print order received. Order #$order_code.", [
+    $notification_label = $is_document_order ? 'print request' : strtolower($order_paper_type) . ' request';
+    if (!sendNotification($conn, $service['owner_id'], "New {$notification_label} received. Request #$order_code.", [
         'type' => 'order_new',
-        'title' => 'New print order',
+        'title' => $is_document_order ? 'New print request' : 'New service request',
         'target_url' => BASE_URL . "frontend/user/shop_owner/orders.php?focus_order_id=$order_id",
         'metadata' => ['order_id' => $order_id, 'order_code' => $order_code],
     ])) {
@@ -313,9 +424,9 @@ try {
     mysqli_commit($conn);
     $transaction_started = false;
 
-    setMessage("Order submitted successfully. Your Order # is " . $order_code . ".", [
-        'title' => 'Order submitted',
-        'action_label' => 'View order',
+    setMessage("Request submitted successfully. Your request # is " . $order_code . ".", [
+        'title' => 'Request submitted',
+        'action_label' => 'View request',
         'action_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . $order_id,
     ]);
     rateLimitRecord($conn, 'order_place', $order_customer_key, $order_ip, 10, 3600, 3600);
@@ -340,7 +451,7 @@ try {
         }
     }
 
-    setError("Order submission failed: " . $e->getMessage());
+    setError("Request submission failed: " . $e->getMessage());
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
     exit();
 }

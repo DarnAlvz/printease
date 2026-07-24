@@ -13,9 +13,9 @@ $alert_message = '';
 $error_messages = [
     'invalid_email' => 'Please enter a valid email address.',
     'email_not_found' => 'No PrintEase account was found with that email address.',
-    'mail_failed' => 'We could not send the OTP right now. Please check your mail settings or try again.',
-    'server' => 'Something went wrong while preparing your OTP. Please try again.',
-    'otp_wait' => 'Please wait at least 60 seconds before requesting another OTP.',
+    'mail_failed' => 'Unable to send the verification code at this time. Please try again shortly.',
+    'server' => 'An unexpected error occurred. Please try again.',
+    'otp_wait' => 'Please wait 60 seconds before requesting another verification code.',
     'otp_hourly_limit' => 'Too many OTP requests for this email. Please try again later.',
     'too_many_requests' => 'Too many OTP requests from your connection. Please try again later.',
 ];

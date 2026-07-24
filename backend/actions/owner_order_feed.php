@@ -2,6 +2,7 @@
 require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
+require_once __DIR__ . "/../includes/cache.php";
 
 header('Content-Type: application/json');
 
@@ -22,6 +23,14 @@ if (!$shop) {
 }
 
 $shop_id = (int) $shop['shop_id'];
+$cache_key = "owner_order:{$shop_id}";
+
+$cached = cacheGet($cache_key);
+if ($cached !== null) {
+    echo json_encode($cached);
+    exit();
+}
+
 $count_sql = "SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END) AS pending,
@@ -59,7 +68,7 @@ while ($row = mysqli_fetch_assoc($signature_result)) {
     ]);
 }
 
-echo json_encode([
+$response = [
     'success' => true,
     'counts' => [
         'total' => (int) ($counts['total'] ?? 0),
@@ -69,5 +78,9 @@ echo json_encode([
         'completed' => (int) ($counts['completed'] ?? 0),
     ],
     'signature' => hash('sha256', implode('|', $signature_parts) . '|' . ($counts['latest_created'] ?? '')),
-]);
+];
+
+cacheSet($cache_key, $response, 5);
+
+echo json_encode($response);
 ?>

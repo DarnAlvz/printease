@@ -8,7 +8,6 @@ require_once __DIR__ . '/../components/auth_brand_panel.php';
 
 define('DB_CONNECTION_OPTIONAL', true);
 require_once __DIR__ . '/../../backend/config/db.php';
-require_once __DIR__ . '/../../backend/includes/functions.php';
 require_once __DIR__ . '/../../backend/includes/auth.php';
 
 redirectIfAuthenticated($conn);
@@ -47,6 +46,7 @@ $login_alert_message = '';
 
 $login_success_messages = [
     'registered' => 'Account created successfully. You can now sign in.',
+    'account_verified' => 'Account verified. You can now sign in.',
     'password_reset' => 'Password reset successfully. You can now sign in with your new password.',
 ];
 
@@ -54,7 +54,7 @@ $login_error_messages = [
     'invalid_credentials' => 'Invalid email or password. Please try again.',
     'rejected' => 'Your account has been rejected. Please contact the administrator.',
     'inactive' => 'Your account has been deactivated. Please contact the administrator.',
-    'invalid_role' => 'Invalid role detected. Please contact the administrator.',
+    'invalid_role' => 'Your account has an unrecognized role. Please contact the administrator.',
     'oauth_invalid_provider' => 'That sign-in provider is not supported.',
     'oauth_not_configured' => 'Social sign-in is not configured yet. Please contact the administrator.',
     'oauth_denied' => 'Social sign-in was cancelled. Please try again.',
@@ -140,8 +140,9 @@ if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
                                 <path d="m22 6-10 7L2 6" />
                             </svg>
                             <input id="email" type="email" name="email" placeholder="Enter your email"
-                                autocomplete="email" required>
+                                autocomplete="email">
                         </div>
+                        <span class="field-error" id="email-error">Please enter a valid email address.</span>
                     </div>
 
                     <div class="field-group">
@@ -153,7 +154,7 @@ if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                             </svg>
                             <input id="password" type="password" name="password" placeholder="Enter your password"
-                                autocomplete="current-password" required>
+                                autocomplete="current-password">
                             <button class="password-toggle" type="button" aria-label="Show password"
                                 aria-pressed="false" data-password-toggle="password">
                                 <svg class="password-icon-visible" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -170,6 +171,7 @@ if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
                                 </svg>
                             </button>
                         </div>
+                        <span class="field-error" id="password-error">Please enter your password.</span>
                     </div>
 
                     <div class="form-options">
@@ -184,12 +186,13 @@ if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
                     </div>
 
                     <div class="policy-agreement">
-                        <input id="terms_privacy" type="checkbox" name="terms_privacy" value="1" aria-label="I agree to the Terms and Privacy Policy" required>
+                        <input id="terms_privacy" type="checkbox" name="terms_privacy" value="1" aria-label="I agree to the Terms and Privacy Policy">
                         <span>
                             I agree to the <button class="policy-link" type="button" data-policy-open="terms-modal">Terms</button> and
                             <button class="policy-link" type="button" data-policy-open="privacy-modal">Privacy Policy</button>.
                         </span>
                     </div>
+                    <span class="field-error" id="terms-error">Please agree to the Terms and Privacy Policy.</span>
 
                     <button class="btn btn-primary" type="submit" name="login">Sign In</button>
                 </form>
@@ -322,6 +325,75 @@ if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
                 button.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
             });
         });
+
+        (function () {
+            var form = document.getElementById('password-login-form');
+            var email = document.getElementById('email');
+            var password = document.getElementById('password');
+            var terms = document.getElementById('terms_privacy');
+
+            if (!form) return;
+
+            function showError(input, errorId, message) {
+                var errorEl = document.getElementById(errorId);
+                if (errorEl) {
+                    if (message) errorEl.textContent = message;
+                    errorEl.classList.add('visible');
+                }
+                var wrap = input ? input.closest('.input-wrap') : null;
+                if (wrap) wrap.classList.add('has-error');
+            }
+
+            function clearError(input, errorId) {
+                var errorEl = document.getElementById(errorId);
+                if (errorEl) errorEl.classList.remove('visible');
+                var wrap = input ? input.closest('.input-wrap') : null;
+                if (wrap) wrap.classList.remove('has-error');
+            }
+
+            function isValidEmail(value) {
+                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+            }
+
+            email.addEventListener('input', function () { clearError(email, 'email-error'); });
+            password.addEventListener('input', function () { clearError(password, 'password-error'); });
+            if (terms) {
+                terms.addEventListener('change', function () {
+                    var errorEl = document.getElementById('terms-error');
+                    if (errorEl) errorEl.classList.remove('visible');
+                });
+            }
+
+            form.addEventListener('submit', function (e) {
+                var valid = true;
+
+                if (email.value.trim() === '') {
+                    showError(email, 'email-error', 'Please enter your email address.');
+                    valid = false;
+                } else if (!isValidEmail(email.value.trim())) {
+                    showError(email, 'email-error', 'Please enter a valid email address.');
+                    valid = false;
+                } else {
+                    clearError(email, 'email-error');
+                }
+
+                if (password.value === '') {
+                    showError(password, 'password-error', 'Please enter your password.');
+                    valid = false;
+                } else {
+                    clearError(password, 'password-error');
+                }
+
+                if (terms && !terms.checked) {
+                    document.getElementById('terms-error').classList.add('visible');
+                    valid = false;
+                }
+
+                if (!valid) {
+                    e.preventDefault();
+                }
+            });
+        })();
 
         var activePolicyModal = null;
         var policyModalTrigger = null;

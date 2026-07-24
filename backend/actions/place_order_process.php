@@ -28,7 +28,7 @@ function validatePlaceOrderUpload(array $file): bool
     $original_name = basename((string) ($file['name'] ?? ''));
     $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
     if ($extension !== 'pdf') {
-        setError("Only PDF files are accepted for print orders.");
+        setError("Only PDF files are accepted for print requests.");
         return false;
     }
 
@@ -41,7 +41,7 @@ function validatePlaceOrderUpload(array $file): bool
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($tmp_name);
     if ($mime !== 'application/pdf') {
-        setError("Only PDF files are accepted for print orders.");
+        setError("Only PDF files are accepted for print requests.");
         return false;
     }
 
@@ -115,16 +115,16 @@ if (isset($_POST['place_order'])) {
     $shop_result = mysqli_stmt_get_result($shop_stmt);
     $shop = mysqli_fetch_assoc($shop_result);
 
-    sendNotification($conn, $shop['owner_id'], "New order #$order_id has been placed.", [
-        'type' => 'order_new', 'title' => 'New order',
+    sendNotification($conn, $shop['owner_id'], "New print request #$order_id has been submitted.", [
+        'type' => 'order_new', 'title' => 'New print request',
         'target_url' => BASE_URL . "frontend/user/shop_owner/orders.php?focus_order_id=$order_id",
         'metadata' => ['order_id' => $order_id],
     ]);
 
     // Log activity
-    logActivity($conn, $customer_id, "Placed order #$order_id", "Order Placement");
+    logActivity($conn, $customer_id, "Submitted print request #$order_id", "Print Request");
 
-    setMessage("Order placed successfully.");
+    setMessage("Print request submitted successfully.");
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 }
 ?>

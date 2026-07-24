@@ -395,7 +395,7 @@ adminLayoutStart('shops', 'Manage Print Shop', 'Review shop permits, filter shop
                                     <?php endif; ?>
                                     <?php if (!empty($setting['merchant_link'])): ?>
                                         <a class="admin-payment-link-btn" href="<?php echo e($setting['merchant_link']); ?>" target="_blank" rel="noopener">
-                                            <?php echo adminIcon('search'); ?>Payment Link
+                                            <?php echo adminIcon('search'); ?>GCash Merchant Link
                                         </a>
                                     <?php endif; ?>
                                 </div>

@@ -27,6 +27,20 @@ function dashboardInitials($name)
     return $initials ?: 'CU';
 }
 
+function dashboardCustomerProfilePictureUrl($path)
+{
+    $path = trim((string) $path);
+    if ($path === '') {
+        return '';
+    }
+
+    if (preg_match('/^https?:\/\//i', $path)) {
+        return $path;
+    }
+
+    return BASE_URL . ltrim($path, '/');
+}
+
 $owner_id = $_SESSION['user_id'];
 
 $notif_sql = "SELECT COUNT(*) AS total
@@ -101,7 +115,7 @@ while ($note = mysqli_fetch_assoc($recent_result)) {
 $recent_orders = [];
 if ($shop_id) {
     $orders_sql = "SELECT o.order_id, o.order_code, o.total_amount, o.order_status, o.created_at,
-                          u.full_name,
+                          u.full_name, u.profile_picture,
                           (
                               SELECT uf.file_name
                               FROM uploaded_files uf
@@ -167,7 +181,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
     <section class="hero-card">
         <div>
             <h2>Complete your shop profile</h2>
-            <p>Add your shop details and permit to start accepting print orders.</p>
+            <p>Add your shop details and permit to start accepting print requests.</p>
         </div>
         <a class="btn" href="shop_profile.php"><?php echo ownerIcon('store', 'icon'); ?>Complete Profile</a>
     </section>
@@ -233,7 +247,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                         <span class="status-badge status-success"><?php echo (int) $stats['total']; ?></span>
                     </div>
                     <strong><?php echo (int) $stats['total']; ?></strong>
-                    <p>Total Orders</p> 
+                    <p>Total Print Jobs</p> 
                 </article>
                 <article class="metric-card dashboard-stat-card">
                     <div class="metric-head">
@@ -241,7 +255,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                         <span class="status-badge status-warning">Active</span>
                     </div>
                     <strong><?php echo (int) $stats['processing']; ?></strong>
-                    <p>Processing Orders</p>
+                    <p>Processing Jobs</p>
                 </article>
                 <article class="metric-card dashboard-stat-card">
                     <div class="metric-head">
@@ -249,7 +263,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                         <span class="status-badge status-warning"><?php echo (int) $stats['pending']; ?></span>
                     </div>
                     <strong><?php echo (int) $stats['pending']; ?></strong>
-                    <p>Pending Orders</p>
+                    <p>Pending Jobs</p>
                 </article>
                 <article class="metric-card dashboard-sales-card">
                     <div class="metric-head">
@@ -296,7 +310,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                 </article>
 
                 <article class="owner-card dashboard-status-card">
-                    <h2>Orders Status</h2>
+                    <h2>Print Job Status</h2>
                     <div class="status-list">
                         <?php
                         $status_rows = [
@@ -319,7 +333,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                         <?php endforeach; ?>
                     </div>
                     <div class="status-total">
-                        <span>Total Orders</span>
+                        <span>Total Print Jobs</span>
                         <strong><?php echo (int) $stats['total']; ?></strong>
                     </div>
                 </article>
@@ -358,19 +372,19 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                     <strong><?php echo dashboardMoney($stats['today_revenue'] > 0 ? $stats['today_revenue'] : $stats['revenue']); ?></strong>
                 </p>
                 <p>Active Customers <strong><?php echo (int) $stats['active_customers']; ?></strong></p>
-                <p>Ready Orders <strong><?php echo (int) $stats['ready_for_pickup']; ?></strong></p>
+                <p>Ready Jobs <strong><?php echo (int) $stats['ready_for_pickup']; ?></strong></p>
             </section>
         </aside>
 
         <section class="owner-card recent-orders-card">
             <div class="card-head recent-orders-head">
-                <h2>Recent Orders</h2>
+                <h2>Recent Print Jobs</h2>
                 <a href="orders.php">View All</a>
             </div>
             <?php if (empty($recent_orders)): ?>
                 <div class="empty-state">
-                    <h2>No recent orders</h2>
-                    <p>New print orders will appear here.</p>
+                    <h2>No recent print jobs</h2>
+                    <p>New print requests will appear here.</p>
                 </div>
             <?php else: ?>
                 <div class="recent-orders-table-wrap">
@@ -378,7 +392,7 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                         <thead>
                             <tr>
                                 <th>Customer</th>
-                                <th>Order ID</th>
+                                <th>Job ID</th>
                                 <th>File Name</th>
                                 <th>Amount</th>
                                 <th>Status</th>
@@ -389,12 +403,18 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                             $avatar_classes = ['avatar-blue', 'avatar-purple', 'avatar-pink', 'avatar-green'];
                             foreach ($recent_orders as $index => $order):
                                 $avatar_class = $avatar_classes[$index % count($avatar_classes)];
+                                $customer_photo_url = dashboardCustomerProfilePictureUrl($order['profile_picture'] ?? '');
                                 ?>
                                 <tr>
                                     <td>
                                         <div class="recent-customer">
-                                            <span
-                                                class="customer-avatar <?php echo e($avatar_class); ?>"><?php echo e(dashboardInitials($order['full_name'])); ?></span>
+                                            <span class="customer-avatar <?php echo e($avatar_class); ?>">
+                                                <?php if ($customer_photo_url !== ''): ?>
+                                                    <img src="<?php echo e($customer_photo_url); ?>" alt="">
+                                                <?php else: ?>
+                                                    <?php echo e(dashboardInitials($order['full_name'])); ?>
+                                                <?php endif; ?>
+                                            </span>
                                             <strong><?php echo e($order['full_name']); ?></strong>
                                         </div>
                                     </td>
@@ -416,13 +436,26 @@ ownerLayoutStart('dashboard', 'Dashboard', '', $notif_count, $shop);
                 </div>
                 <div class="order-mobile-list recent-order-mobile-list">
                     <?php foreach ($recent_orders as $index => $order): ?>
+                        <?php
+                        $avatar_class = $avatar_classes[$index % count($avatar_classes)];
+                        $customer_photo_url = dashboardCustomerProfilePictureUrl($order['profile_picture'] ?? '');
+                        ?>
                         <article class="owner-card order-card-mobile">
                             <div class="card-head">
                                 <h2><?php echo e($order['order_code']); ?></h2>
                                 <span
                                     class="status-badge <?php echo ownerStatusClass($order['order_status']); ?>"><?php echo e(ownerStatusLabel($order['order_status'])); ?></span>
                             </div>
-                            <p><strong>Customer:</strong> <?php echo e($order['full_name']); ?></p>
+                            <div class="recent-customer">
+                                <span class="customer-avatar <?php echo e($avatar_class); ?>">
+                                    <?php if ($customer_photo_url !== ''): ?>
+                                        <img src="<?php echo e($customer_photo_url); ?>" alt="">
+                                    <?php else: ?>
+                                        <?php echo e(dashboardInitials($order['full_name'])); ?>
+                                    <?php endif; ?>
+                                </span>
+                                <strong><?php echo e($order['full_name']); ?></strong>
+                            </div>
                             <p><strong>File:</strong> <?php echo e($order['file_name'] ?: 'No uploaded file'); ?></p>
                             <p><strong>Amount:</strong> <?php echo dashboardMoney($order['total_amount']); ?></p>
                         </article>
