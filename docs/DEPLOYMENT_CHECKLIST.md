@@ -20,15 +20,15 @@ Companion docs:
 
 - [✓] **Select PHP 8.3** — cPanel → Select PHP Version (or MultiPHP Manager). Local runs 8.3; do not go below 8.1.
 - [✓] Confirm required PHP extensions are enabled: `mysqli`, `curl`, `openssl`, `mbstring`, `gd`, `fileinfo`, `zlib`. (Ask host support if any are missing.)
-- [] `proc_open` and Tesseract OCR are usually unavailable on shared hosting. This is fine — payment-reference OCR degrades gracefully and reference numbers can be entered manually.
+- [✓] `proc_open` and Tesseract OCR are usually unavailable on shared hosting. This is fine — payment-reference OCR degrades gracefully and reference numbers can be entered manually.
 
 ## 3. Create the database
 
-- [] cPanel → MySQL Databases → create database (e.g. `printease_db`).
-- [] Create a dedicated user (e.g. `printease_user`) with a strong password. **Do not use `root`**.
-- [] Add the user to the database with **ALL PRIVILEGES** during setup.
-- [] Open **phpMyAdmin**, select the new database, import **`backend/database/0000_base_schema.sql`**.
-- [] **Do not** run the individual migration files separately — `0000_base_schema.sql` is the consolidated schema for fresh installs and already includes the `orders.submit_token` column and all later migrations.
+- [✓] cPanel → MySQL Databases → create database (e.g. `printease_db`).
+- [✓] Create a dedicated user (e.g. `printease_user`) with a strong password. **Do not use `root`**.
+- [✓] Add the user to the database with **ALL PRIVILEGES** during setup.
+- [✓] Open **phpMyAdmin**, select the new database, import **`backend/database/0000_base_schema.sql`**.
+- [✓] **Do not** run the individual migration files separately — `0000_base_schema.sql` is the consolidated schema for fresh installs and already includes the `orders.submit_token` column and all later migrations.
 
 ## 4. Upload the files
 

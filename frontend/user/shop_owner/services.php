@@ -235,12 +235,12 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                     <div class="field">
                         <label for="pricing_size_name">Size</label>
                         <input id="pricing_size_name" type="text" name="size_name" list="paper-size-options" maxlength="150"
-                            placeholder="e.g., A4, 4R, 2 x 3 ft, Standard ID (CR80), Wedding Invitation" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
+                            placeholder="e.g., A4, Short, Long, Letter" required <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
                     </div>
                     <div class="field" data-pricing-paper-type-field>
                         <label for="pricing_paper_type">Paper Type</label>
                         <input id="pricing_paper_type" type="text" name="paper_type" list="paper-type-options" maxlength="150"
-                            placeholder="e.g., Bond Paper, Glossy, Matte, Standard" required <?php echo $owner_is_verified ? '' : 'disabled'; ?> data-pricing-paper-type>
+                            placeholder="e.g., Bond Paper, Colored Paper, Glossy" required <?php echo $owner_is_verified ? '' : 'disabled'; ?> data-pricing-paper-type>
                     </div>
                     <div class="field" data-pricing-basis-field>
                         <label for="pricing_basis">Charged By</label>
@@ -250,7 +250,7 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                     <div class="field" data-pricing-variant-field>
                         <label for="pricing_variant">Print Type</label>
                         <input id="pricing_variant" type="text" name="variant" list="print-type-options" maxlength="150"
-                            placeholder="e.g., Colored, Matte, Glossy" <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
+                            placeholder="e.g., Black & White, Colored" <?php echo $owner_is_verified ? '' : 'disabled'; ?>>
                     </div>
                     <div class="field">
                         <label for="pricing_price">Price (&#8369;)</label>
@@ -293,7 +293,7 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                     </div>
                     <div class="field" data-edit-document-field>
                         <label for="edit_pricing_paper_type">Paper Type</label>
-                        <input id="edit_pricing_paper_type" type="text" name="paper_type" list="paper-type-options" maxlength="150" placeholder="e.g., Bond Paper, Glossy, Matte" data-edit-paper-type>
+                        <input id="edit_pricing_paper_type" type="text" name="paper_type" list="paper-type-options" maxlength="150" placeholder="e.g., Bond Paper, Colored Paper, Glossy" data-edit-paper-type>
                     </div>
                     <div class="field" data-edit-document-field>
                         <label for="edit_pricing_print_type">Print Type</label>
@@ -753,7 +753,7 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                 basis.value = 'per piece';
             }
             if (sizeInput) {
-                sizeInput.placeholder = isDocument ? 'e.g., A4, Short, Long' : (isPhotoPrinting ? 'e.g., 2R, 3R, 4R, A4' : (isTarpaulinPrinting ? 'e.g., 2 x 3 ft, 3 x 4 ft' : (isIdPrinting ? 'e.g., Standard ID (CR80), Paper ID' : (isInvitationCardPrinting ? 'e.g., A6, Business Card, Wedding Invitation' : 'e.g., Badge, A5, A4, A3'))));
+                sizeInput.placeholder = isDocument ? 'e.g., A4, Short, Long, Letter' : (isPhotoPrinting ? 'e.g., 2R, 3R, 4R, A4' : (isTarpaulinPrinting ? 'e.g., 2 x 3 ft, 3 x 4 ft' : (isIdPrinting ? 'e.g., Standard ID (CR80), Paper ID' : (isInvitationCardPrinting ? 'e.g., A6, Business Card, Wedding Invitation' : 'e.g., Badge, A5, A4, A3'))));
             }
             if (basisField) {
                 basisField.hidden = !(isDocument || isPerPieceService);
@@ -772,7 +772,7 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
             if (paperTypeInput) {
                 paperTypeInput.required = (isDocument || isDetailedService) && canEditPricing;
                 paperTypeInput.disabled = !(isDocument || isDetailedService) || !canEditPricing;
-                paperTypeInput.placeholder = isPhotoPrinting ? 'e.g., Photo Paper' : (isTarpaulinPrinting ? 'e.g., Standard Tarpaulin' : (isIdPrinting ? 'e.g., PVC Card, Cardstock' : (isInvitationCardPrinting ? 'e.g., Cardstock, Matte Card, Premium Paper' : 'e.g., Bond Paper, Glossy, Matte, Standard')));
+                paperTypeInput.placeholder = isPhotoPrinting ? 'e.g., Photo Paper' : (isTarpaulinPrinting ? 'e.g., Standard Tarpaulin' : (isIdPrinting ? 'e.g., PVC Card, Cardstock' : (isInvitationCardPrinting ? 'e.g., Cardstock, Matte Card, Premium Paper' : 'e.g., Bond Paper, Colored Paper, Glossy')));
                 if (isLamination) {
                     paperTypeInput.value = '';
                 }
@@ -783,7 +783,7 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
             if (variantInput) {
                 variantInput.required = (isDocument || isDetailedService) && canEditPricing;
                 variantInput.disabled = !(isDocument || isDetailedService) || !canEditPricing;
-                variantInput.placeholder = isPhotoPrinting ? 'e.g., Glossy, Matte' : (isTarpaulinPrinting ? 'e.g., Full Color' : (isIdPrinting ? 'e.g., Single-sided Color, Double-sided Color' : (isInvitationCardPrinting ? 'e.g., Full Color, Glossy Color' : 'e.g., Colored, Matte, Glossy')));
+                variantInput.placeholder = isPhotoPrinting ? 'e.g., Glossy, Matte' : (isTarpaulinPrinting ? 'e.g., Full Color' : (isIdPrinting ? 'e.g., Single-sided Color, Double-sided Color' : (isInvitationCardPrinting ? 'e.g., Full Color, Glossy Color' : 'e.g., Black & White, Colored')));
                 if (isLamination) {
                     variantInput.value = '';
                 }
