@@ -1,8 +1,8 @@
 {
   "name": "PrintEase",
   "short_name": "Print Ease",
-  "start_url": "/",
-  "scope": "/printease/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#03045e",

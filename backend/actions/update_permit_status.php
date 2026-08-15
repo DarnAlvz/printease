@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("super_admin");
 
@@ -28,6 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 validateCsrf();
+
+$rate_guard = rateLimitGuardRequest($conn, 'permit_status', 60, 3600);
+if (!$rate_guard['allowed']) {
+    setError("Too many permit status updates. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".");
+    redirect($redirect_url);
+}
+rateLimitRecordRequest($conn, 'permit_status', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 3600);
 
 $shop_id = filter_input(INPUT_POST, 'shop_id', FILTER_VALIDATE_INT);
 $status = trim((string) ($_POST['status'] ?? ''));

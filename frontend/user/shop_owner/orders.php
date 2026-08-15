@@ -195,6 +195,20 @@ while ($order = mysqli_fetch_assoc($result)) {
     $orders[] = $order;
 }
 
+$shop_service_type_lookup = [];
+$service_types_stmt = mysqli_prepare($conn, "SELECT service_type FROM shop_service_types WHERE shop_id = ?");
+if ($service_types_stmt) {
+    mysqli_stmt_bind_param($service_types_stmt, "i", $shop_id);
+    mysqli_stmt_execute($service_types_stmt);
+    $service_types_result = mysqli_stmt_get_result($service_types_stmt);
+    while ($service_type_row = mysqli_fetch_assoc($service_types_result)) {
+        $service_type = trim((string) ($service_type_row['service_type'] ?? ''));
+        if ($service_type !== '') {
+            $shop_service_type_lookup[mb_strtolower($service_type, 'UTF-8')] = $service_type;
+        }
+    }
+}
+
 $counts = [
     'total' => 0,
     'pending' => 0,
@@ -236,6 +250,24 @@ function ownerOrderIsPaidAndPending(array $order)
     return ($order['order_status'] ?? '') === 'pending'
         && ($order['payment_status'] ?? '') === 'paid'
         && ($order['verification_status'] ?? '') === 'verified';
+}
+
+function ownerSelectedServiceName(array $order, array $service_type_lookup)
+{
+    $instruction = trim((string) ($order['customer_instruction'] ?? ''));
+    if (preg_match('/Service request:\s*([^-\.]+?)\s*-/i', $instruction, $matches)) {
+        return trim($matches[1]);
+    }
+
+    $candidate = trim((string) ($order['paper_type'] ?? ''));
+    if ($candidate !== '') {
+        $key = mb_strtolower($candidate, 'UTF-8');
+        if (isset($service_type_lookup[$key])) {
+            return $service_type_lookup[$key];
+        }
+    }
+
+    return 'Document Printing';
 }
 
 function ownerDownloadFileUrl(array $file)
@@ -304,7 +336,7 @@ function renderOwnerCustomerIdentity(array $order, $show_email = false)
 
     $email = trim((string) ($order['email'] ?? ''));
     $photo_url = ownerCustomerProfilePictureUrl($order);
-    ?>
+?>
     <span class="owner-customer-identity">
         <span class="owner-customer-avatar" aria-hidden="true">
             <?php if ($photo_url !== ''): ?>
@@ -320,12 +352,12 @@ function renderOwnerCustomerIdentity(array $order, $show_email = false)
             <?php endif; ?>
         </span>
     </span>
-    <?php
+<?php
 }
 
 function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = false)
 {
-    ?>
+?>
     <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
         class="orders-update-form orders-status-action order-modal-accept-form" data-accept-download-form
         data-order-id="<?php echo e($order['order_id']); ?>" <?php echo $hidden ? 'hidden' : ''; ?>>
@@ -339,11 +371,11 @@ function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = fals
                     data-download-name="<?php echo e(ownerDownloadFileName($file)); ?>">
             <?php endif; ?>
         <?php endforeach; ?>
-        <button type="submit" name="update_order" class="btn order-btn-ready">
+        <button type="submit" name="update_order" class="btn order-btn-completed">
             Accept & Download
         </button>
     </form>
-    <?php
+<?php
 }
 
 ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $owner_toast);
@@ -360,7 +392,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
     ];
     foreach ($tabs as $key => $tab):
         $tab_url = orderPageUrl(1, $search_code, $key);
-        ?>
+    ?>
         <a class="<?php echo $status_filter === $key ? 'active' : ''; ?>" href="<?php echo e($tab_url); ?>">
             <?php echo ownerIcon($tab['icon'], 'icon-sm'); ?>
             <?php echo e($tab['label']); ?>
@@ -437,6 +469,13 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                     <?php foreach ($orders as $order): ?>
                         <?php
                         $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
+                        $selected_service_name = ownerSelectedServiceName($order, $shop_service_type_lookup);
+                        $is_document_service = strcasecmp($selected_service_name, 'Document Printing') === 0;
+                        $is_photo_printing = strcasecmp($selected_service_name, 'Photo Printing') === 0;
+                        $is_tarpaulin_printing = strcasecmp($selected_service_name, 'Tarpaulin Printing') === 0;
+                        $is_id_printing = strcasecmp($selected_service_name, 'ID Printing') === 0;
+                        $is_invitation_card_printing = strcasecmp($selected_service_name, 'Invitation / Card Printing') === 0;
+                        $is_detailed_service = $is_photo_printing || $is_tarpaulin_printing || $is_id_printing || $is_invitation_card_printing;
                         $file_sql = "SELECT * FROM uploaded_files WHERE order_id = ?";
                         $file_stmt = mysqli_prepare($conn, $file_sql);
                         mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
@@ -459,11 +498,19 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             <td><?php echo e($first_file); ?></td>
                             <td>
                                 <div class="print-detail-chips">
-                                    <span><?php echo ownerIcon('file-text', 'icon-sm'); ?><?php echo e($order['paper_size']); ?></span>
-                                    <span><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['print_type']); ?></span>
-                                    <span><?php echo e($order_page_count); ?>p x<?php echo e($order['copies']); ?></span>
+                                    <span><?php echo ownerIcon('package', 'icon-sm'); ?>Service: <?php echo e($selected_service_name); ?></span>
+                                    <span><?php echo ownerIcon('file-text', 'icon-sm'); ?><?php echo $is_document_service ? 'Paper: ' : 'Size: '; ?><?php echo e($order['paper_size']); ?></span>
+                                    <?php if ($is_document_service): ?>
+                                        <span><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['print_type']); ?></span>
+                                        <span><?php echo e($order_page_count); ?>p x<?php echo e($order['copies']); ?></span>
+                                    <?php elseif ($is_detailed_service): ?>
+                                        <span><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['paper_type']); ?> / <?php echo e($order['print_type']); ?></span>
+                                        <span>Qty: <?php echo e($order['copies']); ?></span>
+                                    <?php else: ?>
+                                        <span><?php echo ownerIcon('printer', 'icon-sm'); ?>Qty: <?php echo e($order['copies']); ?></span>
+                                    <?php endif; ?>
                                 </div>
-                                <small class="muted"><?php echo e($order['paper_type']); ?></small>
+                                <small class="muted"><?php echo $is_document_service || $is_detailed_service ? e($order['paper_type']) : e($selected_service_name); ?></small>
                             </td>
                             <td>
                                 <?php if (!empty($order['pickup_datetime'])): ?>
@@ -517,6 +564,14 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             <?php
             $file_rows = $order_files[(int) $order['order_id']] ?? [];
             $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
+            $selected_service_name = ownerSelectedServiceName($order, $shop_service_type_lookup);
+            $is_document_service = strcasecmp($selected_service_name, 'Document Printing') === 0;
+            $is_photo_printing = strcasecmp($selected_service_name, 'Photo Printing') === 0;
+            $is_tarpaulin_printing = strcasecmp($selected_service_name, 'Tarpaulin Printing') === 0;
+            $is_id_printing = strcasecmp($selected_service_name, 'ID Printing') === 0;
+            $is_invitation_card_printing = strcasecmp($selected_service_name, 'Invitation / Card Printing') === 0;
+            $is_detailed_service = $is_photo_printing || $is_tarpaulin_printing || $is_id_printing || $is_invitation_card_printing;
+            $pricing_basis = $is_document_service ? 'Per Page' : trim((string) ($order['print_type'] ?? ''));
             ?>
             <div class="order-modal" id="order-modal-<?php echo e($order['order_id']); ?>" aria-hidden="true">
                 <div class="order-modal-backdrop" data-order-modal-close></div>
@@ -559,28 +614,40 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             <h3>Print Settings</h3>
                             <div class="order-settings-grid">
                                 <div class="order-setting-card">
-                                    <span>Size</span>
+                                    <span>Service</span>
+                                    <strong><?php echo e($selected_service_name); ?></strong>
+                                </div>
+                                <div class="order-setting-card">
+                                    <span><?php echo $is_document_service ? 'Paper Size' : 'Size'; ?></span>
                                     <strong><?php echo e($order['paper_size'] ?: 'Not set'); ?></strong>
                                 </div>
+                                <?php if ($is_document_service || $is_detailed_service): ?>
+                                    <div class="order-setting-card">
+                                        <span><?php echo ($is_tarpaulin_printing || $is_id_printing) ? 'Material' : 'Paper Type'; ?></span>
+                                        <strong><?php echo e($order['paper_type'] ?: 'Not set'); ?></strong>
+                                    </div>
+                                    <div class="order-setting-card">
+                                        <span>Print Type</span>
+                                        <strong><?php echo e($order['print_type'] ?: 'Not set'); ?></strong>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($is_document_service): ?>
+                                    <div class="order-setting-card">
+                                        <span>Pricing Basis</span>
+                                        <strong><?php echo e($pricing_basis ?: 'Not set'); ?></strong>
+                                    </div>
+                                    <div class="order-setting-card">
+                                        <span>Pages</span>
+                                        <strong><?php echo e($order_page_count); ?></strong>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="order-setting-card">
-                                    <span>Color</span>
-                                    <strong><?php echo e($order['print_type'] ?: 'Not set'); ?></strong>
-                                </div>
-                                <div class="order-setting-card">
-                                    <span>Pages</span>
-                                    <strong><?php echo e($order_page_count); ?></strong>
-                                </div>
-                                <div class="order-setting-card">
-                                    <span>Copies</span>
+                                    <span><?php echo $is_document_service ? 'Copies' : 'Quantity'; ?></span>
                                     <strong><?php echo e($order['copies'] ?: 'Not set'); ?></strong>
                                 </div>
                                 <div class="order-setting-card">
                                     <span>Print Volume</span>
                                     <strong><?php echo e($order_page_count); ?> x <?php echo e($order['copies'] ?: 1); ?></strong>
-                                </div>
-                                <div class="order-setting-card">
-                                    <span>Services</span>
-                                    <strong><?php echo e(trim(($order['paper_type'] ?: '') . ($order['print_type'] ? ', ' . $order['print_type'] : '')) ?: 'Not set'); ?></strong>
                                 </div>
                             </div>
                         </section>
@@ -706,7 +773,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                                 <?php echo csrfField(); ?>
                                                 <input type="hidden" name="payment_id"
                                                     value="<?php echo e($order['payment_id']); ?>">
-                                                <button type="submit" name="verify_payment" class="btn order-btn-ready">
+                                                <button type="submit" name="verify_payment" class="btn order-btn-completed">
                                                     Mark as Paid
                                                 </button>
                                             </form>
@@ -754,6 +821,13 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             <?php foreach ($orders as $order): ?>
                 <?php
                 $order_page_count = max(1, (int) ($order['page_count'] ?? 1));
+                $selected_service_name = ownerSelectedServiceName($order, $shop_service_type_lookup);
+                $is_document_service = strcasecmp($selected_service_name, 'Document Printing') === 0;
+                $is_photo_printing = strcasecmp($selected_service_name, 'Photo Printing') === 0;
+                $is_tarpaulin_printing = strcasecmp($selected_service_name, 'Tarpaulin Printing') === 0;
+                $is_id_printing = strcasecmp($selected_service_name, 'ID Printing') === 0;
+                $is_invitation_card_printing = strcasecmp($selected_service_name, 'Invitation / Card Printing') === 0;
+                $is_detailed_service = $is_photo_printing || $is_tarpaulin_printing || $is_id_printing || $is_invitation_card_printing;
                 $file_sql = "SELECT * FROM uploaded_files WHERE order_id = ?";
                 $file_stmt = mysqli_prepare($conn, $file_sql);
                 mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
@@ -775,9 +849,16 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                     <div class="order-card-mobile-customer">
                         <?php renderOwnerCustomerIdentity($order); ?>
                     </div>
-                    <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>,
-                        <?php echo e($order['print_type']); ?>, <?php echo e($order_page_count); ?> pages x<?php echo e($order['copies']); ?>
-                    </p>
+                    <p><strong>Service:</strong> <?php echo e($selected_service_name); ?></p>
+                    <?php if ($is_document_service): ?>
+                        <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>,
+                            <?php echo e($order['print_type']); ?>, <?php echo e($order_page_count); ?> pages x<?php echo e($order['copies']); ?>
+                        </p>
+                    <?php elseif ($is_detailed_service): ?>
+                        <p><strong>Details:</strong> Size: <?php echo e($order['paper_size']); ?>, <?php echo ($is_tarpaulin_printing || $is_id_printing) ? 'Material' : 'Paper'; ?>: <?php echo e($order['paper_type']); ?>, Print: <?php echo e($order['print_type']); ?>, Quantity: <?php echo e($order['copies']); ?></p>
+                    <?php else: ?>
+                        <p><strong>Details:</strong> Size: <?php echo e($order['paper_size']); ?>, Quantity: <?php echo e($order['copies']); ?></p>
+                    <?php endif; ?>
                     <p><strong>Total:</strong> <?php echo ownerMoney($order['total_amount']); ?></p>
                     <p><strong>Instruction:</strong> <?php echo e($order['customer_instruction'] ?: 'No instruction'); ?></p>
                     <div class="row-actions">
@@ -828,8 +909,8 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
     </section>
 <?php endif; ?>
 
-<script>
-    (function () {
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function() {
         const openButtons = document.querySelectorAll('[data-order-modal-target]');
         const closeSelector = '[data-order-modal-close]';
         let activeModal = null;
@@ -848,8 +929,11 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
         }
 
         if (focusedOrder) {
-            window.setTimeout(function () {
-                focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            window.setTimeout(function() {
+                focusedOrder.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
             }, 120);
         }
 
@@ -868,13 +952,13 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             }
         }
 
-        openButtons.forEach(function (button) {
-            button.addEventListener('click', function () {
+        openButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
                 openModal(document.getElementById(button.dataset.orderModalTarget));
             });
         });
 
-        document.addEventListener('click', function (event) {
+        document.addEventListener('click', function(event) {
             const rejectToggle = event.target.closest('[data-payment-reject-toggle]');
             if (rejectToggle) {
                 event.preventDefault();
@@ -905,7 +989,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             }
         });
 
-        document.addEventListener('keydown', function (event) {
+        document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape' && activeModal) {
                 closeModal(activeModal);
             }
@@ -913,7 +997,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
 
         function setOrderProcessing(orderId) {
             const processingIcon = <?php echo json_encode(ownerIcon('trending-up', 'icon-sm')); ?>;
-            document.querySelectorAll('[data-order-status-badge="' + orderId + '"]').forEach(function (badge) {
+            document.querySelectorAll('[data-order-status-badge="' + orderId + '"]').forEach(function(badge) {
                 badge.className = 'status-badge order-status-badge order-status-processing status-info';
                 badge.innerHTML = processingIcon + 'Processing';
             });
@@ -947,41 +1031,41 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
         }
 
         function showAcceptDownloadAction(orderId) {
-            document.querySelectorAll('.order-modal [data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function (form) {
+            document.querySelectorAll('.order-modal [data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function(form) {
                 form.hidden = false;
             });
         }
 
         function setPaymentVerified(paymentId) {
-            document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function (label) {
+            document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function(label) {
                 label.textContent = 'Paid';
             });
 
-            document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function (label) {
+            document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function(label) {
                 label.textContent = 'Verified';
             });
 
-            document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function (card) {
+            document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function(card) {
                 card.remove();
             });
         }
 
         function setPaymentRejected(paymentId) {
-            document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function (label) {
+            document.querySelectorAll('[data-payment-status-label="' + paymentId + '"]').forEach(function(label) {
                 label.textContent = 'Rejected';
             });
 
-            document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function (label) {
+            document.querySelectorAll('[data-verification-status-label="' + paymentId + '"]').forEach(function(label) {
                 label.textContent = 'Rejected';
             });
 
-            document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function (card) {
+            document.querySelectorAll('[data-payment-action-card="' + paymentId + '"]').forEach(function(card) {
                 card.remove();
             });
         }
 
-        document.querySelectorAll('[data-payment-verify-form]').forEach(function (form) {
-            form.addEventListener('submit', function (event) {
+        document.querySelectorAll('[data-payment-verify-form]').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
                 event.preventDefault();
                 event.stopPropagation();
 
@@ -1004,20 +1088,22 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                 }
 
                 fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'same-origin',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                    .then(function (response) {
-                        return response.json().then(function (data) {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function(response) {
+                        return response.json().then(function(data) {
                             if (!response.ok || !data || !data.success) {
                                 throw new Error((data && data.message) || 'Payment update failed.');
                             }
                             return data;
                         });
                     })
-                    .then(function (data) {
+                    .then(function(data) {
                         setPaymentVerified(data.payment_id || form.dataset.paymentId);
                         if (data.order_id) {
                             showAcceptDownloadAction(data.order_id);
@@ -1026,7 +1112,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             window.ownerShowToast(data.message || 'Payment verified successfully.', 'success');
                         }
                     })
-                    .catch(function (error) {
+                    .catch(function(error) {
                         form.dataset.paymentSubmitting = 'false';
                         form.classList.remove('is-loading');
                         if (submitButton) {
@@ -1040,8 +1126,8 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             });
         });
 
-        document.querySelectorAll('[data-payment-reject-form]').forEach(function (form) {
-            form.addEventListener('submit', function (event) {
+        document.querySelectorAll('[data-payment-reject-form]').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
                 event.preventDefault();
                 event.stopPropagation();
 
@@ -1076,26 +1162,28 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                 }
 
                 fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'same-origin',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                    .then(function (response) {
-                        return response.json().then(function (data) {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function(response) {
+                        return response.json().then(function(data) {
                             if (!response.ok || !data || !data.success) {
                                 throw new Error((data && data.message) || 'Payment rejection failed.');
                             }
                             return data;
                         });
                     })
-                    .then(function (data) {
+                    .then(function(data) {
                         setPaymentRejected(data.payment_id || form.dataset.paymentId);
                         if (window.ownerShowToast) {
                             window.ownerShowToast(data.message || 'Payment proof rejected.', 'warning');
                         }
                     })
-                    .catch(function (error) {
+                    .catch(function(error) {
                         form.dataset.paymentSubmitting = 'false';
                         form.classList.remove('is-loading');
                         if (submitButton) {
@@ -1109,8 +1197,8 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             });
         });
 
-        document.querySelectorAll('[data-accept-download-form]').forEach(function (form) {
-            form.addEventListener('submit', async function (event) {
+        document.querySelectorAll('[data-accept-download-form]').forEach(function(form) {
+            form.addEventListener('submit', async function(event) {
                 event.preventDefault();
                 event.stopPropagation();
 
@@ -1119,13 +1207,13 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                 }
 
                 const files = Array.from(form.querySelectorAll('[data-download-url]'))
-                    .map(function (input, index) {
+                    .map(function(input, index) {
                         return {
                             url: input.value,
                             name: input.dataset.downloadName || ('request-file-' + (index + 1))
                         };
                     })
-                    .filter(function (file) {
+                    .filter(function(file) {
                         return file.url;
                     });
 
@@ -1150,10 +1238,12 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
 
                         const response = await fetch(checkUrl.toString(), {
                             credentials: 'same-origin',
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
                         });
 
-                        const checkData = await response.json().catch(function () {
+                        const checkData = await response.json().catch(function() {
                             return null;
                         });
 
@@ -1185,10 +1275,12 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                         method: 'POST',
                         body: formData,
                         credentials: 'same-origin',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
                     });
 
-                    const data = await response.json().catch(function () {
+                    const data = await response.json().catch(function() {
                         return null;
                     });
 
@@ -1198,7 +1290,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
 
                     const orderId = data.order_id || form.dataset.orderId;
                     setOrderProcessing(orderId);
-                    document.querySelectorAll('[data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function (matchingForm) {
+                    document.querySelectorAll('[data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function(matchingForm) {
                         matchingForm.remove();
                     });
                     showReadyAction(orderId);
@@ -1207,8 +1299,8 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                         submitButton.textContent = 'Starting download...';
                     }
 
-                    resolvedFiles.forEach(function (file, index) {
-                        window.setTimeout(function () {
+                    resolvedFiles.forEach(function(file, index) {
+                        window.setTimeout(function() {
                             const link = document.createElement('a');
                             link.href = file.url;
                             if (file.remote) {
@@ -1226,7 +1318,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
 
                     closeModal(form.closest('.order-modal') || activeModal);
 
-                    window.setTimeout(function () {
+                    window.setTimeout(function() {
                         const processingUrl = new URL('orders.php', window.location.href);
                         processingUrl.searchParams.set('status', 'processing');
                         processingUrl.searchParams.set('focus_order_id', orderId);
@@ -1251,7 +1343,6 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
         });
 
     })();
-
 </script>
 
 <?php ownerLayoutEnd(); ?>

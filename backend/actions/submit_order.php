@@ -14,11 +14,23 @@ requireVerifiedStatus($conn);
 
 validateCsrf();
 
+$expected_token = $_SESSION['order_submit_token'] ?? null;
+$submitted_token = trim((string) ($_POST['order_submit_token'] ?? ''));
+if ($expected_token === null || $submitted_token === '' || !hash_equals($expected_token, $submitted_token)) {
+    setMessage("Your request was already submitted. Please check your Orders page.", [
+        'title' => 'Request already submitted',
+        'action_label' => 'View requests',
+        'action_url' => BASE_URL . 'frontend/user/customer/orders.php',
+    ]);
+    redirect(BASE_URL . "frontend/user/customer/orders.php");
+}
+
 $order_customer_key = rateLimitCurrentUserKey('order');
 $order_ip = rateLimitClientIp();
-$order_rate = rateLimitCheck($conn, 'order_place', $order_customer_key, $order_ip, 10, 3600);
+$order_rate = rateLimitCheck($conn, 'order_place', $order_customer_key, $order_ip, 15, 3600);
 if (!$order_rate['allowed']) {
-    setError("You have submitted too many requests recently. Please try again later.");
+    $wait_label = rateLimitFormatSeconds($order_rate['retry_after']);
+    setError("You have reached the maximum number of requests. Please try again in {$wait_label}.");
     redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
 }
 
@@ -32,7 +44,7 @@ $service_id = intval($_POST['service_id']);
 $order_service_type = trim((string) ($_POST['order_service_type'] ?? $_POST['customer_service_type'] ?? 'Document Printing'));
 $is_document_order = $order_service_type === '' || $order_service_type === 'Document Printing';
 $service_pricing_id = intval($_POST['service_pricing_id'] ?? 0);
-$copies = $is_document_order ? intval($_POST['copies'] ?? 1) : max(1, intval($_POST['service_quantity'] ?? 1));
+$copies = $is_document_order ? max(1, min(1000, intval($_POST['copies'] ?? 1))) : max(1, min(1000, intval($_POST['service_quantity'] ?? 1)));
 $order_status = 'pending';
 $instruction = trim((string) ($_POST['customer_instruction'] ?? ''));
 
@@ -98,12 +110,17 @@ if (!$is_document_order) {
         redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
     }
 
-    $pricing_sql = "SELECT id, service_type, option_label, unit, price
-                    FROM shop_service_pricing
-                    WHERE id = ?
-                    AND shop_id = ?
-                    AND is_available = 1
-                    AND service_type <> 'Document Printing'
+    $pricing_sql = "SELECT spp.id, spp.service_type, spp.option_size, spp.option_label, spp.unit, spp.price, sst.online_available
+                    FROM shop_service_pricing spp
+                    INNER JOIN shop_service_types sst
+                        ON sst.shop_id = spp.shop_id
+                        AND sst.service_type = spp.service_type
+                    WHERE spp.id = ?
+                    AND spp.shop_id = ?
+                    AND spp.is_available = 1
+                    AND sst.service_offered = 1
+                    AND sst.online_available = 1
+                    AND spp.service_type IN ('Lamination', 'Photo Printing', 'Tarpaulin Printing', 'ID Printing', 'Invitation / Card Printing')
                     LIMIT 1";
     $pricing_stmt = mysqli_prepare($conn, $pricing_sql);
     mysqli_stmt_bind_param($pricing_stmt, "ii", $service_pricing_id, $shop_id);
@@ -164,6 +181,11 @@ function validateOrderDocumentUpload(array $file)
         return false;
     }
 
+    if (!validatePdfStructure($tmp_name)) {
+        setError("Please upload a valid PDF file. The file you uploaded is not a readable PDF.");
+        return false;
+    }
+
     return true;
 }
 
@@ -194,6 +216,14 @@ function validateServiceUpload(array $file)
         return false;
     }
 
+    $extension_mime_map = [
+        'pdf' => 'application/pdf',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+    ];
+    $expected_mime = $extension_mime_map[$extension] ?? null;
+
     $tmp_name = (string) ($file['tmp_name'] ?? '');
     if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
         setError("Please upload a valid attachment.");
@@ -205,6 +235,21 @@ function validateServiceUpload(array $file)
     $allowed_mimes = ['application/pdf', 'image/jpeg', 'image/png'];
     if (!in_array($mime, $allowed_mimes, true)) {
         setError("Attachment must be a PDF, JPG, or PNG file.");
+        return false;
+    }
+
+    if ($expected_mime !== null && $mime !== $expected_mime) {
+        setError("Attachment file type does not match its extension.");
+        return false;
+    }
+
+    if ($mime === 'application/pdf' && !validatePdfStructure($tmp_name)) {
+        setError("Attachment must be a valid PDF file. The file you uploaded is not a readable PDF.");
+        return false;
+    }
+
+    if (($mime === 'image/jpeg' || $mime === 'image/png') && !validateImageStructure($tmp_name, $mime)) {
+        setError("Attachment must be a valid image file. The file you uploaded is not a readable image.");
         return false;
     }
 
@@ -280,6 +325,16 @@ function isDuplicateKeyError($conn)
     return (int) mysqli_errno($conn) === 1062;
 }
 
+function isSubmitTokenDuplicateError($conn)
+{
+    return (int) mysqli_errno($conn) === 1062
+        && str_contains((string) mysqli_error($conn), 'uq_orders_submit_token');
+}
+
+class OrderAlreadySubmittedException extends Exception
+{
+}
+
 $page_count = 1;
 $detected_page_count = max(1, min(10000, (int) ($_POST['detected_page_count'] ?? 1)));
 $original_name = $has_upload ? basename($_FILES[$active_upload_key]['name']) : '';
@@ -300,10 +355,17 @@ try {
     } else {
         $page_count = 1;
         $total_amount = (float) $service_price['price'] * $copies;
-        $order_paper_size = $service_price['option_label'];
-        $order_paper_type = $service_price['service_type'];
-        $order_print_type = !empty($service_price['unit']) ? $service_price['unit'] : 'flat rate';
-        $instruction_prefix = "Service request: {$service_price['service_type']} - {$service_price['option_label']} ({$order_print_type}).";
+        if (in_array(($service_price['service_type'] ?? ''), ['Photo Printing', 'Tarpaulin Printing', 'ID Printing', 'Invitation / Card Printing'], true)) {
+            $order_paper_size = $service_price['option_size'];
+            $order_paper_type = $service_price['option_label'];
+            $order_print_type = $service_price['unit'];
+            $instruction_prefix = "Service request: {$service_price['service_type']} - {$order_paper_size} / {$order_paper_type} / {$order_print_type}.";
+        } else {
+            $order_paper_size = $service_price['option_label'];
+            $order_paper_type = $service_price['service_type'];
+            $order_print_type = 'per item';
+            $instruction_prefix = "Service request: {$service_price['service_type']} - {$service_price['option_label']}.";
+        }
         $instruction = trim($instruction_prefix . ($instruction !== '' ? "\n\n" . $instruction : ''));
     }
 
@@ -341,8 +403,8 @@ try {
 
     // Insert order
     $order_sql = "INSERT INTO orders
-        (order_code, customer_id, shop_id, service_id, paper_size, paper_type, print_type, copies, page_count, customer_instruction, pickup_datetime, total_amount, order_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        (order_code, submit_token, customer_id, shop_id, service_id, paper_size, paper_type, print_type, copies, page_count, customer_instruction, pickup_datetime, total_amount, order_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $order_stmt = mysqli_prepare($conn, $order_sql);
     if (!$order_stmt) {
@@ -350,10 +412,12 @@ try {
     }
 
     $order_code = '';
+    $submit_token = $submitted_token;
     mysqli_stmt_bind_param(
         $order_stmt,
-        "siiisssiissds",
+        "ssiiisssiissds",
         $order_code,
+        $submit_token,
         $customer_id,
         $shop_id,
         $service_id,
@@ -376,6 +440,10 @@ try {
         if (mysqli_stmt_execute($order_stmt)) {
             $order_inserted = true;
             break;
+        }
+
+        if (isSubmitTokenDuplicateError($conn)) {
+            throw new OrderAlreadySubmittedException();
         }
 
         if (!isDuplicateKeyError($conn)) {
@@ -411,7 +479,7 @@ try {
     }
 
     // Notify shop owner
-    $notification_label = $is_document_order ? 'print request' : strtolower($order_paper_type) . ' request';
+    $notification_label = $is_document_order ? 'print request' : strtolower((string) ($service_price['service_type'] ?? $order_paper_type)) . ' request';
     if (!sendNotification($conn, $service['owner_id'], "New {$notification_label} received. Request #$order_code.", [
         'type' => 'order_new',
         'title' => $is_document_order ? 'New print request' : 'New service request',
@@ -429,7 +497,8 @@ try {
         'action_label' => 'View request',
         'action_url' => BASE_URL . 'frontend/user/customer/orders.php?focus_order_id=' . $order_id,
     ]);
-    rateLimitRecord($conn, 'order_place', $order_customer_key, $order_ip, 10, 3600, 3600);
+    unset($_SESSION['order_submit_token']);
+    rateLimitRecord($conn, 'order_place', $order_customer_key, $order_ip, 15, 3600, 3600);
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 
 } catch (Throwable $e) {
@@ -449,6 +518,16 @@ try {
         } catch (Throwable $cleanup_exception) {
             error_log("Cloudinary cleanup failed for {$cloudinary_public_id}: " . $cleanup_exception->getMessage());
         }
+    }
+
+    if ($e instanceof OrderAlreadySubmittedException) {
+        unset($_SESSION['order_submit_token']);
+        setMessage("Your request was already submitted. Please check your Orders page.", [
+            'title' => 'Request already submitted',
+            'action_label' => 'View requests',
+            'action_url' => BASE_URL . 'frontend/user/customer/orders.php',
+        ]);
+        redirect(BASE_URL . "frontend/user/customer/orders.php");
     }
 
     setError("Request submission failed: " . $e->getMessage());

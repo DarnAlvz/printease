@@ -41,6 +41,23 @@ function validateAuthenticatedSession($conn)
         && (int) $user['auth_version'] === (int) $_SESSION['auth_version'];
 }
 
+function authIsAjaxRequest(): bool
+{
+    return strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+}
+
+function authJsonResponse(bool $success, string $message, int $status_code): void
+{
+    http_response_code($status_code);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => $success,
+        'message' => $message,
+    ]);
+    exit();
+}
+
 function authenticatedHomeUrl($conn)
 {
     $role = $_SESSION['role'] ?? '';
@@ -118,6 +135,9 @@ function checkRole($required_role)
 
     if (!isset($_SESSION['user_id']) || !validateAuthenticatedSession($conn)) {
         clearAuthenticatedSession($conn);
+        if (authIsAjaxRequest()) {
+            authJsonResponse(false, 'Authentication required.', 401);
+        }
         header("Location: " . BASE_URL . "frontend/pages/login.php");
         exit();
     }
@@ -125,6 +145,9 @@ function checkRole($required_role)
     rememberRenewCurrentDevice($conn);
 
     if (($_SESSION['role'] ?? '') !== $required_role) {
+        if (authIsAjaxRequest()) {
+            authJsonResponse(false, 'Access denied.', 403);
+        }
         http_response_code(403);
         echo "Access denied.";
         exit();

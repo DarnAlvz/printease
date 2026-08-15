@@ -87,7 +87,7 @@ $summary = [
 $summary_result = mysqli_query($conn, "
     SELECT COALESCE(account_status, 'pending') AS account_status, COUNT(*) AS total
     FROM users
-    WHERE role != 'super_admin'
+    WHERE role = 'customer'
     GROUP BY COALESCE(account_status, 'pending')
 ");
 if ($summary_result) {
@@ -104,7 +104,7 @@ if ($summary_result) {
     }
 }
 
-$where = ["u.role != 'super_admin'"];
+$where = ["u.role = 'customer'"];
 $types = '';
 $params = [];
 
@@ -132,6 +132,7 @@ $sql = "
         u.role,
         u.account_status,
         u.valid_id_file,
+        u.profile_picture,
         u.created_at,
         ps.shop_id,
         ps.shop_name,
@@ -185,7 +186,7 @@ $filters = [
     'inactive' => ['label' => 'Inactive', 'count' => $summary['inactive'], 'icon' => 'shield'],
 ];
 
-adminLayoutStart('users', 'User Management', 'Review, approve, and manage customer and shop owner accounts.');
+adminLayoutStart('users', 'User Management', 'Review, approve, and manage customer accounts.');
 ?>
 <section class="admin-user-manager">
     <form class="admin-user-toolbar" method="GET" action="manage_users.php" data-live-search-form data-live-target="admin_users" data-live-min="1">
@@ -273,6 +274,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                             $last_activity_source = $user['last_activity_at'] ?: ($user['created_at'] ?? '');
                             $last_activity = manageUserRelativeTime($last_activity_source);
                             $created_at = !empty($user['created_at']) ? date('Y-m-d', strtotime($user['created_at'])) : 'N/A';
+                            $profile_url = !empty($user['profile_picture']) ? BASE_URL . $user['profile_picture'] : '';
                             $document_url = '';
                             $document_type = '';
                             if ($user['role'] === 'customer' && !empty($user['valid_id_file'])) {
@@ -291,7 +293,11 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                             <td><input type="checkbox" aria-label="Select <?php echo e($user['full_name']); ?>"></td>
                             <td>
                                 <div class="admin-user-name">
-                                    <span><?php echo e(manageUserInitial($user['full_name'])); ?></span>
+                                    <?php if ($profile_url !== ''): ?>
+                                        <img src="<?php echo e($profile_url); ?>" alt="<?php echo e($user['full_name']); ?> profile picture" class="admin-user-avatar" loading="lazy" onerror="this.remove()">
+                                    <?php else: ?>
+                                        <span><?php echo e(manageUserInitial($user['full_name'])); ?></span>
+                                    <?php endif; ?>
                                     <div>
                                         <strong><?php echo e($user['full_name']); ?></strong>
                                         <small><?php echo e($role_label); ?><?php echo !empty($user['shop_name']) ? ' - ' . e($user['shop_name']) : ''; ?></small>
@@ -317,6 +323,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                                         data-created="<?php echo e($created_at); ?>"
                                         data-document-url="<?php echo e($document_url); ?>"
                                         data-document-type="<?php echo e($document_type); ?>"
+                                        data-avatar="<?php echo e($profile_url); ?>"
                                     >
                                         <?php echo adminIcon('search'); ?>View
                                     </button>
@@ -374,6 +381,9 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
         <button class="admin-user-modal__close" type="button" data-user-modal-close aria-label="Close user details">&times;</button>
         <span class="admin-user-modal__eyebrow">Account Details</span>
         <h2 id="adminUserModalTitle">User Details</h2>
+        <div class="admin-user-modal__avatar-wrap" data-user-modal-avatar-wrap hidden>
+            <img data-user-modal-avatar alt="User profile picture">
+        </div>
         <dl>
             <div><dt>Email</dt><dd data-user-modal-email></dd></div>
             <div><dt>Role</dt><dd data-user-modal-role></dd></div>
@@ -404,7 +414,7 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     (function () {
         const selectAll = document.querySelector('[data-admin-user-select-all]');
         if (selectAll) {
@@ -490,7 +500,9 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             preview: modal.querySelector('[data-user-modal-preview]'),
             previewImg: modal.querySelector('[data-user-modal-preview-img]'),
             previewPdf: modal.querySelector('[data-user-modal-preview-pdf]'),
-            previewFallback: modal.querySelector('[data-user-modal-preview-fallback]')
+            previewFallback: modal.querySelector('[data-user-modal-preview-fallback]'),
+            avatarWrap: modal.querySelector('[data-user-modal-avatar-wrap]'),
+            avatarImg: modal.querySelector('[data-user-modal-avatar]')
         };
 
         function resetPreview() {
@@ -500,6 +512,8 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             fields.previewPdf.hidden = true;
             fields.previewPdf.src = '';
             fields.previewFallback.hidden = true;
+            if (fields.avatarWrap) fields.avatarWrap.hidden = true;
+            if (fields.avatarImg) fields.avatarImg.src = '';
         }
 
         function closeModal() {
@@ -519,6 +533,11 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                 fields.created.textContent = button.dataset.created || 'N/A';
 
                 resetPreview();
+
+                if (button.dataset.avatar) {
+                    fields.avatarWrap.hidden = false;
+                    fields.avatarImg.src = button.dataset.avatar;
+                }
 
                 if (button.dataset.documentUrl) {
                     var docUrl = button.dataset.documentUrl;

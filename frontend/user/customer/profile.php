@@ -149,7 +149,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
             <section class="customer-profile-summary bg-white p-5 md:p-6 rounded-2xl shadow mb-5">
                 <button type="button" id="customerEditProfileTrigger" class="customer-profile-card-edit"
-                    aria-label="Edit profile">
+                    aria-label="Edit profile" title="Edit profile">
                     <?php echo customerIcon('edit'); ?>
                 </button>
                 <div class="customer-profile-hero-band" aria-hidden="true"></div>
@@ -224,7 +224,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                         <input type="file" id="customerProfilePictureInput" name="profile_picture"
                             accept="image/jpeg,image/png,image/webp" hidden>
                         <button type="button" class="customer-profile-photo-button" id="customerProfilePictureButton"
-                            aria-label="Change profile picture">
+                            aria-label="Change profile picture" title="Change profile picture">
                             <span class="customer-profile-photo-preview" data-profile-picture-preview>
                                 <?php if ($profile_picture_url !== ''): ?>
                                     <img src="<?php echo $profile_picture_url; ?>" alt="<?php echo e($customer_name); ?> profile picture">
@@ -263,7 +263,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                         <input type="hidden" id="latitude" name="latitude">
                         <input type="hidden" id="longitude" name="longitude">
 
-                        <button type="button" onclick="useCurrentLocation()"
+                        <button type="button" id="useCurrentLocationButton"
                             class="mt-2 bg-green-600 text-white py-2 px-4 rounded-xl font-semibold">
                             Use My Current Location
                         </button>
@@ -444,8 +444,8 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
     <?php renderCustomerLayoutEnd('profile'); ?>
 
-    <script src="assets/js/location.js"></script>
-    <script>
+    <script src="assets/js/location.js" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             const editTrigger = document.getElementById('customerEditProfileTrigger');
             const editForm = document.getElementById('customerProfileEditForm');
@@ -514,6 +514,8 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 });
             }
         })();
+
+        
 
         (function () {
             const modal = document.getElementById('customerValidIdModal');

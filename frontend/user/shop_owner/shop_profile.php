@@ -20,13 +20,16 @@ $shop_stmt = mysqli_prepare($conn, $shop_sql);
 mysqli_stmt_bind_param($shop_stmt, "i", $owner_id);
 mysqli_stmt_execute($shop_stmt);
 $shop = mysqli_fetch_assoc(mysqli_stmt_get_result($shop_stmt));
-$payment_settings = null;
+$payment_channels = [];
 
 if ($shop) {
-    $payment_settings_stmt = mysqli_prepare($conn, "SELECT * FROM shop_payment_settings WHERE shop_id = ? LIMIT 1");
-    mysqli_stmt_bind_param($payment_settings_stmt, "i", $shop['shop_id']);
-    mysqli_stmt_execute($payment_settings_stmt);
-    $payment_settings = mysqli_fetch_assoc(mysqli_stmt_get_result($payment_settings_stmt));
+    $payment_channels_stmt = mysqli_prepare($conn, "SELECT * FROM shop_payment_channels WHERE shop_id = ?");
+    mysqli_stmt_bind_param($payment_channels_stmt, "i", $shop['shop_id']);
+    mysqli_stmt_execute($payment_channels_stmt);
+    $payment_channels_result = mysqli_stmt_get_result($payment_channels_stmt);
+    while ($channel = mysqli_fetch_assoc($payment_channels_result)) {
+        $payment_channels[$channel['channel']] = $channel;
+    }
 }
 
 $permit_status = $shop ? ($shop['permit_status'] ?? 'pending') : 'incomplete';
@@ -40,27 +43,34 @@ if ($shop) {
     mysqli_stmt_execute($svc_stmt);
     $service_count = (int) (mysqli_fetch_assoc(mysqli_stmt_get_result($svc_stmt))['total'] ?? 0);
 
-    $st_stmt = mysqli_prepare($conn, "SELECT service_type FROM shop_service_types WHERE shop_id = ?");
+    $st_stmt = mysqli_prepare($conn, "SELECT service_type FROM shop_service_types WHERE shop_id = ? AND service_offered = 1");
     mysqli_stmt_bind_param($st_stmt, "i", $shop['shop_id']);
     mysqli_stmt_execute($st_stmt);
     $st_result = mysqli_stmt_get_result($st_stmt);
-while ($st_row = mysqli_fetch_assoc($st_result)) {
-        $shop_service_types[] = $st_row['service_type'];
+    while ($st_row = mysqli_fetch_assoc($st_result)) {
+        $service_type = trim((string) ($st_row['service_type'] ?? ''));
+        if ($service_type !== '') {
+            $shop_service_types[] = $service_type;
+        }
     }
 }
 $shop_service_types[] = 'Document Printing';
 $shop_service_types = array_values(array_unique(array_filter($shop_service_types)));
-$allowed_service_types = [
+$active_service_types = [
     'Document Printing',
-    'Photocopy',
+    'Lamination',
     'Photo Printing',
     'Tarpaulin Printing',
-    'Lamination',
-    'Binding',
-    'Scanning',
     'ID Printing',
     'Invitation / Card Printing',
 ];
+$future_service_types = [
+    'Photocopy',
+    'Binding',
+    'Scanning',
+];
+$allowed_service_types = array_merge($active_service_types, $future_service_types);
+$shop_service_types = array_values(array_intersect($shop_service_types, $allowed_service_types));
 $shop_status_details = [
     'available' => [
         'label' => 'Accepting Print Requests',
@@ -102,9 +112,53 @@ $weekday_open_time = shopTimeValue($shop['weekday_open_time'] ?? '');
 $weekday_close_time = shopTimeValue($shop['weekday_close_time'] ?? '');
 $weekend_open_time = shopTimeValue($shop['weekend_open_time'] ?? '');
 $weekend_close_time = shopTimeValue($shop['weekend_close_time'] ?? '');
-$payment_approval_status = $payment_settings['approval_status'] ?? 'pending';
-$payment_qr_code = $payment_settings['gcash_qr_code'] ?? ($shop['gcash_qr_file'] ?? '');
-$payment_instructions = $payment_settings['instructions'] ?? 'Pay the exact print request total using this GCash account, then upload your reference number and payment screenshot.';
+$payment_qr_channel = $payment_channels['gcash_qr'] ?? null;
+$payment_link_channel = $payment_channels['gcash_merchant_link'] ?? null;
+
+$payment_qr_code = $payment_qr_channel['gcash_qr_code'] ?? ($shop['gcash_qr_file'] ?? '');
+$payment_instructions = $payment_qr_channel['instructions'] ?? ($payment_link_channel['instructions'] ?? 'Pay the exact print request total using this GCash account, then upload your reference number and payment screenshot.');
+$payment_merchant_link = $payment_link_channel['merchant_link'] ?? '';
+$payment_qr_approval = $payment_qr_channel['approval_status'] ?? 'pending';
+$payment_link_approval = $payment_link_channel['approval_status'] ?? 'pending';
+
+$payment_channel_status_meta = static function (string $status): array {
+    return match ($status) {
+        'approved' => ['class' => 'payment-setup-approved', 'label' => 'Available'],
+        'rejected' => ['class' => 'payment-setup-rejected', 'label' => 'Rejected'],
+        default => ['class' => 'payment-setup-pending', 'label' => 'Pending Approval'],
+    };
+};
+
+$payment_setup_statuses = [];
+if ($payment_merchant_link !== '') {
+    $meta = $payment_channel_status_meta($payment_link_approval);
+    $payment_setup_statuses[] = [
+        'class' => $meta['class'],
+        'icon' => BASE_URL . 'assets/images/gcash.svg',
+        'label' => 'GCash Merchant Link - ' . $meta['label'],
+        'tooltip' => 'Customers can pay through your GCash merchant link once approved.',
+    ];
+}
+if ($payment_qr_code !== '') {
+    $meta = $payment_channel_status_meta($payment_qr_approval);
+    $payment_setup_statuses[] = [
+        'class' => $meta['class'],
+        'icon' => BASE_URL . 'assets/images/qr-code.png',
+        'label' => 'QR Code Payment - ' . $meta['label'],
+        'tooltip' => 'Customers can scan your GCash QR code to pay once approved.',
+    ];
+}
+if (empty($payment_setup_statuses)) {
+    $payment_setup_statuses[] = [
+        'class' => 'payment-setup-required',
+        'icon' => '',
+        'label' => 'Payment Setup Required',
+        'tooltip' => 'Add a GCash link or QR code before customers can pay online.',
+    ];
+}
+$payment_setup_class = $payment_setup_statuses[0]['class'];
+$payment_setup_label = $payment_setup_statuses[0]['label'];
+$payment_setup_emoji = 'warn';
 
 $weekday_hours_label = ($weekday_open_time && $weekday_close_time)
     ? shopTimeLabel($weekday_open_time) . " - " . shopTimeLabel($weekday_close_time)
@@ -120,46 +174,67 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<section class="shop-status-bar <?php echo e(ownerStatusClass($shop_status)); ?>" aria-label="Current shop status">
-    <div class="shop-status-summary">
-        <span class="shop-status-indicator" aria-hidden="true"></span>
-        <div>
-            <div class="shop-status-title">
-                <strong>Shop Status: <?php echo e($current_status['label']); ?></strong>
-                <span class="shop-status-live"><?php echo ownerIcon($current_status['icon'], 'icon-sm'); ?> Live</span>
+<div class="shop-status-overview">
+    <section class="shop-status-bar <?php echo e(ownerStatusClass($shop_status)); ?>" aria-label="Current shop status">
+        <div class="shop-status-summary">
+            <span class="shop-status-indicator" aria-hidden="true"></span>
+            <div>
+                <div class="shop-status-title">
+                    <strong>Shop Status: <?php echo e($current_status['label']); ?></strong>
+                    <span class="shop-status-live"><?php echo ownerIcon($current_status['icon'], 'icon-sm'); ?> Live</span>
+                </div>
+                <p><?php echo e($current_status['description']); ?></p>
             </div>
-            <p><?php echo e($current_status['description']); ?></p>
         </div>
-    </div>
 
-    <?php if ($can_change_status): ?>
-        <details class="shop-status-menu">
-            <summary>Change Status <?php echo ownerIcon('chevron-down', 'icon-sm'); ?></summary>
-            <div class="shop-status-options">
-                <?php foreach ($shop_status_details as $status_value => $status_detail): ?>
-                    <form action="../../../backend/actions/update_shop_status.php" method="POST">
-                        <?php echo csrfField(); ?>
-                        <input type="hidden" name="shop_status" value="<?php echo e($status_value); ?>">
-                        <input type="hidden" name="return_to" value="shop_profile.php">
-                        <button type="submit" name="update_status"
-                            class="<?php echo $shop_status === $status_value ? 'is-current' : ''; ?>">
-                            <?php echo ownerIcon($status_detail['icon'], 'icon-sm'); ?>
-                            <span><?php echo e($status_detail['label']); ?></span>
-                            <?php if ($shop_status === $status_value): ?>
-                                <?php echo ownerIcon('check', 'icon-sm'); ?>
-                            <?php endif; ?>
-                        </button>
-                    </form>
-                <?php endforeach; ?>
-            </div>
-        </details>
-    <?php else: ?>
-        <button type="button" class="shop-status-disabled" disabled
-            title="Your business permit must be verified before changing shop status.">
-            Change Status <?php echo ownerIcon('lock', 'icon-sm'); ?>
-        </button>
-    <?php endif; ?>
-</section>
+        <?php if ($can_change_status): ?>
+            <details class="shop-status-menu">
+                <summary>Change Status <?php echo ownerIcon('chevron-down', 'icon-sm'); ?></summary>
+                <div class="shop-status-options">
+                    <?php foreach ($shop_status_details as $status_value => $status_detail): ?>
+                        <form action="../../../backend/actions/update_shop_status.php" method="POST">
+                            <?php echo csrfField(); ?>
+                            <input type="hidden" name="shop_status" value="<?php echo e($status_value); ?>">
+                            <input type="hidden" name="return_to" value="shop_profile.php">
+                            <button type="submit" name="update_status"
+                                class="<?php echo $shop_status === $status_value ? 'is-current' : ''; ?>">
+                                <?php echo ownerIcon($status_detail['icon'], 'icon-sm'); ?>
+                                <span><?php echo e($status_detail['label']); ?></span>
+                                <?php if ($shop_status === $status_value): ?>
+                                    <?php echo ownerIcon('check', 'icon-sm'); ?>
+                                <?php endif; ?>
+                            </button>
+                        </form>
+                    <?php endforeach; ?>
+                </div>
+            </details>
+        <?php else: ?>
+            <button type="button" class="shop-status-disabled" disabled
+                title="Your business permit must be verified before changing shop status.">
+                Change Status <?php echo ownerIcon('lock', 'icon-sm'); ?>
+            </button>
+        <?php endif; ?>
+    </section>
+
+    <section class="owner-card payment-status-card" aria-label="Payment availability">
+        <div class="payment-availability-block" id="paymentSetupStatus">
+            <span class="payment-availability-title">Payment Availability</span>
+            <?php foreach ($payment_setup_statuses as $payment_status): ?>
+                <div class="payment-setup-status <?php echo e($payment_status['class']); ?>" data-payment-status-row
+                    title="<?php echo e($payment_status['tooltip']); ?>">
+                    <span class="payment-setup-emoji" aria-hidden="true">
+                        <?php if ($payment_status['icon'] !== ''): ?>
+                            <img src="<?php echo e($payment_status['icon']); ?>" alt="" class="payment-setup-icon">
+                        <?php else: ?>
+                            <?php echo ownerIcon('triangle-alert', 'icon-sm'); ?>
+                        <?php endif; ?>
+                    </span>
+                    <span class="payment-setup-text"><?php echo e($payment_status['label']); ?></span>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+</div>
 
 <?php if ($shop && $service_count === 0): ?>
 <section class="owner-card shop-services-banner" style="border-left: 4px solid #f59e0b; background: #fffbeb; margin-bottom: 20px;">
@@ -270,42 +345,42 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                 <div class="card-head">
                     <div>
                         <h2>Services Offered</h2>
-                        <p class="card-note">Select the services your shop provides.</p>
+                        <p class="card-note">Select all services your shop provides. Some services may require a shop visit and cannot be requested online.</p>
                     </div>
                 </div>
 
                 <div class="service-types-grid" data-owner-service-grid data-editable disabled>
                     <?php foreach ($allowed_service_types as $type): ?>
-                        <?php $is_document_printing = $type === 'Document Printing'; ?>
+                        <?php
+                        $is_document_printing = $type === 'Document Printing';
+                        $is_selected_service = $is_document_printing || in_array($type, $shop_service_types, true);
+                        $is_online_default = !in_array($type, ['Photocopy', 'Binding', 'Scanning'], true);
+                        ?>
                         <label class="service-type-check" data-service-type-choice="<?php echo e($type); ?>">
                             <input type="checkbox" name="service_types[]"
                                 value="<?php echo e($type); ?>"
-                                <?php echo ($is_document_printing || in_array($type, $shop_service_types, true)) ? 'checked' : ''; ?>
+                                <?php echo $is_selected_service ? 'checked' : ''; ?>
                                 <?php echo $is_document_printing ? 'disabled data-required-service="true"' : 'data-editable disabled'; ?>>
                             <span><?php echo e($type); ?></span>
                             <?php if ($is_document_printing): ?>
                                 <small class="service-type-lock-note">Default</small>
+                            <?php elseif (!$is_online_default): ?>
+                                <small class="service-type-lock-note service-type-lock-note--muted">Shop visit</small>
+                            <?php else: ?>
+                                <small class="service-type-lock-note">Online</small>
                             <?php endif; ?>
                         </label>
                     <?php endforeach; ?>
-                    <?php foreach ($shop_service_types as $st): ?>
-                        <?php if (!in_array($st, $allowed_service_types, true)): ?>
-                            <label class="service-type-check service-type-check--custom" data-service-type-choice="<?php echo e($st); ?>" data-custom-service-type="true">
-                                <input type="checkbox" name="service_types[]" value="<?php echo e($st); ?>" checked data-editable disabled>
-                                <span><?php echo e($st); ?></span>
-                                <button type="button" class="remove-custom-tag">&times;</button>
-                            </label>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
                 </div>
                 <input type="hidden" name="service_types[]" value="Document Printing">
-                <div class="service-types-custom-row" data-editable disabled>
-                    <input type="text" id="customServiceType" placeholder="Add another service (e.g., Bookbinding)"
-                        data-editable disabled>
-                    <button type="button" id="addCustomServiceBtn" class="btn btn-soft" data-editable disabled>
+                <div class="service-types-custom-row service-types-custom-row--disabled">
+                    <input type="text" id="customServiceType" placeholder="Custom services will be added in a future update."
+                        disabled>
+                    <button type="button" id="addCustomServiceBtn" class="btn btn-soft" disabled>
                         <?php echo ownerIcon('plus', 'icon-sm'); ?> Add
                     </button>
                 </div>
+                <p class="card-note">Online request availability is set automatically for each service type.</p>
             </section>
         </div>
 
@@ -354,27 +429,51 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                         <span class="muted">Optional, but helpful for customer navigation.</span>
                     </div>
 
+                    <div class="payment-setup-status <?php echo e($payment_setup_class); ?>" id="paymentSetupStatusLegacy" hidden aria-hidden="true">
+                        <span class="payment-setup-emoji" aria-hidden="true">
+                            <?php if ($payment_setup_emoji === 'gcash'): ?>
+                                <img src="<?php echo BASE_URL; ?>assets/images/gcash.svg" alt="" class="payment-setup-icon">
+                            <?php elseif ($payment_setup_emoji === 'qr'): ?>
+                                <img src="<?php echo BASE_URL; ?>assets/images/qr-code.png" alt="" class="payment-setup-icon">
+                            <?php else: ?>
+                                <?php echo ownerIcon('triangle-alert', 'icon-sm'); ?>
+                            <?php endif; ?>
+                        </span>
+                        <span class="payment-setup-text"><?php echo e($payment_setup_label); ?></span>
+                    </div>
+
                     <div class="field full">
-                        <label for="gcash_name">GCash Account Name</label>
+                        <label for="gcash_name">GCash Account Name (Optional if you have QR Code) </label>
                         <input id="gcash_name" type="text" name="gcash_name"
-                            value="<?php echo e($payment_settings['gcash_account_name'] ?? ($shop['gcash_name'] ?? '')); ?>"
-                            placeholder="Account name shown in GCash" required data-editable disabled>
+                            value="<?php echo e($payment_qr_channel['gcash_account_name'] ?? ($shop['gcash_name'] ?? '')); ?>"
+                            placeholder="Account name shown in GCash" data-editable disabled>
                         <span class="muted">Shown to customers when they pay online through GCash.</span>
                     </div>
 
                     <div class="field full">
-                        <label for="gcash_number">GCash Number</label>
+                        <label for="gcash_number">GCash Number (Optional if you have QR Code)</label>
                         <input id="gcash_number" type="text" name="gcash_number"
-                            value="<?php echo e($payment_settings['gcash_number'] ?? ($shop['gcash_number'] ?? '')); ?>" placeholder="09XXXXXXXXX"
-                            required data-editable disabled>
+                            value="<?php echo e($payment_qr_channel['gcash_number'] ?? ($shop['gcash_number'] ?? '')); ?>" placeholder="09XXXXXXXXX"
+                            data-editable disabled>
                     </div>
 
                     <div class="field full">
-                        <label for="merchant_link">Optional GCash Merchant Link</label>
-                        <input id="merchant_link" type="url" name="merchant_link"
-                            value="<?php echo e($payment_settings['merchant_link'] ?? ''); ?>"
-                            placeholder="https://..." data-editable disabled>
-                        <span class="muted">Optional. Enter your official GCash merchant/payment link if available. Customers can still pay using your GCash QR code.</span>
+                        <label for="merchant_link">GCash Payment Link</label>
+                        <div class="merchant-link-row">
+                            <input id="merchant_link" type="url" name="merchant_link"
+                                value="<?php echo e($payment_merchant_link); ?>"
+                                placeholder="https://..." data-editable disabled>
+                            <a href="<?php echo e($payment_merchant_link); ?>"
+                                target="_blank" rel="noopener noreferrer"
+                                class="btn btn-soft merchant-link-preview<?php echo $payment_merchant_link === '' ? ' hidden' : ''; ?>"
+                                id="merchantLinkPreview"
+                                title="Open this payment link in a new tab">
+                                <?php echo ownerIcon('external-link', 'icon-sm'); ?>
+                                Open Preview
+                            </a>
+                        </div>
+                        <span class="field-error" id="merchantLinkError"></span>
+                        <span class="muted">Customers can use this link to directly access your GCash payment channel. Leave empty to remove this payment method.</span>
                     </div>
 
                     <div class="field full">
@@ -389,8 +488,23 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                                 </div>
                             </div>
                         <?php endif; ?>
-                        <input id="gcash_qr_file" type="file" name="gcash_qr_file"
-                            accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
+                        <div class="qr-upload-action-row">
+                            <div class="qr-upload-input-wrap">
+                                <input id="gcash_qr_file" type="file" name="gcash_qr_file"
+                                    accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
+                            </div>
+                            <?php if (!empty($payment_qr_code)): ?>
+                                <div class="qr-remove-toggle-container">
+                                    <label class="qr-remove-label" for="remove_gcash_qr">
+                                        <input type="checkbox" id="remove_gcash_qr" name="remove_gcash_qr" value="1" class="qr-remove-checkbox" data-editable disabled aria-describedby="removeQrTooltip">
+                                        <span class="qr-remove-text">Remove current QR</span>
+                                    </label>
+                                    <div class="qr-remove-tooltip" role="tooltip" id="removeQrTooltip">
+                                        Remove current QR code (this removes the QR payment method)
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                         <span class="muted">Required before customers can pay online through GCash and submit proof.</span>
                     </div>
 
@@ -404,9 +518,34 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
 
                     <div class="field full">
                         <label>Payment Details Approval</label>
-                        <span class="status-badge <?php echo ownerStatusClass($payment_approval_status === 'approved' ? 'verified' : ($payment_approval_status === 'rejected' ? 'rejected' : 'pending')); ?>">
-                            <?php echo e(ucfirst($payment_approval_status)); ?>
-                        </span>
+                        <div class="payment-approval-badges">
+                            <?php if ($payment_qr_code !== ''): ?>
+                                <span class="status-badge <?php echo ownerStatusClass($payment_qr_approval === 'approved' ? 'verified' : ($payment_qr_approval === 'rejected' ? 'rejected' : 'pending')); ?>">
+                                    QR Code: <?php echo e(ucfirst($payment_qr_approval)); ?>
+                                </span>
+                            <?php endif; ?>
+                            <?php if ($payment_merchant_link !== ''): ?>
+                                <span class="status-badge <?php echo ownerStatusClass($payment_link_approval === 'approved' ? 'verified' : ($payment_link_approval === 'rejected' ? 'rejected' : 'pending')); ?>">
+                                    Merchant Link: <?php echo e(ucfirst($payment_link_approval)); ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($payment_qr_code !== '' && $payment_qr_approval === 'rejected'): ?>
+                            <div class="payment-setup-status payment-setup-rejected" style="margin-top:10px;">
+                                <span class="payment-setup-emoji" aria-hidden="true">!</span>
+                                <span class="payment-setup-text">
+                                    QR Code rejected: <?php echo e(!empty($payment_qr_channel['rejected_reason']) ? $payment_qr_channel['rejected_reason'] : 'No reason provided.'); ?>
+                                </span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($payment_merchant_link !== '' && $payment_link_approval === 'rejected'): ?>
+                            <div class="payment-setup-status payment-setup-rejected" style="margin-top:10px;">
+                                <span class="payment-setup-emoji" aria-hidden="true">!</span>
+                                <span class="payment-setup-text">
+                                    Merchant Link rejected: <?php echo e(!empty($payment_link_channel['rejected_reason']) ? $payment_link_channel['rejected_reason'] : 'No reason provided.'); ?>
+                                </span>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="field full">
@@ -483,117 +622,272 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     </div>
 </form>
 
-<script>
-(function () {
-    var form = document.getElementById('shopProfileForm');
-    if (!form) return;
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function() {
+        var form = document.getElementById('shopProfileForm');
+        if (!form) return;
 
-    var rules = [
-        { name: 'shop_name', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter a shop name.' },
-        { name: 'shop_address', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter the complete shop address.' },
-        { name: 'gcash_name', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter the GCash account name.' },
-        { name: 'gcash_number', test: function (v) { return /^[0-9+\-\s]{7,30}$/.test(v.trim()); }, msg: 'Please enter a valid GCash number (7-30 digits).' },
-        { name: 'payment_instructions', test: function (v) { return v.trim() !== ''; }, msg: 'Please enter payment instructions.' }
-    ];
-
-    function validateField(rule) {
-        var input = form.querySelector('[name="' + rule.name + '"]');
-        if (!input) return true;
-        var field = input.closest('.field');
-        var errorEl = field ? field.querySelector('.field-error') : null;
-        var valid = rule.test(input.value);
-
-        if (field) {
-            field.classList.toggle('has-error', !valid);
-        }
-        if (errorEl) {
-            errorEl.textContent = valid ? '' : rule.msg;
-        }
-        return valid;
-    }
-
-    form.addEventListener('submit', function (event) {
-        var firstError = null;
-        rules.forEach(function (rule) {
-            var valid = validateField(rule);
-            if (!valid && !firstError) {
-                firstError = form.querySelector('[name="' + rule.name + '"]');
+        var rules = [{
+                name: 'shop_name',
+                test: function(v) {
+                    return v.trim() !== '';
+                },
+                msg: 'Please enter a shop name.'
+            },
+            {
+                name: 'shop_address',
+                test: function(v) {
+                    return v.trim() !== '';
+                },
+                msg: 'Please enter the complete shop address.'
+            },
+            {
+                name: 'gcash_number',
+                test: function(v) {
+                    return v.trim() === '' || /^[0-9+\-\s]{7,30}$/.test(v.trim());
+                },
+                msg: 'Please enter a valid GCash number (7-30 digits).'
+            },
+            {
+                name: 'merchant_link',
+                test: function(v) {
+                    if (v.trim() === '') return true;
+                    try {
+                        var url = new URL(v.trim());
+                        return url.protocol === 'http:' || url.protocol === 'https:';
+                    } catch (e) {
+                        return false;
+                    }
+                },
+                msg: 'Please enter a valid GCash payment link.'
+            },
+            {
+                name: 'payment_instructions',
+                test: function(v) {
+                    return v.trim() !== '';
+                },
+                msg: 'Please enter payment instructions.'
             }
-        });
-        if (firstError) {
-            event.preventDefault();
-            firstError.focus();
-        }
-    });
+        ];
 
-    rules.forEach(function (rule) {
-        var input = form.querySelector('[name="' + rule.name + '"]');
-        if (!input) return;
-        input.addEventListener('blur', function () { validateField(rule); });
-        input.addEventListener('input', function () {
+        function validateField(rule) {
+            var input = form.querySelector('[name="' + rule.name + '"]');
+            if (!input) return true;
             var field = input.closest('.field');
-            if (field && field.classList.contains('has-error')) {
-                validateField(rule);
+            var errorEl = field ? field.querySelector('.field-error') : null;
+            var valid = rule.test(input.value);
+
+            if (field) {
+                field.classList.toggle('has-error', !valid);
+            }
+            if (errorEl) {
+                errorEl.textContent = valid ? '' : rule.msg;
+            }
+            return valid;
+        }
+
+        form.addEventListener('submit', function(event) {
+            var firstError = null;
+            rules.forEach(function(rule) {
+                var valid = validateField(rule);
+                if (!valid && !firstError) {
+                    firstError = form.querySelector('[name="' + rule.name + '"]');
+                }
+            });
+            if (firstError) {
+                event.preventDefault();
+                firstError.focus();
             }
         });
-    });
-})();
+
+        rules.forEach(function(rule) {
+            var input = form.querySelector('[name="' + rule.name + '"]');
+            if (!input) return;
+            input.addEventListener('blur', function() {
+                validateField(rule);
+            });
+            input.addEventListener('input', function() {
+                var field = input.closest('.field');
+                if (field && field.classList.contains('has-error')) {
+                    validateField(rule);
+                }
+            });
+        });
+    })();
 </script>
 
-<script>
-(function () {
-    var addBtn = document.getElementById('addCustomServiceBtn');
-    var customInput = document.getElementById('customServiceType');
-    var serviceGrid = document.querySelector('[data-owner-service-grid]');
-    var form = document.getElementById('shopProfileForm');
-    if (!addBtn || !customInput || !serviceGrid) return;
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function() {
+        var addBtn = document.getElementById('addCustomServiceBtn');
+        var customInput = document.getElementById('customServiceType');
+        var serviceGrid = document.querySelector('[data-owner-service-grid]');
+        var form = document.getElementById('shopProfileForm');
+        if (!addBtn || !customInput || !serviceGrid) return;
 
-    function escapeAttr(value) {
-        return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    }
+        function escapeAttr(value) {
+            return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
 
-    function escapeHtml(value) {
-        return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+        function escapeHtml(value) {
+            return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
 
-    function addCustomService() {
-        var value = customInput.value.trim();
-        if (!value) return;
+        function addCustomService() {
+            var value = customInput.value.trim();
+            if (!value) return;
 
-        var existing = document.querySelectorAll('input[name="service_types[]"]');
-        for (var i = 0; i < existing.length; i++) {
-            if (existing[i].value.toLowerCase() === value.toLowerCase()) {
-                customInput.value = '';
-                customInput.focus();
-                return;
+            var existing = document.querySelectorAll('input[name="service_types[]"]');
+            for (var i = 0; i < existing.length; i++) {
+                if (existing[i].value.toLowerCase() === value.toLowerCase()) {
+                    customInput.value = '';
+                    customInput.focus();
+                    return;
+                }
             }
+
+            var label = document.createElement('label');
+            label.className = 'service-type-check service-type-check--custom';
+            label.dataset.serviceTypeChoice = value;
+            label.dataset.customServiceType = 'true';
+            label.innerHTML = '<input type="checkbox" name="service_types[]" value="' + escapeAttr(value) + '" checked data-editable>' +
+                '<span>' + escapeHtml(value) + '</span>' +
+                '<button type="button" class="remove-custom-tag">&times;</button>';
+            serviceGrid.appendChild(label);
+
+            customInput.value = '';
+            customInput.focus();
         }
 
-        var label = document.createElement('label');
-        label.className = 'service-type-check service-type-check--custom';
-        label.dataset.serviceTypeChoice = value;
-        label.dataset.customServiceType = 'true';
-        label.innerHTML = '<input type="checkbox" name="service_types[]" value="' + escapeAttr(value) + '" checked data-editable>' +
-            '<span>' + escapeHtml(value) + '</span>' +
-            '<button type="button" class="remove-custom-tag">&times;</button>';
-        serviceGrid.appendChild(label);
+        addBtn.addEventListener('click', addCustomService);
+        customInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomService();
+            }
+        });
 
-        customInput.value = '';
-        customInput.focus();
-    }
+        serviceGrid.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-custom-tag')) {
+                e.preventDefault();
+                e.target.closest('.service-type-check').remove();
+            }
+        });
+    })();
+</script>
 
-    addBtn.addEventListener('click', addCustomService);
-    customInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); addCustomService(); }
-    });
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function() {
+        var linkInput = document.getElementById('merchant_link');
+        var previewBtn = document.getElementById('merchantLinkPreview');
+        var statusEl = document.getElementById('paymentSetupStatus');
+        var qrInput = document.getElementById('gcash_qr_file');
+        var qrRemoveCheckbox = document.getElementById('remove_gcash_qr');
 
-    serviceGrid.addEventListener('click', function (e) {
-        if (e.target.classList.contains('remove-custom-tag')) {
-            e.preventDefault();
-            e.target.closest('.service-type-check').remove();
+        var hasExistingQr = <?php echo json_encode($payment_qr_code !== ''); ?>;
+        var linkOriginal = <?php echo json_encode($payment_merchant_link); ?>;
+        var qrApproved = <?php echo json_encode($payment_qr_code !== '' && $payment_qr_approval === 'approved'); ?>;
+        var qrRejected = <?php echo json_encode($payment_qr_code !== '' && $payment_qr_approval === 'rejected'); ?>;
+        var linkApproved = <?php echo json_encode($payment_merchant_link !== '' && $payment_link_approval === 'approved'); ?>;
+        var linkRejected = <?php echo json_encode($payment_merchant_link !== '' && $payment_link_approval === 'rejected'); ?>;
+        var qrReason = <?php echo json_encode(($payment_qr_channel['rejected_reason'] ?? '') ?: 'No reason provided.'); ?>;
+        var linkReason = <?php echo json_encode(($payment_link_channel['rejected_reason'] ?? '') ?: 'No reason provided.'); ?>;
+        var qrIcon = <?php echo json_encode(BASE_URL . 'assets/images/qr-code.png'); ?>;
+        var gcashIcon = <?php echo json_encode(BASE_URL . 'assets/images/gcash.svg'); ?>;
+
+        if (!linkInput || !previewBtn) return;
+
+        function updatePreviewButton() {
+            var val = linkInput.value.trim();
+            if (val !== '') {
+                try {
+                    var url = new URL(val);
+                    if (url.protocol === 'http:' || url.protocol === 'https:') {
+                        previewBtn.href = val;
+                        previewBtn.classList.remove('hidden');
+                        return;
+                    }
+                } catch (e) { }
+            }
+            previewBtn.classList.add('hidden');
         }
-    });
-})();
+
+        function paymentStatusRow(iconUrl, text, cls) {
+            var iconHtml = iconUrl !== ''
+                ? '<span class="payment-setup-emoji" aria-hidden="true"><img src="' + iconUrl + '" alt="" class="payment-setup-icon"></span>'
+                : '<span class="payment-setup-emoji" aria-hidden="true">!</span>';
+            return '<div class="payment-setup-status ' + cls + '" data-payment-status-row>' +
+                iconHtml +
+                '<span class="payment-setup-text">' + text + '</span></div>';
+        }
+
+        function updatePaymentStatus() {
+            if (!statusEl) return;
+            var linkValue = linkInput.value.trim();
+            var linkDirty = linkValue !== '' && linkValue !== linkOriginal;
+            var qrDirty = !!(qrInput && qrInput.files && qrInput.files.length > 0);
+            var qrRemoveChecked = !!(qrRemoveCheckbox && qrRemoveCheckbox.checked);
+            var hasLink = linkValue !== '';
+            var hasQr = (hasExistingQr && !qrRemoveChecked) || qrDirty;
+            var rows = [];
+
+            if (hasLink) {
+                var linkText, linkCls;
+                if (linkDirty) {
+                    linkText = 'GCash Merchant Link - Pending Approval';
+                    linkCls = 'payment-setup-pending';
+                } else if (linkRejected) {
+                    linkText = 'GCash Merchant Link - Rejected: ' + linkReason;
+                    linkCls = 'payment-setup-rejected';
+                } else if (linkApproved) {
+                    linkText = 'GCash Merchant Link - Available';
+                    linkCls = 'payment-setup-approved';
+                } else {
+                    linkText = 'GCash Merchant Link - Pending Approval';
+                    linkCls = 'payment-setup-pending';
+                }
+                rows.push(paymentStatusRow(gcashIcon, linkText, linkCls));
+            }
+            if (hasQr) {
+                var qrText, qrCls;
+                if (qrDirty) {
+                    qrText = 'QR Code Payment - Pending Approval';
+                    qrCls = 'payment-setup-pending';
+                } else if (qrRejected) {
+                    qrText = 'QR Code Payment - Rejected: ' + qrReason;
+                    qrCls = 'payment-setup-rejected';
+                } else if (qrApproved) {
+                    qrText = 'QR Code Payment - Available';
+                    qrCls = 'payment-setup-approved';
+                } else {
+                    qrText = 'QR Code Payment - Pending Approval';
+                    qrCls = 'payment-setup-pending';
+                }
+                rows.push(paymentStatusRow(qrIcon, qrText, qrCls));
+            }
+            if (rows.length === 0) {
+                rows.push(paymentStatusRow('', 'Payment Setup Required', 'payment-setup-required'));
+            }
+            statusEl.innerHTML = '<span class="payment-availability-title">Payment Availability</span>' + rows.join('');
+        }
+
+        linkInput.addEventListener('input', function() {
+            updatePreviewButton();
+            updatePaymentStatus();
+        });
+
+        if (qrInput) {
+            qrInput.addEventListener('change', updatePaymentStatus);
+        }
+
+        if (qrRemoveCheckbox) {
+            qrRemoveCheckbox.addEventListener('change', function() {
+                if (qrInput) {
+                    qrInput.disabled = qrRemoveCheckbox.checked;
+                }
+                updatePaymentStatus();
+            });
+        }
+    })();
 </script>
 
 <script src="assets/js/shopLocation.js?v=<?php echo filemtime(__DIR__ . '/assets/js/shopLocation.js'); ?>"></script>

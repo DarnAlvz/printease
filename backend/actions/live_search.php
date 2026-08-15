@@ -6,6 +6,14 @@ require_once __DIR__ . "/../includes/functions.php";
 
 header('Content-Type: application/json');
 
+if (!isset($_SESSION['user_id'])) {
+    if (authIsAjaxRequest()) {
+        authJsonResponse(false, 'Authentication required.', 401);
+    }
+    header("Location: " . BASE_URL . "frontend/pages/login.php");
+    exit();
+}
+
 $role = $_SESSION['role'] ?? '';
 $target = trim((string) ($_GET['target'] ?? ''));
 

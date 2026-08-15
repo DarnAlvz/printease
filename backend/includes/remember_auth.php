@@ -13,8 +13,12 @@ function rememberCookiePath()
 
 function rememberCookieIsSecure()
 {
+    if (function_exists('isRequestSecure')) {
+        return isRequestSecure();
+    }
+
     return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        || strtolower(trim((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))) === 'https';
 }
 
 function rememberSetCookie($value, $expires_at)

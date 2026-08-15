@@ -168,7 +168,7 @@ while ($shop = mysqli_fetch_assoc($shops)) {
     <?php renderCustomerLayoutEnd('map'); ?>
 
     <?php if (!empty($shop_locations)): ?>
-        <script>
+        <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             document.addEventListener('DOMContentLoaded', function () {
                 const shops = <?php echo json_encode($shop_locations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
                 let selectedShopId = <?php echo $selected_shop_id; ?>;

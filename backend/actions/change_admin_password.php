@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("super_admin");
 
@@ -25,6 +26,12 @@ $new_password = $_POST['new_password'] ?? '';
 $confirm_password = $_POST['confirm_password'] ?? '';
 
 validateCsrf();
+
+$rate_guard = rateLimitGuardRequest($conn, 'change_password', 5, 3600);
+if (!$rate_guard['allowed']) {
+    redirectAdminPassword($redirect_url, 'Too many password change attempts. Please try again in ' . rateLimitFormatSeconds($rate_guard['retry_after']) . '.');
+}
+rateLimitRecordRequest($conn, 'change_password', $rate_guard['identifier'], $rate_guard['ip_address'], 5, 3600);
 
 if (strlen($new_password) < 8) {
     redirectAdminPassword($redirect_url, 'Your new password must be at least 8 characters long.');

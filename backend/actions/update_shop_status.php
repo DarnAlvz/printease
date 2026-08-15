@@ -5,6 +5,7 @@ require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("shop_owner");
 requireCompleteShopProfile($conn);
@@ -14,6 +15,14 @@ validateCsrf();
 
 if (isset($_POST['update_status'])) {
     $owner_id = $_SESSION['user_id'];
+
+    $rate_guard = rateLimitGuardRequest($conn, 'update_shop_status', 60, 3600);
+    if (!$rate_guard['allowed']) {
+        setToast("Too many shop status updates. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".", "error");
+        redirect('../../frontend/user/shop_owner/dashboard.php');
+    }
+    rateLimitRecordRequest($conn, 'update_shop_status', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 3600);
+
     $shop_status = $_POST['shop_status'] ?? '';
     $return_to = $_POST['return_to'] ?? '';
     $redirect_url = $return_to === 'shop_profile.php'

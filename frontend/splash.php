@@ -222,7 +222,7 @@ require_once __DIR__ . '/components/head.php';
         <a class="noscript-link" href="../index.php">Continue to PrintEase</a>
     </noscript>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             const splash = document.getElementById('printEaseSplash');
             const spinner = document.getElementById('splashSpinner');

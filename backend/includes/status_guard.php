@@ -175,7 +175,7 @@ function showToast($message, $type = 'pending', $redirect = '')
         }
     </style>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     (function () {
         const container = document.getElementById("toast-container");
         if (!container) return;

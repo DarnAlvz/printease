@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("shop_owner");
 
@@ -10,6 +11,14 @@ validateCsrf();
 
 if (isset($_POST['save_profile'])) {
     $owner_id = $_SESSION['user_id'];
+
+    $rate_guard = rateLimitGuardRequest($conn, 'save_shop_profile', 10, 3600);
+    if (!$rate_guard['allowed']) {
+        setError("Too many profile save attempts. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".");
+        header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+        exit();
+    }
+    rateLimitRecordRequest($conn, 'save_shop_profile', $rate_guard['identifier'], $rate_guard['ip_address'], 10, 3600);
 
     $shop_name = trim($_POST['shop_name'] ?? '');
     $shop_address = trim($_POST['shop_address'] ?? '');
@@ -82,14 +91,17 @@ if (isset($_POST['save_profile'])) {
     mysqli_stmt_execute($check_stmt);
     $existing = mysqli_fetch_assoc(mysqli_stmt_get_result($check_stmt));
     $shop_status = $existing['shop_status'] ?? 'available';
-    $existing_payment_settings = null;
+    $existing_payment_channels = [];
 
     if ($existing) {
-        $payment_settings_sql = "SELECT * FROM shop_payment_settings WHERE shop_id = ? LIMIT 1";
-        $payment_settings_stmt = mysqli_prepare($conn, $payment_settings_sql);
-        mysqli_stmt_bind_param($payment_settings_stmt, "i", $existing['shop_id']);
-        mysqli_stmt_execute($payment_settings_stmt);
-        $existing_payment_settings = mysqli_fetch_assoc(mysqli_stmt_get_result($payment_settings_stmt));
+        $channels_sql = "SELECT * FROM shop_payment_channels WHERE shop_id = ?";
+        $channels_stmt = mysqli_prepare($conn, $channels_sql);
+        mysqli_stmt_bind_param($channels_stmt, "i", $existing['shop_id']);
+        mysqli_stmt_execute($channels_stmt);
+        $channels_result = mysqli_stmt_get_result($channels_stmt);
+        while ($channel_row = mysqli_fetch_assoc($channels_result)) {
+            $existing_payment_channels[$channel_row['channel']] = $channel_row;
+        }
     }
 
     $has_new_permit = isset($_FILES['business_permit_file'])
@@ -106,15 +118,15 @@ if (isset($_POST['save_profile'])) {
 
     $new_name = null;
     $new_logo_name = null;
-    $new_gcash_qr_name = $existing_payment_settings['gcash_qr_code'] ?? ($existing['gcash_qr_file'] ?? null);
+    $new_gcash_qr_name = $existing_payment_channels['gcash_qr']['gcash_qr_code'] ?? ($existing['gcash_qr_file'] ?? null);
 
-    if ($gcash_name === '' || strlen($gcash_name) > 150) {
+    if ($gcash_name !== '' && strlen($gcash_name) > 150) {
         setError("Please enter a valid GCash account name.");
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     }
 
-    if ($gcash_number === '' || !preg_match('/^[0-9+\\-\\s]{7,30}$/', $gcash_number)) {
+    if ($gcash_number !== '' && !preg_match('/^[0-9+\\-\\s]{7,30}$/', $gcash_number)) {
         setError("Please enter a valid GCash number.");
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
@@ -149,7 +161,7 @@ if (isset($_POST['save_profile'])) {
             mkdir($logo_dir, 0775, true);
         }
 
-        $new_logo_name = time() . "_" . bin2hex(random_bytes(4)) . "." . $logo_extension;
+        $new_logo_name = time() . "_" . bin2hex(random_bytes(16)) . "." . $logo_extension;
         if (!move_uploaded_file($logo_tmp, $logo_dir . $new_logo_name)) {
             setError("Failed to upload shop logo.");
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
@@ -178,7 +190,8 @@ if (isset($_POST['save_profile'])) {
             mkdir($gcash_dir, 0775, true);
         }
 
-        $new_gcash_qr_name = time() . "_" . bin2hex(random_bytes(4)) . "." . $gcash_extension;
+        $gcash_extension = ($gcash_extension === 'jfif') ? 'jpg' : $gcash_extension;
+        $new_gcash_qr_name = time() . "_" . bin2hex(random_bytes(16)) . "." . $gcash_extension;
         if (!move_uploaded_file($gcash_tmp, $gcash_dir . $new_gcash_qr_name)) {
             setError("Failed to upload GCash QR.");
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
@@ -191,8 +204,13 @@ if (isset($_POST['save_profile'])) {
         }
     }
 
-    if (empty($new_gcash_qr_name)) {
-        setError("Please upload a GCash QR code for customer payments.");
+    $remove_gcash_qr = isset($_POST['remove_gcash_qr']) && !$has_new_gcash_qr;
+    if ($remove_gcash_qr) {
+        $new_gcash_qr_name = null;
+    }
+
+    if (empty($new_gcash_qr_name) && trim($merchant_link) === '') {
+        setError("Please provide at least one payment method (GCash QR Code or GCash Merchant Link).");
         header("Location: ../../frontend/user/shop_owner/shop_profile.php");
         exit();
     }
@@ -200,14 +218,34 @@ if (isset($_POST['save_profile'])) {
     $normalize_payment_value = static function ($value) {
         return trim((string) ($value ?? ''));
     };
-    $existing_payment_qr = $existing_payment_settings['gcash_qr_code'] ?? ($existing['gcash_qr_file'] ?? '');
-    $payment_details_changed = empty($existing_payment_settings)
+
+    $existing_qr_channel = $existing_payment_channels['gcash_qr'] ?? null;
+    $existing_link_channel = $existing_payment_channels['gcash_merchant_link'] ?? null;
+
+    if ($remove_gcash_qr) {
+        $old_qr_file = $existing_qr_channel['gcash_qr_code'] ?? ($existing['gcash_qr_file'] ?? null);
+        if (!empty($old_qr_file)) {
+            $old_qr_path = __DIR__ . '/../../uploads/gcash_qr/' . $old_qr_file;
+            if (is_file($old_qr_path)) @unlink($old_qr_path);
+        }
+    }
+
+    $qr_details_changed = $existing_qr_channel === null
         || $has_new_gcash_qr
-        || $normalize_payment_value($existing_payment_settings['gcash_account_name'] ?? '') !== $gcash_name
-        || $normalize_payment_value($existing_payment_settings['gcash_number'] ?? '') !== $gcash_number
-        || $normalize_payment_value($existing_payment_settings['merchant_link'] ?? '') !== $merchant_link
-        || $normalize_payment_value($existing_payment_settings['instructions'] ?? '') !== $payment_instructions
-        || $normalize_payment_value($existing_payment_qr) !== $normalize_payment_value($new_gcash_qr_name);
+        || $remove_gcash_qr
+        || $normalize_payment_value($existing_qr_channel['gcash_account_name'] ?? '') !== $gcash_name
+        || $normalize_payment_value($existing_qr_channel['gcash_number'] ?? '') !== $gcash_number
+        || $normalize_payment_value($existing_qr_channel['instructions'] ?? '') !== $payment_instructions
+        || $normalize_payment_value($existing_qr_channel['gcash_qr_code'] ?? '') !== $normalize_payment_value($new_gcash_qr_name);
+
+    $merchant_link_changed = ($merchant_link !== '') && ($existing_link_channel === null
+        || $normalize_payment_value($existing_link_channel['merchant_link'] ?? '') !== $merchant_link
+        || $normalize_payment_value($existing_link_channel['instructions'] ?? '') !== $payment_instructions);
+
+    $payment_details_changed = ($qr_details_changed && !$remove_gcash_qr) || $merchant_link_changed;
+
+    $link_removal_requested = $existing_link_channel !== null && $merchant_link === '';
+    $payment_update_needed = $qr_details_changed || $merchant_link_changed || $link_removal_requested;
 
     if ($has_new_permit) {
         $allowed_permit_extensions = ['jpg', 'jpeg', 'png', 'webp', 'jfif', 'pdf'];
@@ -221,12 +259,47 @@ if (isset($_POST['save_profile'])) {
             exit();
         }
 
+        if (($_FILES['business_permit_file']['size'] ?? 0) > 10 * 1024 * 1024) {
+            setError("Business permit file must be 10MB or smaller.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+
+        $permit_mime = (new finfo(FILEINFO_MIME_TYPE))->file($permit_tmp);
+        $permit_is_pdf = $permit_mime === 'application/pdf';
+        $permit_is_image = in_array($permit_mime, ['image/jpeg', 'image/png', 'image/webp'], true);
+
+        if (!$permit_is_pdf && !$permit_is_image) {
+            setError("Please upload a valid business permit file.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+
+        if ($permit_is_image && @getimagesize($permit_tmp) === false) {
+            setError("Please upload a valid business permit image.");
+            header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+            exit();
+        }
+
+        if ($permit_is_pdf) {
+            $permit_handle = fopen($permit_tmp, 'rb');
+            $permit_header = $permit_handle !== false ? fread($permit_handle, 4) : '';
+            if ($permit_handle !== false) {
+                fclose($permit_handle);
+            }
+            if ($permit_header !== '%PDF') {
+                setError("Please upload a valid business permit PDF.");
+                header("Location: ../../frontend/user/shop_owner/shop_profile.php");
+                exit();
+            }
+        }
+
         $permit_dir = "../../uploads/permits/";
         if (!is_dir($permit_dir)) {
             mkdir($permit_dir, 0775, true);
         }
 
-        $new_name = time() . "_" . bin2hex(random_bytes(4)) . "." . $permit_extension;
+        $new_name = time() . "_" . bin2hex(random_bytes(16)) . "." . $permit_extension;
         if (!move_uploaded_file($permit_tmp, $permit_dir . $new_name)) {
             setError("Failed to upload business permit.");
             header("Location: ../../frontend/user/shop_owner/shop_profile.php");
@@ -308,7 +381,7 @@ if (isset($_POST['save_profile'])) {
 
                 mysqli_stmt_bind_param(
                     $stmt,
-                    "sssssssddssssii",
+                    "ssssssddssssii",
                     $shop_name,
                     $shop_address,
                     $display_address,
@@ -473,22 +546,76 @@ if (isset($_POST['save_profile'])) {
         mysqli_stmt_bind_param($gcash_stmt, "sssii", $gcash_name, $gcash_number, $new_gcash_qr_name, $shop_id, $owner_id);
         mysqli_stmt_execute($gcash_stmt);
 
-        if ($payment_details_changed) {
-            $payment_settings_sql = "INSERT INTO shop_payment_settings
-                (shop_id, payment_method, merchant_link, gcash_account_name, gcash_number, gcash_qr_code, instructions, approval_status, is_active, created_at, updated_at)
-                VALUES (?, 'gcash', ?, ?, ?, ?, ?, 'pending', 1, NOW(), NOW())
-                ON DUPLICATE KEY UPDATE
-                    merchant_link = VALUES(merchant_link),
-                    gcash_account_name = VALUES(gcash_account_name),
-                    gcash_number = VALUES(gcash_number),
-                    gcash_qr_code = VALUES(gcash_qr_code),
-                    instructions = VALUES(instructions),
-                    approval_status = 'pending',
-                    is_active = 1,
-                    updated_at = NOW()";
-            $payment_settings_stmt = mysqli_prepare($conn, $payment_settings_sql);
-            mysqli_stmt_bind_param($payment_settings_stmt, "isssss", $shop_id, $merchant_link, $gcash_name, $gcash_number, $new_gcash_qr_name, $payment_instructions);
-            mysqli_stmt_execute($payment_settings_stmt);
+        if ($payment_update_needed) {
+            if ($qr_details_changed && ($remove_gcash_qr ? $existing_qr_channel !== null : !empty($new_gcash_qr_name))) {
+                $qr_channel_sql = "INSERT INTO shop_payment_channels
+                    (shop_id, channel, gcash_account_name, gcash_number, gcash_qr_code, instructions, approval_status, is_active, created_at, updated_at)
+                    VALUES (?, 'gcash_qr', ?, ?, ?, ?, 'pending', 1, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE
+                        gcash_account_name = VALUES(gcash_account_name),
+                        gcash_number = VALUES(gcash_number),
+                        gcash_qr_code = VALUES(gcash_qr_code),
+                        instructions = VALUES(instructions),
+                        is_active = CASE
+                            WHEN VALUES(gcash_qr_code) IS NULL OR VALUES(gcash_qr_code) = '' THEN 0
+                            ELSE 1
+                        END,
+                        approval_status = CASE
+                            WHEN VALUES(gcash_qr_code) IS NULL OR VALUES(gcash_qr_code) = '' THEN approval_status
+                            ELSE 'pending'
+                        END,
+                        approved_by = CASE
+                            WHEN VALUES(gcash_qr_code) IS NULL OR VALUES(gcash_qr_code) = '' THEN approved_by
+                            ELSE NULL
+                        END,
+                        approved_at = CASE
+                            WHEN VALUES(gcash_qr_code) IS NULL OR VALUES(gcash_qr_code) = '' THEN approved_at
+                            ELSE NULL
+                        END,
+                        rejected_reason = CASE
+                            WHEN VALUES(gcash_qr_code) IS NULL OR VALUES(gcash_qr_code) = '' THEN rejected_reason
+                            ELSE NULL
+                        END,
+                        updated_at = NOW()";
+                $qr_channel_stmt = mysqli_prepare($conn, $qr_channel_sql);
+                mysqli_stmt_bind_param($qr_channel_stmt, "issss", $shop_id, $gcash_name, $gcash_number, $new_gcash_qr_name, $payment_instructions);
+                mysqli_stmt_execute($qr_channel_stmt);
+            }
+
+            if ($merchant_link_changed || $existing_link_channel !== null) {
+                $old_link_value = $existing_link_channel['merchant_link'] ?? '';
+                $link_channel_sql = "INSERT INTO shop_payment_channels
+                    (shop_id, channel, merchant_link, instructions, approval_status, is_active, created_at, updated_at)
+                    VALUES (?, 'gcash_merchant_link', ?, ?, 'pending', 1, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE
+                        merchant_link = VALUES(merchant_link),
+                        instructions = VALUES(instructions),
+                        is_active = CASE WHEN VALUES(merchant_link) = '' THEN 0 ELSE 1 END,
+                        approval_status = CASE
+                            WHEN VALUES(merchant_link) = '' THEN approval_status
+                            WHEN ? = VALUES(merchant_link) THEN approval_status
+                            ELSE 'pending'
+                        END,
+                        approved_by = CASE
+                            WHEN VALUES(merchant_link) = '' THEN approved_by
+                            WHEN ? = VALUES(merchant_link) THEN approved_by
+                            ELSE NULL
+                        END,
+                        approved_at = CASE
+                            WHEN VALUES(merchant_link) = '' THEN approved_at
+                            WHEN ? = VALUES(merchant_link) THEN approved_at
+                            ELSE NULL
+                        END,
+                        rejected_reason = CASE
+                            WHEN VALUES(merchant_link) = '' THEN rejected_reason
+                            WHEN ? = VALUES(merchant_link) THEN rejected_reason
+                            ELSE NULL
+                        END,
+                        updated_at = NOW()";
+                $link_channel_stmt = mysqli_prepare($conn, $link_channel_sql);
+                mysqli_stmt_bind_param($link_channel_stmt, "issssss", $shop_id, $merchant_link, $payment_instructions, $old_link_value, $old_link_value, $old_link_value, $old_link_value);
+                mysqli_stmt_execute($link_channel_stmt);
+            }
         }
 
         $service_types = array_values(array_unique(array_filter(array_map('trim', $_POST['service_types'] ?? []))));
@@ -520,19 +647,24 @@ if (isset($_POST['save_profile'])) {
 
         logActivity($conn, $owner_id, $activity, "Shop Profile");
         if (!$existing || $has_new_permit) {
-            sendRoleNotification($conn, 'super_admin', 'A print shop permit is ready for review.', [
+            sendRoleNotification($conn, 'super_admin', '"' . $shop_name . '" submitted its business permit for review.', [
                 'type' => 'permit_submitted',
-                'title' => 'Permit verification submitted',
-                'target_url' => BASE_URL . 'frontend/user/superadmin/dashboard.php#pending-approvals',
+                'title' => 'Permit verification submitted: ' . $shop_name,
+                'target_url' => BASE_URL . 'frontend/user/superadmin/manage_print_shops.php?status=pending',
                 'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
             ]);
         }
         if ($payment_details_changed) {
-            sendRoleNotification($conn, 'super_admin', 'A print shop payment setting is ready for review.', [
+            $changed_channels = [];
+            if (!empty($qr_details_changed) && !$remove_gcash_qr) $changed_channels[] = 'GCash QR Code';
+            if (!empty($merchant_link_changed)) $changed_channels[] = 'GCash Merchant Link';
+            $channel_label = !empty($changed_channels) ? implode(' & ', $changed_channels) : 'Payment settings';
+
+            sendRoleNotification($conn, 'super_admin', $channel_label . ' for "' . $shop_name . '" is ready for review.', [
                 'type' => 'payment_settings_submitted',
-                'title' => 'Payment settings submitted',
+                'title' => 'Payment details updated: ' . $shop_name,
                 'target_url' => BASE_URL . 'frontend/user/superadmin/manage_print_shops.php#payment-settings-review',
-                'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id],
+                'metadata' => ['shop_id' => (int) $shop_id, 'owner_id' => $owner_id, 'channels' => $changed_channels],
             ]);
         }
         setMessage($message);

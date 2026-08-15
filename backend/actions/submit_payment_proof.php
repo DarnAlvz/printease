@@ -47,12 +47,18 @@ function cleanupPaymentProofUpload($target_path)
 }
 
 $order_sql = "SELECT o.order_id, o.order_code, o.total_amount, ps.owner_id,
-                     sps.gcash_account_name, sps.gcash_number, sps.gcash_qr_code
+                     qr.gcash_account_name, qr.gcash_number, qr.gcash_qr_code,
+                     lnk.merchant_link
               FROM orders o
               JOIN print_shops ps ON o.shop_id = ps.shop_id
-              LEFT JOIN shop_payment_settings sps ON sps.shop_id = ps.shop_id
-                  AND sps.approval_status = 'approved'
-                  AND sps.is_active = 1
+              LEFT JOIN shop_payment_channels qr ON qr.shop_id = ps.shop_id
+                  AND qr.channel = 'gcash_qr'
+                  AND qr.approval_status = 'approved'
+                  AND qr.is_active = 1
+              LEFT JOIN shop_payment_channels lnk ON lnk.shop_id = ps.shop_id
+                  AND lnk.channel = 'gcash_merchant_link'
+                  AND lnk.approval_status = 'approved'
+                  AND lnk.is_active = 1
               WHERE o.order_id = ? AND o.customer_id = ?
               LIMIT 1";
 $order_stmt = mysqli_prepare($conn, $order_sql);
@@ -65,7 +71,7 @@ if (!$order) {
     redirect(BASE_URL . "frontend/user/customer/orders.php");
 }
 
-if (empty($order['gcash_account_name']) || empty($order['gcash_number']) || empty($order['gcash_qr_code'])) {
+if (empty($order['gcash_qr_code']) && empty($order['merchant_link'])) {
     setError("This shop's GCash payment details are not approved yet.");
     redirect(BASE_URL . "frontend/user/customer/payment.php?order_id=" . $order_id);
 }
@@ -81,7 +87,7 @@ if (!is_dir($upload_dir)) {
     mkdir($upload_dir, 0775, true);
 }
 
-$file_name = time() . "_proof_" . bin2hex(random_bytes(4)) . "." . $proof_extension;
+$file_name = time() . "_proof_" . bin2hex(random_bytes(16)) . "." . $proof_extension;
 $target_path = $upload_dir . $file_name;
 $db_path = "uploads/payment_proofs/" . $file_name;
 

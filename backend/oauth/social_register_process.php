@@ -103,6 +103,23 @@ if (!linkSocialAccount($conn, $user_id, $provider, $provider_user_id, $email)) {
 }
 
 mysqli_commit($conn);
+
+if ($role === 'customer') {
+    sendRoleNotification($conn, 'super_admin', $email . ' has signed up as a customer. Review their account.', [
+        'type' => 'account_submitted',
+        'title' => 'New customer registered: ' . $full_name,
+        'target_url' => BASE_URL . 'frontend/user/superadmin/manage_users.php',
+        'metadata' => ['user_id' => (int) $user_id, 'role' => 'customer', 'stage' => 'registered'],
+    ]);
+} else {
+    sendRoleNotification($conn, 'super_admin', $email . ' has signed up as a print shop owner. They still need to set up their shop.', [
+        'type' => 'permit_submitted',
+        'title' => 'New shop owner registered: ' . $full_name,
+        'target_url' => BASE_URL . 'frontend/user/superadmin/manage_print_shops.php',
+        'metadata' => ['user_id' => (int) $user_id, 'role' => 'shop_owner', 'stage' => 'registered'],
+    ]);
+}
+
 unset($_SESSION['pending_oauth_user']);
 
 $user = findUserByEmail($conn, $email);

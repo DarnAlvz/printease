@@ -6,6 +6,7 @@ require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/cache.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("shop_owner");
 requireCompleteShopProfile($conn);
@@ -38,6 +39,12 @@ function finishOrderStatusRequest($success, $message, $redirect_url, $http_statu
 
     redirect($redirect_url);
 }
+
+$rate_guard = rateLimitGuardRequest($conn, 'update_order_status', 120, 3600);
+if (!$rate_guard['allowed']) {
+    finishOrderStatusRequest(false, "Too many status updates. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".", $orders_url, 429);
+}
+rateLimitRecordRequest($conn, 'update_order_status', $rate_guard['identifier'], $rate_guard['ip_address'], 120, 3600);
 
 if (!isset($_POST['update_order'])) {
     if ($is_ajax) {

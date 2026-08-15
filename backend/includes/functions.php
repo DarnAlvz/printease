@@ -317,24 +317,94 @@ function requireAuth()
     }
 }
 
-function getPdfPageCount($filePath, $fallback = 1) {
-    $fallback = max(1, (int) $fallback);
+function requirePdfParserAutoload() {
+    static $loaded = false;
 
-    if (!class_exists('Imagick')) {
-        return getPdfPageCountFromText($filePath, $fallback);
+    if ($loaded) {
+        return true;
+    }
+
+    if (class_exists(\setasign\Fpdi\PdfParser\PdfParser::class)) {
+        $loaded = true;
+        return true;
+    }
+
+    $autoload = __DIR__ . '/../../vendor/autoload.php';
+    if (is_file($autoload)) {
+        require_once $autoload;
+    }
+
+    $loaded = class_exists(\setasign\Fpdi\PdfParser\PdfParser::class);
+    return $loaded;
+}
+
+function getPdfPageCountFromFpdi($filePath) {
+    if (!is_file($filePath) || !is_readable($filePath) || !requirePdfParserAutoload()) {
+        return null;
     }
 
     try {
-        $imagick = new Imagick();
-        $imagick->pingImage($filePath);
-        $page_count = $imagick->getNumberImages();
-        $imagick->clear();
-        $imagick->destroy();
+        $stream = \setasign\Fpdi\PdfParser\StreamReader::createByFile($filePath);
+        $parser = new \setasign\Fpdi\PdfParser\PdfParser($stream);
+        $reader = new \setasign\Fpdi\PdfReader\PdfReader($parser);
+        $page_count = $reader->getPageCount();
+        $parser->cleanUp();
 
         return max(1, (int) $page_count);
     } catch (Throwable $exception) {
-        return getPdfPageCountFromText($filePath, $fallback);
+        return null;
     }
+}
+
+function validatePdfStructure($filePath) {
+    return getPdfPageCountFromFpdi($filePath) !== null;
+}
+
+function validateImageStructure($filePath, $expected_mime) {
+    if (!is_file($filePath) || !is_readable($filePath)) {
+        return false;
+    }
+
+    $info = @getimagesize($filePath);
+    if ($info === false || empty($info['mime'])) {
+        return false;
+    }
+
+    $allowed_mimes = ['image/jpeg', 'image/png'];
+    if (!in_array($expected_mime, $allowed_mimes, true)) {
+        return false;
+    }
+
+    if ($info['mime'] !== $expected_mime) {
+        return false;
+    }
+
+    return true;
+}
+
+function getPdfPageCount($filePath, $fallback = 1) {
+    $fallback = max(1, (int) $fallback);
+
+    $fpdi_count = getPdfPageCountFromFpdi($filePath);
+    if ($fpdi_count !== null) {
+        return $fpdi_count;
+    }
+
+    if (class_exists('Imagick')) {
+        try {
+            $imagick = new Imagick();
+            $imagick->pingImage($filePath);
+            $page_count = $imagick->getNumberImages();
+            $imagick->clear();
+            $imagick->destroy();
+
+            return max(1, (int) $page_count);
+        } catch (Throwable $exception) {
+            return getPdfPageCountFromText($filePath, $fallback);
+        }
+    }
+
+    return getPdfPageCountFromText($filePath, $fallback);
 }
 
 function getPdfPageCountFromText($filePath, $fallback = 1) {

@@ -109,7 +109,7 @@ function dashboardLinePoints($series, $width = 640, $height = 210)
 $total_shops = dashboardCount($conn, "SELECT COUNT(*) AS total FROM print_shops");
 $total_customers = dashboardCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role = 'customer'");
 $active_users = dashboardCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role != 'super_admin' AND account_status = 'verified'");
-$pending_users = dashboardCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role != 'super_admin' AND account_status = 'pending'");
+$pending_users = dashboardCount($conn, "SELECT COUNT(*) AS total FROM users WHERE role = 'customer' AND account_status = 'pending'");
 $pending_permits = dashboardCount($conn, "SELECT COUNT(*) AS total FROM print_shops WHERE permit_status = 'pending'");
 $pending_approvals = $pending_users + $pending_permits;
 $verified_shops = dashboardCount($conn, "SELECT COUNT(*) AS total FROM print_shops WHERE permit_status = 'verified'");
@@ -131,7 +131,7 @@ $pending_shops = dashboardRows($conn, "
 $pending_accounts = dashboardRows($conn, "
     SELECT u.user_id, u.full_name, u.email, u.role, u.created_at
     FROM users u
-    WHERE u.role != 'super_admin' AND u.account_status = 'pending'
+    WHERE u.role = 'customer' AND u.account_status = 'pending'
     ORDER BY u.created_at DESC
     LIMIT 5
 ");

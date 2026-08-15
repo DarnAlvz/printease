@@ -313,7 +313,7 @@ if ($flash_error !== '' && isset($login_error_messages[$flash_error])) {
         </section>
     </div>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
             button.addEventListener('click', function () {
                 var input = document.getElementById(button.dataset.passwordToggle);

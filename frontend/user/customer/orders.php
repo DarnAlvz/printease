@@ -39,7 +39,7 @@ function countCustomerOrdersByTab($conn, $customer_id, $status_tab)
     $sql = "SELECT COUNT(*) AS total FROM orders WHERE customer_id = ?" . customerOrderPrivacySql($conn);
 
     if ($status_tab === 'active') {
-        $sql .= " AND COALESCE(NULLIF(order_status, ''), 'pending') IN ('pending', 'processing', 'ready_for_pickup')";
+        $sql .= " AND COALESCE(NULLIF(order_status, ''), 'pending') IN ('pending', 'accepted', 'processing', 'ready_for_pickup')";
     } else {
         $sql .= " AND order_status = 'completed'";
     }
@@ -75,7 +75,7 @@ $sql = "SELECT o.*, ps.shop_name,
         WHERE o.customer_id = ?" . customerOrderPrivacySql($conn, 'o');
 
 if ($status_tab === 'active') {
-    $sql .= " AND COALESCE(NULLIF(o.order_status, ''), 'pending') IN ('pending', 'processing', 'ready_for_pickup')";
+    $sql .= " AND COALESCE(NULLIF(o.order_status, ''), 'pending') IN ('pending', 'accepted', 'processing', 'ready_for_pickup')";
 } else {
     $sql .= " AND o.order_status = 'completed'";
 }
@@ -153,6 +153,17 @@ function customerOrderPaymentLabel(array $order)
     return 'Waiting for Payment';
 }
 
+function customerOrderPaymentClass(string $label)
+{
+    return match ($label) {
+        'Paid' => 'customer-payment-paid',
+        'For Verification' => 'customer-payment-pending',
+        'Waiting for Payment' => 'customer-payment-pending',
+        'Rejected' => 'customer-payment-failed',
+        default => 'customer-payment-pending',
+    };
+}
+
 function customerOrderUnitPrice(array $order)
 {
     $page_count = max(1, (int) ($order['page_count'] ?? 1));
@@ -178,12 +189,26 @@ function orderStatusLabel($status)
 {
     return match (normalizeOrderStatus($status)) {
         'pending' => 'Pending',
+        'accepted' => 'Accepted',
         'processing' => 'Processing',
         'ready_for_pickup' => 'Ready for Pickup',
         'completed' => 'Completed',
         
         default => ucfirst(str_replace('_', ' ', $status))
     };
+}
+
+function customerOrderProgressStatuses()
+{
+    return ['pending', 'accepted', 'processing', 'ready_for_pickup', 'completed'];
+}
+
+function customerOrderProgressIndex($status)
+{
+    $progress_statuses = customerOrderProgressStatuses();
+    $current_progress = array_search(normalizeOrderStatus($status), $progress_statuses, true);
+
+    return $current_progress === false ? null : $current_progress;
 }
 //12hrs format with month day, year
 function formatDateTime12Hour($datetime)
@@ -258,12 +283,20 @@ function formatDateTime12Hour($datetime)
                             $order_unit_price = customerOrderUnitPrice($order);
                             $order_service_name = customerOrderServiceName($order);
                             $is_document_request = $order_service_name === 'Document Printing';
+                            $is_photo_request = $order_service_name === 'Photo Printing';
+                            $is_tarpaulin_request = $order_service_name === 'Tarpaulin Printing';
+                            $is_id_request = $order_service_name === 'ID Printing';
+                            $is_invitation_card_request = $order_service_name === 'Invitation / Card Printing';
+                            $is_detailed_service_request = $is_photo_request || $is_tarpaulin_request || $is_id_request || $is_invitation_card_request;
+                            $order_unit_label = ($is_tarpaulin_request || $is_id_request || $is_invitation_card_request) ? 'piece' : 'item';
                             $order_instruction = trim((string) ($order['customer_instruction'] ?? ''));
                             $order_instruction = trim((string) preg_replace('/^Service request:.*?\.\s*/is', '', $order_instruction));
                             if ($order_instruction === '') {
                                 $order_instruction = 'No instruction provided';
                             }
                             $order_payment_label = customerOrderPaymentLabel($order);
+                            $progress_statuses = customerOrderProgressStatuses();
+                            $current_progress = customerOrderProgressIndex($order['order_status']);
                             $file_stmt = mysqli_prepare($conn, "SELECT * FROM uploaded_files WHERE order_id = ? LIMIT 1");
                             mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                             mysqli_stmt_execute($file_stmt);
@@ -271,16 +304,16 @@ function formatDateTime12Hour($datetime)
                             ?>
 
                             <div <?php echo $is_focused_order ? 'id="focused-order"' : ''; ?>
-                                class="bg-white p-5 rounded-2xl shadow <?php echo $is_focused_order ? 'ring-2 ring-blue-500 border border-blue-300' : ''; ?>">
+                                class="customer-request-card bg-white p-5 rounded-2xl shadow <?php echo $is_focused_order ? 'ring-2 ring-blue-500 border border-blue-300' : ''; ?>">
                                 <div class="flex justify-between items-start gap-3">
-                                    <div>
+                                    <div class="customer-request-card-header">
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <h2 class="font-bold text-lg"><?php echo e($order['order_code']); ?></h2>
+                                            <h2 class="customer-request-code font-bold text-lg"><?php echo e($order['order_code']); ?></h2>
                                             <?php if ($is_focused_order): ?>
                                                 <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">Selected</span>
                                             <?php endif; ?>
                                         </div>
-                                        <p class="text-sm text-gray-500"><?php echo e($order['shop_name']); ?></p>
+                                        <p class="customer-request-shop text-sm text-gray-500"><?php echo e($order['shop_name']); ?></p>
                                     </div>
 
                                     <span
@@ -289,40 +322,85 @@ function formatDateTime12Hour($datetime)
                                     </span>
                                 </div>
 
+                                <?php if ($current_progress !== null): ?>
+                                    <ol class="customer-order-progress customer-request-progress" aria-label="Request progress">
+                                        <?php foreach ($progress_statuses as $index => $progress_status): ?>
+                                            <?php $state = $index < $current_progress ? 'complete' : ($index === $current_progress ? 'current' : 'upcoming'); ?>
+                                            <li class="<?php echo e($state); ?>" title="<?php echo e(orderStatusLabel($progress_status)); ?>" <?php echo $state === 'current' ? 'aria-current="step"' : ''; ?>>
+                                                <span><?php echo $index < $current_progress ? customerIcon('check') : $index + 1; ?></span>
+                                                <strong><?php echo e(orderStatusLabel($progress_status)); ?></strong>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ol>
+                                <?php endif; ?>
+
                                 <div class="customer-request-details mt-4 text-sm text-gray-700" data-request-details>
-                                    <div class="customer-request-detail-row">
-                                        <strong>Service:</strong>
-                                        <span><?php echo e($order_service_name); ?></span>
-                                    </div>
-                                    <div class="customer-request-detail-row">
-                                        <strong>Instruction:</strong>
-                                        <span><?php echo e($order_instruction); ?></span>
-                                    </div>
-                                    <div class="customer-request-detail-row">
-                                        <strong>Pickup:</strong>
-                                        <span><?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></span>
-                                    </div>
-                                    <div class="customer-request-detail-row">
-                                        <strong>Total:</strong>
-                                        <span>&#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></span>
-                                    </div>
-                                    <div class="customer-request-detail-row">
-                                        <strong>Payment:</strong>
-                                        <span><?php echo e($order_payment_label); ?></span>
+                                    <div class="customer-request-section">
+                                        <div class="customer-request-section-title">Request Information</div>
+                                        <div class="customer-request-detail-row">
+                                            <strong>Service:</strong>
+                                            <span><?php echo e($order_service_name); ?></span>
+                                        </div>
+                                        <div class="customer-request-detail-row">
+                                            <strong>Instruction:</strong>
+                                            <span class="customer-request-instruction"><?php echo e($order_instruction); ?></span>
+                                        </div>
+                                        <div class="customer-request-detail-row">
+                                            <strong>Pickup:</strong>
+                                            <span><?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></span>
+                                        </div>
                                     </div>
 
-                                    <div class="customer-request-more space-y-1" data-request-more hidden>
-                                    <p><strong><?php echo $is_document_request ? 'Paper:' : 'Option:'; ?></strong> <?php echo e($order['paper_size']); ?><?php if ($is_document_request && !empty($order['paper_type'])): ?>,
-                                        <?php echo e($order['paper_type']); ?><?php endif; ?>
-                                    </p>
-                                    <p><strong><?php echo $is_document_request ? 'Print:' : 'Charged By:'; ?></strong> <?php echo e(displayPrintType($order['print_type'])); ?></p>
-                                    <p><strong>Pages:</strong> <?php echo e($order_page_count); ?></p>
-                                    <p><strong>Copies:</strong> <?php echo e($order_copies); ?></p>
-                                    <p><strong><?php echo $is_document_request ? 'Paper Price:' : 'Price:'; ?></strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?><?php echo $is_document_request ? '/page' : ' ' . e(displayPrintType($order['print_type'])); ?></p>
-                                    <p><strong>Computation:</strong> &#8369;<?php echo e(number_format($order_unit_price, 2)); ?> x <?php echo e($order_page_count); ?> page<?php echo $order_page_count === 1 ? '' : 's'; ?> x <?php echo e($order_copies); ?> cop<?php echo $order_copies === 1 ? 'y' : 'ies'; ?> = &#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></p>
-                                    <?php if (!empty($order['reference_number'])): ?>
-                                        <p><strong>GCash Ref:</strong> <?php echo e($order['reference_number']); ?></p>
-                                    <?php endif; ?>
+                                    <div class="customer-request-section">
+                                        <div class="customer-request-section-title">Payment Information</div>
+                                        <div class="customer-request-detail-row">
+                                            <strong>Total:</strong>
+                                            <span class="customer-request-total">&#8369;<?php echo e(number_format($order['total_amount'], 2)); ?></span>
+                                        </div>
+                                        <div class="customer-request-detail-row">
+                                            <strong>Status:</strong>
+                                            <span class="<?php echo e(customerOrderPaymentClass($order_payment_label)); ?>"><?php echo e($order_payment_label); ?></span>
+                                        </div>
+                                        <?php if (!empty($order['reference_number'])): ?>
+                                            <div class="customer-request-detail-row">
+                                                <strong>GCash Ref:</strong>
+                                                <span><?php echo e($order['reference_number']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="customer-request-more" data-request-more hidden>
+                                        <div class="customer-request-section">
+                                            <div class="customer-request-section-title">Printing Details</div>
+                                            <?php if ($is_document_request): ?>
+                                                <div class="customer-request-detail-row"><strong>Paper:</strong> <span><?php echo e($order['paper_size']); ?><?php if (!empty($order['paper_type'])): ?>, <?php echo e($order['paper_type']); ?><?php endif; ?></span></div>
+                                            <?php else: ?>
+                                                <div class="customer-request-detail-row"><strong>Size:</strong> <span><?php echo e($order['paper_size']); ?></span></div>
+                                                <?php if ($is_detailed_service_request && !empty($order['paper_type'])): ?>
+                                                    <div class="customer-request-detail-row"><strong><?php echo ($is_tarpaulin_request || $is_id_request) ? 'Material:' : 'Paper Type:'; ?></strong> <span><?php echo e($order['paper_type']); ?></span></div>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
+                                            <?php if ($is_document_request || $is_detailed_service_request): ?>
+                                                <div class="customer-request-detail-row"><strong><?php echo $is_document_request ? 'Print:' : 'Print Type:'; ?></strong> <span><?php echo e(displayPrintType($order['print_type'])); ?></span></div>
+                                            <?php endif; ?>
+                                            <?php if ($is_document_request): ?>
+                                                <div class="customer-request-detail-row"><strong>Pages:</strong> <span><?php echo e($order_page_count); ?></span></div>
+                                                <div class="customer-request-detail-row"><strong>Copies:</strong> <span><?php echo e($order_copies); ?></span></div>
+                                            <?php else: ?>
+                                                <div class="customer-request-detail-row"><strong>Quantity:</strong> <span><?php echo e($order_copies); ?></span></div>
+                                            <?php endif; ?>
+                                            <div class="customer-request-detail-row"><strong><?php echo $is_document_request ? 'Paper Price:' : 'Price:'; ?></strong> <span>&#8369;<?php echo e(number_format($order_unit_price, 2)); ?><?php echo $is_document_request ? '/page' : ' per ' . $order_unit_label; ?></span></div>
+                                            <div class="customer-request-detail-row">
+                                                <strong>Computation:</strong>
+                                                <span>
+                                                    <?php if ($is_document_request): ?>
+                                                        &#8369;<?php echo e(number_format($order_unit_price, 2)); ?> x <?php echo e($order_page_count); ?> page<?php echo $order_page_count === 1 ? '' : 's'; ?> x <?php echo e($order_copies); ?> cop<?php echo $order_copies === 1 ? 'y' : 'ies'; ?> = &#8369;<?php echo e(number_format($order['total_amount'], 2)); ?>
+                                                    <?php else: ?>
+                                                        &#8369;<?php echo e(number_format($order_unit_price, 2)); ?> x <?php echo e($order_copies); ?> <?php echo e($order_unit_label); ?><?php echo $order_copies === 1 ? '' : 's'; ?> = &#8369;<?php echo e(number_format($order['total_amount'], 2)); ?>
+                                                    <?php endif; ?>
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <button type="button" class="customer-request-more-toggle" data-request-toggle aria-expanded="false">
@@ -415,7 +493,7 @@ function formatDateTime12Hour($datetime)
             </section>
         </div>
 
-        <script>
+        <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             const focusedOrder = document.getElementById('focused-order');
             if (focusedOrder) {
                 focusedOrder.scrollIntoView({ behavior: 'smooth', block: 'center' });

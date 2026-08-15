@@ -599,36 +599,61 @@ body.admin-dashboard-body .approval-btn {
     font-weight: 800;
 }
 
+/* ─────────────────────────────────────────────────
+   SETTINGS PAGE
+   ───────────────────────────────────────────────── */
+
 .admin-settings-grid {
     display: grid;
-    grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr);
-    gap: 20px;
+    grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.15fr);
+    gap: 24px;
     align-items: start;
 }
 
-.admin-settings-summary,
-.admin-settings-security,
-.admin-settings-notes {
+.admin-settings-col-left,
+.admin-settings-col-right {
     display: grid;
-    gap: 18px;
+    gap: 24px;
+    align-items: start;
 }
 
-.admin-settings-summary {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
+/* ── Profile Card ── */
+
+.admin-settings-profile {
+    padding: 0;
+    overflow: hidden;
+}
+
+.admin-settings-profile-banner {
+    position: relative;
+    min-height: 80px;
+    background: linear-gradient(135deg, var(--admin-ink) 0%, var(--admin-blue) 50%, var(--admin-cyan) 100%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 0;
 }
 
 .admin-settings-avatar {
-    width: 72px;
-    height: 72px;
+    width: 76px;
+    height: 76px;
     border-radius: 20px;
     color: #fff;
     background: linear-gradient(135deg, var(--admin-ink), var(--admin-blue));
     display: grid;
     place-items: center;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 900;
-    box-shadow: var(--admin-shadow-soft);
+    box-shadow: 0 8px 20px rgba(0, 77, 128, .28);
+    border: 3px solid #fff;
+    position: relative;
+    bottom: -38px;
+    z-index: 2;
+}
+
+.admin-settings-profile-body {
+    padding: 48px 28px 20px;
+    text-align: center;
 }
 
 .admin-settings-eyebrow {
@@ -639,31 +664,92 @@ body.admin-dashboard-body .approval-btn {
     text-transform: uppercase;
 }
 
-.admin-settings-summary h2,
-.admin-settings-security h2,
-.admin-settings-notes h2 {
-    margin: 4px 0 6px;
+.admin-settings-profile-body h2 {
+    margin: 8px 0 4px;
     color: var(--admin-ink);
     font-size: 22px;
+    line-height: 1.2;
 }
 
-.admin-settings-summary p,
-.admin-settings-section-head p,
-.admin-settings-note-list p {
+.admin-settings-email {
     margin: 0;
     color: var(--admin-muted);
+    font-size: 13px;
 }
 
 .admin-settings-badges {
-    margin-top: 14px;
+    margin-top: 16px;
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 8px;
+}
+
+/* ── Profile Meta Info ── */
+
+.admin-settings-meta {
+    border-top: 1px solid #e8f4fa;
+    padding: 18px 24px;
+    display: grid;
+    gap: 0;
+}
+
+.admin-settings-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 4px;
+    border-bottom: 1px solid #f0f7fb;
+}
+
+.admin-settings-meta-item:last-child {
+    border-bottom: none;
+}
+
+.admin-settings-meta-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    color: var(--admin-blue);
+    background: #edf6ff;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.admin-settings-meta-icon .admin-icon {
+    width: 17px;
+    height: 17px;
+}
+
+.admin-settings-meta-item strong {
+    display: block;
+    color: var(--admin-ink);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.admin-settings-meta-item span {
+    color: var(--admin-muted);
+    font-size: 12px;
+}
+
+/* ── Security Card (Change Password) ── */
+
+.admin-settings-security {
+    display: grid;
+    gap: 22px;
+}
+
+.admin-settings-security h2 {
+    margin: 4px 0 4px;
+    color: var(--admin-ink);
+    font-size: 20px;
 }
 
 .admin-settings-section-head {
     display: flex;
-    gap: 14px;
+    gap: 16px;
     align-items: center;
 }
 
@@ -675,49 +761,325 @@ body.admin-dashboard-body .approval-btn {
     background: #e7f3ff;
     display: grid;
     place-items: center;
+    flex-shrink: 0;
 }
+
+.admin-settings-section-head p {
+    margin: 0;
+    color: var(--admin-muted);
+    font-size: 13px;
+}
+
+/* ── Form Styles ── */
 
 .admin-settings-form {
     display: grid;
-    gap: 14px;
+    gap: 18px;
 }
 
 .admin-settings-form label {
     display: grid;
-    gap: 7px;
+    gap: 8px;
     color: var(--admin-ink);
     font-size: 13px;
     font-weight: 800;
 }
 
+.admin-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.admin-input-icon {
+    position: absolute;
+    left: 14px;
+    width: 18px;
+    height: 18px;
+    color: var(--admin-muted);
+    pointer-events: none;
+    z-index: 1;
+    transition: color .18s ease;
+}
+
+.admin-input-wrap .admin-input {
+    width: 100%;
+    min-height: 48px;
+    padding-left: 42px;
+    padding-right: 46px;
+    border: 1.5px solid #d0e8f2;
+    border-radius: 12px;
+    background: #fafcfe;
+    font-size: 14px;
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.admin-input-wrap .admin-input:focus {
+    outline: none;
+    border-color: var(--admin-blue);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(0, 119, 182, .1);
+}
+
+.admin-input-wrap .admin-input:focus ~ .admin-input-icon,
+.admin-input-wrap:focus-within .admin-input-icon {
+    color: var(--admin-blue);
+}
+
 .admin-settings-form .admin-input {
     width: 100%;
-    min-height: 46px;
+    min-height: 48px;
 }
 
-.admin-settings-form .admin-btn {
-    justify-self: start;
-    min-height: 46px;
+/* ── Password Toggle ── */
+
+.admin-pw-toggle {
+    position: absolute;
+    right: 6px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--admin-muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: color .18s ease, background .18s ease;
+    z-index: 1;
 }
 
-.admin-settings-note,
-.admin-settings-note-list article {
-    border: 1px solid #d9f3fb;
-    border-radius: 14px;
-    padding: 14px;
-    background: #f6fdff;
+.admin-pw-toggle:hover {
     color: var(--admin-ink-soft);
+    background: #edf6ff;
+}
+
+.admin-pw-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+.admin-pw-toggle .eye-closed {
+    display: none;
+}
+
+.admin-pw-toggle.is-visible .eye-open {
+    display: none;
+}
+
+.admin-pw-toggle.is-visible .eye-closed {
+    display: block;
+}
+
+/* ── Password Requirements ── */
+
+.admin-pw-requirements {
+    padding: 14px 16px;
+    border: 1px solid #e4f0f7;
+    border-radius: 12px;
+    background: #f8fbfe;
+}
+
+.admin-pw-req-title {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--admin-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-pw-requirements ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 6px;
+}
+
+.admin-pw-requirements li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--admin-muted);
+    font-size: 12px;
+    font-weight: 600;
+    transition: color .22s ease;
+}
+
+.admin-pw-req-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #d0dbe4;
+    flex-shrink: 0;
+    transition: background .22s ease, transform .22s ease;
+}
+
+.admin-pw-requirements li.is-met {
+    color: #047857;
+}
+
+.admin-pw-requirements li.is-met .admin-pw-req-dot {
+    background: #10b981;
+    transform: scale(1.15);
+}
+
+.admin-pw-requirements li.is-unmet {
+    color: #b91c1c;
+}
+
+.admin-pw-requirements li.is-unmet .admin-pw-req-dot {
+    background: #ef4444;
+}
+
+/* ── Password Match Message ── */
+
+.admin-pw-match-msg {
+    min-height: 0;
+    font-size: 12px;
+    font-weight: 700;
+    transition: color .18s ease;
+}
+
+.admin-pw-match-msg:empty {
+    display: none;
+}
+
+.admin-pw-match-msg.is-match {
+    color: #047857;
+}
+
+.admin-pw-match-msg.is-mismatch {
+    color: #b91c1c;
+}
+
+/* ── Google Auth Note ── */
+
+.admin-settings-google-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #d5eef8;
+    border-radius: 12px;
+    background: #f0faff;
+    color: var(--admin-ink-soft);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.admin-settings-google-note svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: var(--admin-blue);
+    margin-top: 1px;
+}
+
+/* ── Update Password Button ── */
+
+.admin-btn-update-pw {
+    justify-self: start;
+    min-height: 48px;
+    padding: 0 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    background: linear-gradient(135deg, var(--admin-ink), var(--admin-blue));
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.admin-btn-update-pw:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(0, 77, 128, .22);
+}
+
+/* ── Security Notes Card ── */
+
+.admin-settings-notes {
+    display: grid;
+    gap: 16px;
+}
+
+.admin-settings-notes-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-settings-notes-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    color: var(--admin-blue);
+    background: #e7f3ff;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.admin-settings-notes-icon .admin-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.admin-settings-notes h2 {
+    margin: 0;
+    color: var(--admin-ink);
+    font-size: 18px;
 }
 
 .admin-settings-note-list {
     display: grid;
-    gap: 12px;
+    gap: 10px;
+}
+
+.admin-settings-note,
+.admin-settings-note-list article {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    border: 1px solid #e4f0f7;
+    border-radius: 12px;
+    padding: 16px;
+    background: #f8fbfe;
+    color: var(--admin-ink-soft);
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.admin-settings-note-list article:hover {
+    border-color: #c0e2f0;
+    background: #f2f9ff;
+    box-shadow: 0 4px 12px rgba(0, 119, 182, .06);
+}
+
+.admin-settings-note-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    color: var(--admin-blue);
+    background: #e7f3ff;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.admin-settings-note-icon svg {
+    width: 16px;
+    height: 16px;
 }
 
 .admin-settings-note-list strong {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     color: var(--admin-ink);
+    font-size: 13px;
+}
+
+.admin-settings-note-list p {
+    margin: 0;
+    color: var(--admin-muted);
+    font-size: 12.5px;
+    line-height: 1.5;
 }
 
 .admin-empty {
@@ -1377,6 +1739,14 @@ body.admin-dashboard-body .approval-btn {
     font-weight: 900;
 }
 
+.admin-shop-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .admin-shop-name strong,
 .admin-shop-owner strong {
     color: var(--admin-ink);
@@ -1422,6 +1792,12 @@ body.admin-dashboard-body .approval-btn {
     color: #c10012;
     border-color: #fecaca;
     background: #ffe0e6;
+}
+
+.admin-shop-status-partial {
+    color: #6d28d9;
+    border-color: #ddd6fe;
+    background: #f3e8ff;
 }
 
 .admin-shop-status-disabled {
@@ -1519,6 +1895,442 @@ body.admin-dashboard-body .approval-btn {
     height: 15px;
 }
 
+.admin-payment-review-head {
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid #edf3f6;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.admin-payment-review-head h2 {
+    margin: 0;
+    color: var(--admin-ink);
+    font-size: 20px;
+    line-height: 1.2;
+}
+
+.admin-payment-review-head p {
+    margin: 6px 0 0;
+    color: var(--admin-muted);
+}
+
+.admin-payment-review-head > span {
+    min-height: 30px;
+    padding: 0 12px;
+    border: 1px solid #bde9f7;
+    border-radius: 999px;
+    color: var(--admin-blue);
+    background: #f1fbff;
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.admin-payment-review-table {
+    min-width: 900px;
+}
+
+.admin-payment-group-row td {
+    background: #fff;
+}
+
+.admin-payment-group-row:nth-child(even) td {
+    background: #fbfdff;
+}
+
+.admin-payment-shop small {
+    overflow-wrap: anywhere;
+}
+
+.admin-payment-methods {
+    display: grid;
+    gap: 9px;
+}
+
+.admin-payment-methods > strong {
+    color: var(--admin-ink);
+}
+
+.admin-payment-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-payment-method-badge {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid #b7efff;
+    border-radius: 999px;
+    color: #005a8d;
+    background: #eefaff;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.admin-payment-method-badge.admin-payment-status-badge-pending {
+    color: #9a6500;
+    border-color: #fde047;
+    background: #fff9db;
+}
+
+.admin-payment-method-badge.admin-payment-status-badge-approved {
+    color: #007a33;
+    border-color: #86efac;
+    background: #e6fffa;
+}
+
+.admin-payment-method-badge.admin-payment-status-badge-rejected {
+    color: #c10012;
+    border-color: #fecaca;
+    background: #ffe0e6;
+}
+
+.admin-payment-badge-status {
+    margin-left: 2px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.admin-payment-badge-status.status-pending {
+    color: #78350f;
+    background: #fef08a;
+}
+
+.admin-payment-badge-status.status-approved {
+    color: #065f46;
+    background: #bbf7d0;
+}
+
+.admin-payment-badge-status.status-rejected {
+    color: #991b1b;
+    background: #fecaca;
+}
+
+.admin-payment-method-badge .admin-icon {
+    width: 15px;
+    height: 15px;
+}
+
+.admin-payment-group-actions {
+    justify-content: flex-start;
+}
+
+.admin-payment-modal__panel {
+    width: min(720px, 100%);
+    max-height: min(760px, calc(100vh - 48px));
+    overflow-y: auto;
+}
+
+.admin-payment-modal-owner {
+    margin: 10px 0 18px;
+    padding: 14px 16px;
+    border: 1px solid #edf3f6;
+    border-radius: 14px;
+    background: #f8fcff;
+    display: grid;
+    gap: 2px;
+}
+
+.admin-payment-modal-owner strong {
+    color: var(--admin-ink);
+}
+
+.admin-payment-modal-owner span {
+    color: var(--admin-muted);
+    overflow-wrap: anywhere;
+}
+
+.admin-payment-detail-list {
+    display: grid;
+    gap: 14px;
+}
+
+.admin-payment-detail-card {
+    padding: 16px;
+    border: 1px solid #d9f2fb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .06);
+}
+
+.admin-payment-detail-card.is-pending {
+    border: 2px solid #f59e0b;
+    background: #fffdf5;
+}
+
+.admin-payment-card-banner {
+    margin-bottom: 12px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .04em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+}
+
+.admin-payment-card-banner.is-pending {
+    color: #92400e;
+    border: 1px solid #fcd34d;
+    background: #fef3c7;
+}
+
+.admin-payment-card-banner.is-approved {
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+    background: #d1fae5;
+}
+
+.admin-payment-detail-card header {
+    margin-bottom: 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.admin-payment-detail-card header span:first-child {
+    color: var(--admin-blue);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.admin-payment-detail-card header strong {
+    display: block;
+    margin-top: 3px;
+    color: var(--admin-ink);
+    font-size: 16px;
+}
+
+.admin-payment-detail-card dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-payment-detail-card dl div {
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: #f8fbfe;
+}
+
+.admin-payment-detail-card dt {
+    margin-bottom: 3px;
+    color: var(--admin-muted);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.admin-payment-detail-card dd {
+    margin: 0;
+    color: var(--admin-ink-soft);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.admin-payment-detail-media {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.admin-payment-method-actions {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #edf3f6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-payment-method-actions form {
+    margin: 0;
+}
+
+.admin-payment-method-actions .admin-shop-action {
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 12px;
+}
+
+.admin-payment-qr-preview {
+    width: 148px;
+    min-height: 148px;
+    padding: 8px;
+    border: 1px solid #b7efff;
+    border-radius: 14px;
+    background: #fff;
+    display: grid;
+    place-items: center;
+}
+
+.admin-payment-qr-preview img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    object-fit: contain;
+}
+
+.admin-payment-confirm-copy {
+    margin: 8px 0 18px;
+    color: var(--admin-muted);
+}
+
+.admin-payment-reject-form {
+    display: grid;
+    gap: 16px;
+}
+
+.admin-payment-reject-form label {
+    display: grid;
+    gap: 8px;
+    color: var(--admin-ink);
+    font-weight: 900;
+}
+
+.admin-payment-reject-form label span {
+    color: var(--admin-muted);
+    font-weight: 700;
+}
+
+.admin-payment-reject-form textarea {
+    width: 100%;
+    min-height: 112px;
+    resize: vertical;
+    padding: 12px;
+    border: 1px solid #bde9f7;
+    border-radius: 12px;
+    color: var(--admin-ink-soft);
+    background: #f8fdff;
+    font: inherit;
+}
+
+.admin-payment-reject-form textarea:focus {
+    outline: none;
+    border-color: var(--admin-blue);
+    box-shadow: 0 0 0 3px rgba(0, 119, 182, .1);
+}
+
+.admin-payment-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+    .admin-payment-review-head {
+        padding: 18px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .admin-payment-review-wrap {
+        overflow-x: visible;
+        padding: 0 14px 14px;
+    }
+
+    .admin-payment-review-table {
+        min-width: 0;
+        display: block;
+    }
+
+    .admin-payment-review-table thead {
+        display: none;
+    }
+
+    .admin-payment-review-table tbody,
+    .admin-payment-review-table tr,
+    .admin-payment-review-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .admin-payment-review-table tbody {
+        display: grid;
+        gap: 12px;
+    }
+
+    .admin-payment-review-table .admin-payment-group-row {
+        padding: 14px;
+        border: 1px solid #d9f2fb;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 8px 16px rgba(15, 23, 42, .06);
+    }
+
+    .admin-payment-review-table .admin-payment-group-row td {
+        padding: 11px 0;
+        border-bottom: 1px solid #edf3f6;
+        background: transparent;
+    }
+
+    .admin-payment-review-table .admin-payment-group-row td:last-child {
+        border-bottom: 0;
+    }
+
+    .admin-payment-review-table .admin-payment-group-row td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 7px;
+        color: var(--admin-muted);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+    }
+
+    .admin-payment-group-actions {
+        justify-content: flex-start;
+    }
+
+    .admin-payment-group-actions .admin-shop-action,
+    .admin-payment-group-actions form {
+        width: 100%;
+    }
+
+    .admin-payment-detail-card dl {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-payment-detail-card header,
+    .admin-payment-confirm-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .admin-payment-confirm-actions .admin-shop-action,
+    .admin-payment-confirm-actions .admin-payment-link-btn {
+        width: 100%;
+    }
+
+    .admin-payment-method-actions,
+    .admin-payment-method-actions form,
+    .admin-payment-method-actions .admin-shop-action {
+        width: 100%;
+    }
+}
+
 .admin-shop-modal {
     position: fixed;
     inset: 0;
@@ -1570,6 +2382,21 @@ body.admin-dashboard-body .approval-btn {
 .admin-shop-modal h2 {
     margin: 8px 0 18px;
     color: var(--admin-ink);
+}
+
+.admin-shop-modal__logo-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+}
+
+.admin-shop-modal__logo-wrap img {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+    object-fit: cover;
+    border: 1px solid #b7efff;
+    background: #f8fdff;
 }
 
 .admin-shop-modal dl {
@@ -1863,6 +2690,14 @@ body.admin-dashboard-body .approval-btn {
     font-weight: 900;
 }
 
+.admin-user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .admin-user-name strong {
     color: var(--admin-ink);
 }
@@ -2008,6 +2843,21 @@ body.admin-dashboard-body .approval-btn {
 .admin-user-modal h2 {
     margin: 8px 0 18px;
     color: var(--admin-ink);
+}
+
+.admin-user-modal__avatar-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+}
+
+.admin-user-modal__avatar-wrap img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #b7efff;
+    background: #f8fdff;
 }
 
 .admin-user-modal dl {
@@ -3394,8 +4244,8 @@ body.admin-dashboard-body .metric-card {
         grid-template-columns: 1fr;
     }
 
-    .admin-settings-summary {
-        grid-template-columns: 1fr;
+    .admin-settings-profile-body {
+        padding: 44px 20px 16px;
     }
 }
 

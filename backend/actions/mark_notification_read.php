@@ -4,6 +4,7 @@ require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/cache.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 header('Content-Type: application/json');
 
@@ -17,8 +18,16 @@ function notificationReadResponse($success, $updated = false, $unread_count = 0)
     exit();
 }
 
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['customer', 'shop_owner', 'super_admin'], true)) {
-    notificationReadResponse(false);
+if (!isset($_SESSION['user_id'])) {
+    if (authIsAjaxRequest()) {
+        authJsonResponse(false, 'Authentication required.', 401);
+    }
+    header("Location: " . BASE_URL . "frontend/pages/login.php");
+    exit();
+}
+
+if (!in_array($_SESSION['role'] ?? '', ['customer', 'shop_owner', 'super_admin'], true)) {
+    authJsonResponse(false, 'Access denied.', 403);
 }
 
 validateCsrf();
@@ -35,6 +44,12 @@ function getEndpointUnreadNotificationCount($conn, $user_id)
     $count_row = mysqli_fetch_assoc(mysqli_stmt_get_result($count_stmt));
     return (int) ($count_row['total'] ?? 0);
 }
+
+$rate_guard = rateLimitGuardRequest($conn, 'mark_notification_read', 60, 60);
+if (!$rate_guard['allowed']) {
+    notificationReadResponse(false, false, getEndpointUnreadNotificationCount($conn, $user_id));
+}
+rateLimitRecordRequest($conn, 'mark_notification_read', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 60);
 
 if (!empty($_POST['mark_all'])) {
     $all_stmt = mysqli_prepare($conn, "UPDATE notifications SET is_read = 1, read_at = NOW() WHERE user_id = ? AND is_read = 0");

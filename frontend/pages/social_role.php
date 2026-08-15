@@ -657,7 +657,7 @@ if ($flash_error !== '' && isset($register_error_messages[$flash_error])) {
         </section>
     </div>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         document.querySelectorAll('[data-policy-open]').forEach(function (button) {
             button.addEventListener('click', function () {
                 var modal = document.getElementById(button.dataset.policyOpen);

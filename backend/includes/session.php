@@ -51,7 +51,7 @@ function secureSession(): void {
         'path' => '/',
         'httponly' => true,
         'samesite' => 'Lax',
-        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'secure' => function_exists('isRequestSecure') ? isRequestSecure() : (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
     ]);
 
     ini_set('session.use_strict_mode', '1');

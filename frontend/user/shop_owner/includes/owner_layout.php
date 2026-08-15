@@ -49,6 +49,7 @@ function ownerIcon($name, $class = 'icon')
         'download' => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
         'edit-3' => '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
         'eye' => '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+        'external-link' => '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
         'file-text' => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/>',
         'folder' => '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/>',
         'info' => '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
@@ -205,7 +206,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="<?php echo BASE_URL; ?>frontend/components/notification-center.css">
-        <script>
+        <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             try {
                 if (sessionStorage.getItem('ownerSidebarHold') === '1') {
                     document.documentElement.classList.add('owner-sidebar-hovered');
@@ -280,7 +281,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                     </button>
                     <div class="notification-popover-wrap">
                         <button type="button" class="notification-link" id="ownerNotificationToggle"
-                            aria-label="Notifications" aria-expanded="false" aria-controls="ownerNotificationPopover">
+                            aria-label="Notifications" title="Notifications" aria-expanded="false" aria-controls="ownerNotificationPopover">
                             <?php echo ownerIcon('bell', 'icon'); ?>
                             <?php if ($notif_count > 0): ?>
                                 <span class="notification-badge" id="ownerNotificationBadge"><?php echo (int) $notif_count; ?></span>
@@ -356,7 +357,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                             <p>Update the password used for standard email sign-in.</p>
                         </div>
                         <button type="button" class="owner-modal-close" data-password-modal-close
-                            aria-label="Close change password dialog">
+                            aria-label="Close change password dialog" title="Close change password dialog">
                             <?php echo ownerIcon('x', 'icon'); ?>
                         </button>
                     </header>
@@ -373,7 +374,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                                     <input id="owner_current_password" type="password" name="current_password"
                                         autocomplete="current-password" required>
                                     <button type="button" class="password-toggle" data-password-toggle="owner_current_password"
-                                        aria-label="Show current password" aria-pressed="false">
+                                        aria-label="Show current password" title="Show current password" aria-pressed="false">
                                         <?php echo ownerIcon('eye', 'icon-sm'); ?>
                                     </button>
                                 </div>
@@ -390,7 +391,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                                 <input id="owner_new_password" type="password" name="new_password" minlength="8"
                                     autocomplete="new-password" required aria-describedby="ownerNewPasswordHelp">
                                 <button type="button" class="password-toggle" data-password-toggle="owner_new_password"
-                                    aria-label="Show new password" aria-pressed="false">
+                                    aria-label="Show new password" title="Show new password" aria-pressed="false">
                                     <?php echo ownerIcon('eye', 'icon-sm'); ?>
                                 </button>
                             </div>
@@ -403,7 +404,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                                 <input id="owner_confirm_password" type="password" name="confirm_password" minlength="8"
                                     autocomplete="new-password" required>
                                 <button type="button" class="password-toggle" data-password-toggle="owner_confirm_password"
-                                    aria-label="Show password confirmation" aria-pressed="false">
+                                    aria-label="Show password confirmation" title="Show password confirmation" aria-pressed="false">
                                     <?php echo ownerIcon('eye', 'icon-sm'); ?>
                                 </button>
                             </div>
@@ -439,7 +440,7 @@ function ownerLayoutEnd()
     ?>
             </main>
         </div>
-        <script>
+        <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             (function () {
                 const sidebar = document.querySelector('.owner-sidebar');
                 const expandedClass = 'owner-sidebar-hovered';

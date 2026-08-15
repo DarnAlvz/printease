@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("shop_owner");
 validateCsrf();
@@ -13,23 +14,35 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['save_service_types']
     redirect($redirect);
 }
 
+$rate_guard = rateLimitGuardRequest($conn, 'save_service_types', 60, 3600);
+if (!$rate_guard['allowed']) {
+    setError("Too many service type updates. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".");
+    redirect($redirect);
+}
+rateLimitRecordRequest($conn, 'save_service_types', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 3600);
+
 $owner_id = $_SESSION['user_id'];
 $allowed_types = [
     'Document Printing',
-    'Photocopy',
+    'Lamination',
     'Photo Printing',
     'Tarpaulin Printing',
-    'Lamination',
-    'Binding',
-    'Scanning',
     'ID Printing',
     'Invitation / Card Printing',
+    'Photocopy',
+    'Binding',
+    'Scanning',
 ];
 
 $selected = array_values(array_unique(array_intersect($_POST['service_types'] ?? [], $allowed_types)));
 if (!in_array('Document Printing', $selected, true)) {
     array_unshift($selected, 'Document Printing');
 }
+$default_notes = [
+    'Photocopy' => 'This service requires physical documents. Online request is unavailable.',
+    'Binding' => 'Physical document submission is required. Please visit the shop.',
+    'Scanning' => 'Original documents are required. Online request is unavailable.',
+];
 
 $shop_sql = "SELECT shop_id FROM print_shops WHERE owner_id = ? LIMIT 1";
 $shop_stmt = mysqli_prepare($conn, $shop_sql);
@@ -52,10 +65,12 @@ mysqli_stmt_bind_param($del_stmt, "i", $shop_id);
 mysqli_stmt_execute($del_stmt);
 
 if (!empty($selected)) {
-    $ins_sql = "INSERT INTO shop_service_types (shop_id, service_type) VALUES (?, ?)";
+    $ins_sql = "INSERT INTO shop_service_types (shop_id, service_type, service_offered, online_available, customer_note) VALUES (?, ?, 1, ?, ?)";
     $ins_stmt = mysqli_prepare($conn, $ins_sql);
     foreach ($selected as $type) {
-        mysqli_stmt_bind_param($ins_stmt, "is", $shop_id, $type);
+        $online_available = in_array($type, ['Photocopy', 'Binding', 'Scanning'], true) ? 0 : 1;
+        $customer_note = $default_notes[$type] ?? null;
+        mysqli_stmt_bind_param($ins_stmt, "isis", $shop_id, $type, $online_available, $customer_note);
         mysqli_stmt_execute($ins_stmt);
     }
 }

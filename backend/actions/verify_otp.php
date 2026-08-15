@@ -2,6 +2,8 @@
 require_once __DIR__ . "/../includes/session.php";
 secureSession();
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 validateCsrf();
 
@@ -19,6 +21,13 @@ function redirectToOtp($query = '')
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirectToOtp();
 }
+
+$otp_ip = rateLimitClientIp();
+$otp_ip_check = rateLimitCheck($conn, 'otp_verify', 'all', $otp_ip, 10, 900);
+if (!$otp_ip_check['allowed']) {
+    redirectToOtp('error=too_many_otp_attempts');
+}
+rateLimitRecord($conn, 'otp_verify', 'all', $otp_ip, 10, 900);
 
 if (
     empty($_SESSION['otp'])

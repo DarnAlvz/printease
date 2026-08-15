@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("super_admin");
 
@@ -24,6 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['update_user_status']
 
 validateCsrf();
 
+$rate_guard = rateLimitGuardRequest($conn, 'user_status', 60, 3600);
+if (!$rate_guard['allowed']) {
+    setError("Too many user status updates. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".");
+    redirect($redirect_page);
+}
+rateLimitRecordRequest($conn, 'user_status', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 3600);
+
 $user_id = filter_input(INPUT_POST, 'user_id', FILTER_VALIDATE_INT);
 $account_status = trim((string) ($_POST['account_status'] ?? ''));
 $allowed = ['pending', 'verified', 'rejected', 'inactive'];
@@ -42,6 +50,11 @@ $user = mysqli_fetch_assoc($user_result);
 
 if (!$user) {
     setError("User not found or cannot update super admin.");
+    redirect($redirect_page);
+}
+
+if ($user['role'] === 'shop_owner') {
+    setError("Shop owner accounts are managed in the Manage Print Shop screen.");
     redirect($redirect_page);
 }
 

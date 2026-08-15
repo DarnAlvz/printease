@@ -145,24 +145,86 @@ function renderExploreVerifiedBadge(array $shop): void
     <?php
 }
 
-function renderServiceTags(array $types, int $max = 3): void
+function serviceTypeName($service): string
+{
+    return is_array($service) ? (string) ($service['service_type'] ?? '') : (string) $service;
+}
+
+function serviceOnlineAvailable($service): bool
+{
+    return is_array($service) ? (bool) ($service['online_available'] ?? true) : true;
+}
+
+function serviceCustomerNote($service): string
+{
+    return is_array($service) ? trim((string) ($service['customer_note'] ?? '')) : '';
+}
+
+function renderServiceTags(array $types, int $max = 3, int $shop_id = 0): void
 {
     if (empty($types)) return;
-    $shown = array_slice($types, 0, $max);
-    $hidden = array_slice($types, $max);
-    $remaining = count($types) - $max;
+    $groups = [
+        'online' => ['label' => 'Available Online', 'items' => []],
+        'visit' => ['label' => 'Shop Visit Required', 'items' => []],
+    ];
+    foreach ($types as $service) {
+        $groups[serviceOnlineAvailable($service) ? 'online' : 'visit']['items'][] = $service;
+    }
     ?>
-    <div class="customer-shop-service-tags" data-service-tags>
-        <?php foreach ($shown as $type): ?>
-            <span class="customer-service-tag"><?php echo e($type); ?></span>
-        <?php endforeach; ?>
-        <?php foreach ($hidden as $type): ?>
-            <span class="customer-service-tag" data-extra-service hidden><?php echo e($type); ?></span>
-        <?php endforeach; ?>
-        <?php if ($remaining > 0): ?>
-            <button type="button" class="customer-service-tag-more" data-service-toggle
-                data-collapsed-label="+<?php echo (int) $remaining; ?> more" data-expanded-label="Show less"
-                aria-expanded="false">+<?php echo (int) $remaining; ?> more</button>
+    <div class="customer-shop-service-tags" data-service-tags <?php echo $shop_id > 0 ? 'data-shop-service-tags="' . (int) $shop_id . '"' : ''; ?>>
+        <span class="customer-service-summary"><?php echo (int) count($types); ?> Services Offered</span>
+        <?php if (!empty($groups['online']['items'])): ?>
+            <div class="customer-service-group customer-service-group--online">
+                <div class="customer-service-group-head">
+                    <span class="customer-service-group-title">Available Online</span>
+                </div>
+                <div class="customer-service-chip-row">
+                    <?php foreach ($groups['online']['items'] as $index => $service): ?>
+                        <?php $is_hidden = $index >= $max; ?>
+                        <span class="customer-service-tag customer-service-tag--online" <?php echo $is_hidden ? 'data-extra-online-service hidden' : ''; ?>>
+                            <?php echo e(serviceTypeName($service)); ?>
+                        </span>
+                    <?php endforeach; ?>
+                    <?php if (count($groups['online']['items']) > $max): ?>
+                        <button type="button" class="customer-service-tag-more" data-online-service-toggle
+                            data-collapsed-label="+<?php echo (int) (count($groups['online']['items']) - $max); ?> more" data-expanded-label="Show less"
+                            aria-expanded="false">+<?php echo (int) (count($groups['online']['items']) - $max); ?> more</button>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($groups['visit']['items'])): ?>
+            <div class="customer-service-group customer-service-group--visit">
+                <div class="customer-service-group-head">
+                    <span class="customer-service-group-title">Shop Visit Required</span>
+                    <button type="button" class="customer-service-tag-more customer-service-requirements-toggle"
+                        data-service-requirements-toggle data-collapsed-label="View requirements" data-expanded-label="Hide requirements"
+                        aria-expanded="false">View requirements</button>
+                </div>
+                <div class="customer-service-chip-row">
+                    <?php foreach ($groups['visit']['items'] as $service): ?>
+                        <?php $note = serviceCustomerNote($service); ?>
+                        <span class="customer-service-tag customer-service-tag--visit" <?php echo $note !== '' ? 'title="' . e($note) . '"' : ''; ?>>
+                            <?php echo e(serviceTypeName($service)); ?>
+                        </span>
+                    <?php endforeach; ?>
+                </div>
+                <div class="customer-service-requirements" data-service-requirements hidden>
+                    <?php foreach ($groups['visit']['items'] as $service): ?>
+                        <?php
+                        $service_name = serviceTypeName($service);
+                        $note = serviceCustomerNote($service);
+                        if ($note === '') {
+                            $note = 'This service requires a shop visit. Please visit the shop to proceed.';
+                        }
+                        ?>
+                        <div class="customer-service-requirement">
+                            <strong><?php echo e($service_name); ?></strong>
+                            <small>Requirement: <?php echo e($note); ?></small>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         <?php endif; ?>
     </div>
     <?php
@@ -207,7 +269,7 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
             <span><strong><?php echo (int) ($shop['service_count'] ?? 0); ?> services</strong><?php echo customerExploreMoney($shop['starting_price'] ?? null); ?> start</span>
         </div>
 
-        <?php renderServiceTags($service_types); ?>
+        <?php renderServiceTags($service_types, 3, (int) $shop['shop_id']); ?>
 
         <div class="customer-map-shop-actions">
             <a href="<?php echo e(customerExploreUrl('nearby', ['shop_id' => (int) $shop['shop_id']])); ?>">View Map</a>
@@ -223,11 +285,13 @@ function renderExploreShopCard(array $shop, string $return_to, bool $selected = 
 $sql = "SELECT ps.shop_id, ps.shop_name, ps.shop_address, ps.display_address, ps.landmark,
                ps.contact_number, ps.shop_logo, ps.shop_status, ps.permit_status, ps.latitude, ps.longitude,
                ps.weekday_open_time, ps.weekday_close_time, ps.weekend_open_time, ps.weekend_close_time,
-               COUNT(ss.service_id) AS service_count,
+               COUNT(DISTINCT ss.service_id) AS service_count,
+               COUNT(DISTINCT sst_count.id) AS offered_service_count,
                MIN(ss.price_per_page) AS starting_price,
                MAX(cfs.id) AS favorite_id
         FROM print_shops ps
         LEFT JOIN shop_services ss ON ps.shop_id = ss.shop_id AND ss.is_available = 1
+        LEFT JOIN shop_service_types sst_count ON sst_count.shop_id = ps.shop_id AND sst_count.service_offered = 1
         LEFT JOIN customer_favorite_shops cfs ON cfs.shop_id = ps.shop_id AND cfs.customer_id = ?
         WHERE ps.permit_status = 'verified'
           AND ps.shop_status IN ('available', 'busy')
@@ -249,7 +313,7 @@ if ($search !== '') {
 }
 
 $sql .= " GROUP BY ps.shop_id
-          HAVING service_count > 0";
+          HAVING offered_service_count > 0";
 if ($view === 'favorites') {
     $sql .= " AND favorite_id IS NOT NULL";
 }
@@ -263,6 +327,7 @@ $shops_result = mysqli_stmt_get_result($stmt);
 $shops = [];
 $shop_locations = [];
 $shop_ids = [];
+$allowed_service_types = ['Document Printing', 'Lamination', 'Photo Printing', 'Tarpaulin Printing', 'ID Printing', 'Invitation / Card Printing', 'Photocopy', 'Binding', 'Scanning'];
 while ($shop = mysqli_fetch_assoc($shops_result)) {
     $shop['is_favorite'] = !empty($shop['favorite_id']);
     $shop['is_verified'] = ($shop['permit_status'] ?? '') === 'verified';
@@ -274,14 +339,25 @@ while ($shop = mysqli_fetch_assoc($shops_result)) {
 if (!empty($shop_ids)) {
     $placeholders = implode(',', array_fill(0, count($shop_ids), '?'));
     $types_str = str_repeat('i', count($shop_ids));
-    $st_sql = "SELECT shop_id, service_type FROM shop_service_types WHERE shop_id IN ($placeholders) ORDER BY service_type ASC";
+    $st_sql = "SELECT DISTINCT sst.shop_id, sst.service_type, sst.online_available, sst.customer_note
+               FROM shop_service_types sst
+               WHERE sst.shop_id IN ($placeholders)
+               AND sst.service_offered = 1
+               ORDER BY sst.service_type ASC";
     $st_stmt = mysqli_prepare($conn, $st_sql);
     mysqli_stmt_bind_param($st_stmt, $types_str, ...$shop_ids);
     mysqli_stmt_execute($st_stmt);
     $st_result = mysqli_stmt_get_result($st_stmt);
     $service_types_map = [];
     while ($row = mysqli_fetch_assoc($st_result)) {
-        $service_types_map[(int) $row['shop_id']][] = (string) $row['service_type'];
+        $service_type = (string) $row['service_type'];
+        if (in_array($service_type, $allowed_service_types, true)) {
+            $service_types_map[(int) $row['shop_id']][] = [
+                'service_type' => $service_type,
+                'online_available' => (int) ($row['online_available'] ?? 1) === 1,
+                'customer_note' => (string) ($row['customer_note'] ?? ''),
+            ];
+        }
     }
     mysqli_stmt_close($st_stmt);
     foreach ($shops as &$shop_ref) {
@@ -441,7 +517,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
         </section>
     </div>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         document.addEventListener('DOMContentLoaded', function () {
             const modal = document.getElementById('busyShopModal');
             if (!modal) return;
@@ -509,11 +585,13 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
     </script>
 
     <?php if ($view === 'nearby' && !empty($shop_locations)): ?>
-        <script>
+        <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             document.addEventListener('DOMContentLoaded', function () {
                 const shops = <?php echo json_encode($shop_locations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
                 const favoriteAction = <?php echo json_encode(BASE_URL . 'backend/actions/toggle_favorite_shop.php'); ?>;
                 const returnTo = <?php echo json_encode($return_to); ?>;
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.content : '';
                 let selectedShopId = <?php echo $selected_shop_id; ?>;
                 const calbayogCenter = [12.0432, 124.5946];
                 const map = L.map('map', { zoomControl: false }).setView(calbayogCenter, 13);
@@ -685,10 +763,11 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                 function favoriteFormHtml(shop) {
                     const favorite = !!shop.is_favorite;
                     return '<form method="POST" action="' + favoriteAction + '" class="customer-favorite-form">' +
+                        '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
                         '<input type="hidden" name="shop_id" value="' + shop.shop_id + '">' +
                         '<input type="hidden" name="intent" value="' + (favorite ? 'remove' : 'add') + '">' +
                         '<input type="hidden" name="return_to" value="' + escapeHtml(returnTo) + '">' +
-                        '<button type="submit" class="customer-favorite-button' + (favorite ? ' is-favorite' : '') + '" aria-label="' + (favorite ? 'Remove from favorites' : 'Add to favorites') + '">' +
+                        '<button type="submit" class="customer-favorite-button' + (favorite ? ' is-favorite' : '') + '" aria-label="' + (favorite ? 'Remove from favorites' : 'Add to favorites') + '" title="' + (favorite ? 'Remove from favorites' : 'Add to favorites') + '">' +
                         '<svg class="customer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>' +
                         '</button></form>';
                 }
@@ -702,17 +781,51 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
                 function serviceTagsHtml(shop) {
                     const types = shop.service_types || [];
                     if (!types.length) return '';
+                    const groups = {
+                        online: { label: 'Available Online', items: [] },
+                        visit: { label: 'Shop Visit Required', items: [] }
+                    };
+                    types.forEach(function (item) {
+                        const onlineAvailable = typeof item === 'object' && item ? item.online_available !== false : true;
+                        const key = onlineAvailable ? 'online' : 'visit';
+                        groups[key].items.push(item);
+                    });
                     const max = 3;
                     let html = '<div class="customer-shop-service-tags" data-service-tags>';
-                    types.slice(0, max).forEach(function (t) {
-                        html += '<span class="customer-service-tag">' + escapeHtml(t) + '</span>';
-                    });
-                    types.slice(max).forEach(function (t) {
-                        html += '<span class="customer-service-tag" data-extra-service hidden>' + escapeHtml(t) + '</span>';
-                    });
-                    if (types.length > max) {
-                        const count = types.length - max;
-                        html += '<button type="button" class="customer-service-tag-more" data-service-toggle data-collapsed-label="+' + count + ' more" data-expanded-label="Show less" aria-expanded="false">+' + count + ' more</button>';
+                    html += '<span class="customer-service-summary">' + types.length + ' Services Offered</span>';
+                    if (groups.online.items.length) {
+                        html += '<div class="customer-service-group customer-service-group--online">';
+                        html += '<div class="customer-service-group-head"><span class="customer-service-group-title">' + escapeHtml(groups.online.label) + '</span></div>';
+                        html += '<div class="customer-service-chip-row">';
+                        groups.online.items.forEach(function (item, index) {
+                            const name = typeof item === 'object' && item ? (item.service_type || '') : item;
+                            const hiddenAttr = index >= max ? ' data-extra-online-service hidden' : '';
+                            html += '<span class="customer-service-tag customer-service-tag--online"' + hiddenAttr + '>' + escapeHtml(name) + '</span>';
+                        });
+                        if (groups.online.items.length > max) {
+                            const count = groups.online.items.length - max;
+                            html += '<button type="button" class="customer-service-tag-more" data-online-service-toggle data-collapsed-label="+' + count + ' more" data-expanded-label="Show less" aria-expanded="false">+' + count + ' more</button>';
+                        }
+                        html += '</div></div>';
+                    }
+                    if (groups.visit.items.length) {
+                        html += '<div class="customer-service-group customer-service-group--visit">';
+                        html += '<div class="customer-service-group-head"><span class="customer-service-group-title">' + escapeHtml(groups.visit.label) + '</span>';
+                        html += '<button type="button" class="customer-service-tag-more customer-service-requirements-toggle" data-service-requirements-toggle data-collapsed-label="View requirements" data-expanded-label="Hide requirements" aria-expanded="false">View requirements</button></div>';
+                        html += '<div class="customer-service-chip-row">';
+                        groups.visit.items.forEach(function (item) {
+                            const name = typeof item === 'object' && item ? (item.service_type || '') : item;
+                            const note = typeof item === 'object' && item ? (item.customer_note || '') : '';
+                            const titleAttr = note ? ' title="' + escapeHtml(note) + '"' : '';
+                            html += '<span class="customer-service-tag customer-service-tag--visit"' + titleAttr + '>' + escapeHtml(name) + '</span>';
+                        });
+                        html += '</div><div class="customer-service-requirements" data-service-requirements hidden>';
+                        groups.visit.items.forEach(function (item) {
+                            const name = typeof item === 'object' && item ? (item.service_type || '') : item;
+                            const note = typeof item === 'object' && item && item.customer_note ? item.customer_note : 'This service requires a shop visit. Please visit the shop to proceed.';
+                            html += '<div class="customer-service-requirement"><strong>' + escapeHtml(name) + '</strong><small>Requirement: ' + escapeHtml(note) + '</small></div>';
+                        });
+                        html += '</div></div>';
                     }
                     html += '</div>';
                     return html;
@@ -869,7 +982,7 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
             });
         </script>
     <?php endif; ?>
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             const locationStorageKey = 'printease_customer_location';
 
@@ -984,18 +1097,34 @@ $return_to = customerExploreReturnTo($view, $search, $selected_shop_id);
         })();
 
         document.addEventListener('click', function (event) {
-            const toggle = event.target.closest('[data-service-toggle]');
-            if (!toggle) return;
+            const onlineToggle = event.target.closest('[data-online-service-toggle]');
+            if (onlineToggle) {
+                if (event.printEaseServiceToggleHandled) return;
+                event.printEaseServiceToggleHandled = true;
+                const group = onlineToggle.closest('.customer-service-group');
+                if (!group) return;
+                const expanded = onlineToggle.getAttribute('aria-expanded') === 'true';
+                group.querySelectorAll('[data-extra-online-service]').forEach(function (tag) {
+                    tag.hidden = expanded;
+                });
+                onlineToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                onlineToggle.textContent = expanded ? onlineToggle.dataset.collapsedLabel : onlineToggle.dataset.expandedLabel;
+                return;
+            }
 
-            const tagWrap = toggle.closest('[data-service-tags]');
-            if (!tagWrap) return;
+            const requirementsToggle = event.target.closest('[data-service-requirements-toggle]');
+            if (!requirementsToggle) return;
+            if (event.printEaseServiceToggleHandled) return;
+            event.printEaseServiceToggleHandled = true;
 
-            const expanded = toggle.getAttribute('aria-expanded') === 'true';
-            tagWrap.querySelectorAll('[data-extra-service]').forEach(function (tag) {
-                tag.hidden = expanded;
-            });
-            toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-            toggle.textContent = expanded ? toggle.dataset.collapsedLabel : toggle.dataset.expandedLabel;
+            const group = requirementsToggle.closest('.customer-service-group');
+            const requirements = group ? group.querySelector('[data-service-requirements]') : null;
+            if (!requirements) return;
+
+            const expanded = requirementsToggle.getAttribute('aria-expanded') === 'true';
+            requirements.hidden = expanded;
+            requirementsToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            requirementsToggle.textContent = expanded ? requirementsToggle.dataset.collapsedLabel : requirementsToggle.dataset.expandedLabel;
         });
     </script>
 </body>

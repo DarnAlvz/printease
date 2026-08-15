@@ -132,7 +132,7 @@ if (isset($_GET['sent'], $success_messages[$_GET['sent']])) {
         </section>
     </main>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             var form = document.querySelector('[data-otp-form]');
             if (!form) return;
@@ -183,7 +183,7 @@ if (isset($_GET['sent'], $success_messages[$_GET['sent']])) {
     </script>
 
     <?php if ($alert_type === 'error' && in_array($_GET['error'] ?? '', ['expired', 'session_expired', 'too_many_otp_attempts'], true)): ?>
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             var countdown = 3;
             var alertEl = document.querySelector('.auth-alert');

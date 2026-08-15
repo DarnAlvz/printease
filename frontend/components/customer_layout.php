@@ -48,7 +48,7 @@ function customerNavigationItems()
         'home' => ['label' => 'Home', 'path' => 'dashboard.php', 'icon' => 'home'],
         'explore' => ['label' => 'Explore', 'path' => 'explore.php', 'icon' => 'explore'],
         'order' => ['label' => 'Request', 'path' => 'explore.php?view=all', 'icon' => 'plus'],
-        'orders' => ['label' => 'Requests', 'path' => 'orders.php', 'icon' => 'orders'],
+        'orders' => ['label' => 'My Requests', 'short_label' => 'Request', 'path' => 'orders.php', 'icon' => 'orders'],
         'profile' => ['label' => 'Profile', 'path' => 'profile.php', 'icon' => 'profile'],
     ];
 }
@@ -82,7 +82,7 @@ function renderCustomerHead()
     renderPrintEaseIcons();
     ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             var stored = null;
             try { stored = localStorage.getItem('customerTheme'); } catch (error) { }
@@ -147,7 +147,21 @@ function renderCustomerLayout(array $options)
     $profile_url = $identity['profile_picture'] !== '' ? printEaseAssetUrl($identity['profile_picture']) : '';
     ?>
     <div class="customer-offline-banner" data-customer-offline-banner role="status" hidden>
-        You are offline. You can continue editing drafts, but submission requires internet.
+        You are offline. Requests saved as drafts will be sent automatically when you're back online.
+    </div>
+    <div class="customer-pending-banner" data-customer-pending-banner role="status" hidden>
+        <span data-pending-banner-copy></span>
+        <span class="customer-pending-banner__actions">
+            <button type="button" class="customer-pending-banner__send" data-pending-send-now>Send now</button>
+            <button type="button" class="customer-pending-banner__view" data-pending-view-drafts>View drafts</button>
+        </span>
+    </div>
+    <div class="customer-pending-panel" data-pending-drafts-panel role="dialog" aria-modal="true" hidden>
+        <div class="customer-pending-panel__head">
+            <strong>Saved offline requests</strong>
+            <button type="button" class="customer-pending-panel__close" data-pending-panel-close aria-label="Close">&times;</button>
+        </div>
+        <div class="customer-pending-panel__list" data-pending-drafts-list></div>
     </div>
     <header class="customer-topbar">
         <a class="customer-topbar-brand" href="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/dashboard.php'), ENT_QUOTES, 'UTF-8'); ?>" aria-label="PrintEase customer home">
@@ -186,7 +200,9 @@ function renderCustomerLayoutEnd(?string $active = null)
                 <span class="customer-bottom-nav__order-icon"><?php echo customerIcon($item['icon'], 'customer-bottom-nav-icon'); ?></span>
             <?php else: ?>
                 <?php echo customerIcon($item['icon'], 'customer-bottom-nav-icon'); ?>
-                <span><?php echo htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                <span class="customer-bottom-nav__label"
+                    data-label-full="<?php echo htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php if (isset($item['short_label'])): ?>data-label-short="<?php echo htmlspecialchars($item['short_label'], ENT_QUOTES, 'UTF-8'); ?>"<?php endif; ?>></span>
             <?php endif; ?>
         </a>
         <?php
@@ -198,7 +214,7 @@ function renderCustomerLayoutEnd(?string $active = null)
             <?php $render_nav_item($key); ?>
         <?php endforeach; ?>
     </nav>
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             var themeToggle = document.querySelector('[data-customer-theme-toggle]');
             var offlineBanner = document.querySelector('[data-customer-offline-banner]');
@@ -259,6 +275,7 @@ function renderCustomerLayoutEnd(?string $active = null)
         })();
     </script>
     <script src="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/assets/js/live-updates.js'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo is_file(__DIR__ . '/../assets/js/live-updates.js') ? filemtime(__DIR__ . '/../assets/js/live-updates.js') : time(); ?>" data-printease-live data-base-url="<?php echo htmlspecialchars(printEaseAssetUrl(''), ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <script src="<?php echo htmlspecialchars(printEaseAssetUrl('frontend/user/customer/assets/js/order-drafts.js'), ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo is_file(__DIR__ . '/../user/customer/assets/js/order-drafts.js') ? filemtime(__DIR__ . '/../user/customer/assets/js/order-drafts.js') : time(); ?>" data-base-url="<?php echo htmlspecialchars(printEaseAssetUrl(''), ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php renderPrintEaseSWRegistration(); ?>
     <?php
 }

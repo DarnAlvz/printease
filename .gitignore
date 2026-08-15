@@ -1,5 +1,6 @@
 #user uploads
-uploads/
+uploads/*
+!uploads/.htaccess
 
 vendor/
 
@@ -8,3 +9,11 @@ NEED TO DOWNLOAD.txt
 .env
 
 node_modules/
+
+
+
+# Build artifacts (release archives from deploy/zip-release.ps1)
+deploy/*.zip
+
+# database query
+backend/database/*.sql

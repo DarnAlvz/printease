@@ -23,23 +23,9 @@ function renderPrintEaseIcons()
 function renderPrintEaseSWRegistration()
 {
     ?>
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             if (!('serviceWorker' in navigator)) return;
-
-            var isLocal = ['localhost', '127.0.0.1'].indexOf(location.hostname) !== -1;
-
-            if (isLocal) {
-                navigator.serviceWorker.getRegistrations().then(function (regs) {
-                    regs.forEach(function (reg) { reg.unregister(); });
-                });
-                if ('caches' in window) {
-                    caches.keys().then(function (names) {
-                        names.forEach(function (n) { if (n.indexOf('printease-') === 0) caches.delete(n); });
-                    });
-                }
-                return;
-            }
 
             navigator.serviceWorker.register('<?php echo htmlspecialchars(printEaseAssetUrl("service-worker.js"), ENT_QUOTES, "UTF-8"); ?>')
                 .then(function () { })

@@ -8,9 +8,16 @@ require_once __DIR__ . "/../../frontend/components/notifications.php";
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['customer', 'shop_owner', 'super_admin'], true)) {
-    echo json_encode(['success' => false]);
+if (!isset($_SESSION['user_id'])) {
+    if (authIsAjaxRequest()) {
+        authJsonResponse(false, 'Authentication required.', 401);
+    }
+    header("Location: " . BASE_URL . "frontend/pages/login.php");
     exit();
+}
+
+if (!in_array($_SESSION['role'] ?? '', ['customer', 'shop_owner', 'super_admin'], true)) {
+    authJsonResponse(false, 'Access denied.', 403);
 }
 
 $user_id = (int) $_SESSION['user_id'];

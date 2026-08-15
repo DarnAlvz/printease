@@ -6,9 +6,16 @@ require_once __DIR__ . "/../includes/cache.php";
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'shop_owner') {
-    echo json_encode(['success' => false]);
+if (!isset($_SESSION['user_id'])) {
+    if (authIsAjaxRequest()) {
+        authJsonResponse(false, 'Authentication required.', 401);
+    }
+    header("Location: " . BASE_URL . "frontend/pages/login.php");
     exit();
+}
+
+if (($_SESSION['role'] ?? '') !== 'shop_owner') {
+    authJsonResponse(false, 'Access denied.', 403);
 }
 
 $owner_id = (int) $_SESSION['user_id'];

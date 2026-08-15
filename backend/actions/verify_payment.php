@@ -5,6 +5,7 @@ require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("shop_owner");
 requireCompleteShopProfile($conn);
@@ -32,6 +33,17 @@ $referer_path = parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH) ?: '';
 $payment_redirect = str_ends_with($referer_path, '/payments.php')
     ? BASE_URL . "frontend/user/shop_owner/payments.php"
     : $default_redirect;
+
+$rate_guard = rateLimitGuardRequest($conn, 'verify_payment', 60, 3600);
+if (!$rate_guard['allowed']) {
+    $retry_message = "Too many payment actions. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".";
+    if ($is_ajax) {
+        paymentJsonResponse(false, $retry_message, [], 429);
+    }
+    setError($retry_message);
+    redirect($payment_redirect);
+}
+rateLimitRecordRequest($conn, 'verify_payment', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 3600);
 
 $sql = "SELECT p.*, o.order_code, o.order_status, ps.owner_id
         FROM payments p

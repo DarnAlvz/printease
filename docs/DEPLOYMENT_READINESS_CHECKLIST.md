@@ -39,9 +39,10 @@ DB_PASS=strong_password_here
 - [ ] Create a dedicated database user for PrintEase.
 - [ ] Use a strong database password.
 - [ ] Confirm the app connects using the dedicated database user.
-- [ ] Apply all SQL migrations in `backend/database`.
+- [ ] Apply the database schema correctly:
+  - On a fresh database, import `backend/database/0000_base_schema.sql` only (it is the consolidated schema and already includes all later migrations, e.g. the `orders.submit_token` column). Do not run individual migration files separately.
 - [ ] Confirm these important database objects exist:
-  - `shop_payment_settings`
+  - `shop_payment_channels`
   - `rate_limit_events`
   - activity log audit columns such as `target_type`, `target_id`, `old_value`, `new_value`, `ip_address`, and `user_agent`
   - payment OCR fields

@@ -292,6 +292,102 @@
         return replaced;
     }
 
+    const liveSkeletonRegions = {
+        customer_explore: 'customer-explore-results',
+        customer_orders: 'customer-order-results',
+        owner_orders: 'owner-order-results'
+    };
+
+    function skeletonLine(extraClass) {
+        return '<span class="pe-skeleton pe-skeleton-line ' + (extraClass || '') + '"></span>';
+    }
+
+    function customerExploreSkeleton(regionName) {
+        let cards = '';
+        for (let i = 0; i < 3; i += 1) {
+            cards += '<article class="pe-skeleton-card customer-shop-skeleton">' +
+                skeletonLine('pe-skeleton-title') +
+                skeletonLine('pe-skeleton-short') +
+                '<div class="pe-skeleton-chip-row">' +
+                skeletonLine('pe-skeleton-chip') +
+                skeletonLine('pe-skeleton-chip') +
+                skeletonLine('pe-skeleton-chip') +
+                '</div>' +
+                skeletonLine('pe-skeleton-text') +
+                skeletonLine('pe-skeleton-button') +
+                '</article>';
+        }
+        return '<div class="customer-shops-grid pe-skeleton-region" data-live-region="' + regionName + '" aria-busy="true">' + cards + '</div>';
+    }
+
+    function customerOrdersSkeleton(regionName) {
+        let cards = '';
+        for (let i = 0; i < 2; i += 1) {
+            cards += '<article class="pe-skeleton-card customer-request-skeleton">' +
+                '<div class="pe-skeleton-row pe-skeleton-between">' +
+                '<div>' + skeletonLine('pe-skeleton-title') + skeletonLine('pe-skeleton-short') + '</div>' +
+                skeletonLine('pe-skeleton-pill') +
+                '</div>' +
+                '<div class="pe-skeleton-stepper">' +
+                skeletonLine('pe-skeleton-dot') +
+                skeletonLine('pe-skeleton-dot') +
+                skeletonLine('pe-skeleton-dot') +
+                skeletonLine('pe-skeleton-dot') +
+                skeletonLine('pe-skeleton-dot') +
+                '</div>' +
+                skeletonLine('pe-skeleton-text') +
+                skeletonLine('pe-skeleton-text') +
+                skeletonLine('pe-skeleton-short') +
+                skeletonLine('pe-skeleton-message') +
+                '</article>';
+        }
+        return '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pe-skeleton-region" data-live-region="' + regionName + '" aria-busy="true">' + cards + '</div>';
+    }
+
+    function ownerOrdersSkeleton(regionName) {
+        let rows = '';
+        for (let i = 0; i < 4; i += 1) {
+            rows += '<tr><td>' + skeletonLine('pe-skeleton-short') + '</td><td>' + skeletonLine('pe-skeleton-text') + '</td><td>' + skeletonLine('pe-skeleton-text') + '</td><td>' + skeletonLine('pe-skeleton-text') + '</td><td>' + skeletonLine('pe-skeleton-short') + '</td><td>' + skeletonLine('pe-skeleton-pill') + '</td><td>' + skeletonLine('pe-skeleton-button') + '</td></tr>';
+        }
+        return '<section class="orders-table-card pe-skeleton-region" data-live-region="' + regionName + '" aria-busy="true">' +
+            '<div class="owner-table-wrap"><table class="orders-table owner-order-skeleton-table"><tbody>' + rows + '</tbody></table></div>' +
+            '<div class="orders-mobile-list owner-order-skeleton-mobile"><article class="pe-skeleton-card">' + skeletonLine('pe-skeleton-title') + skeletonLine('pe-skeleton-text') + skeletonLine('pe-skeleton-text') + skeletonLine('pe-skeleton-button') + '</article></div>' +
+            '</section>';
+    }
+
+    function skeletonHtmlForRegion(regionName) {
+        if (regionName === 'customer-explore-results') return customerExploreSkeleton(regionName);
+        if (regionName === 'customer-order-results') return customerOrdersSkeleton(regionName);
+        if (regionName === 'owner-order-results') return ownerOrdersSkeleton(regionName);
+        return '';
+    }
+
+    function showLiveSkeletonForTarget(target) {
+        const regionName = liveSkeletonRegions[target];
+        if (!regionName) return null;
+        const current = document.querySelector('[data-live-region="' + cssEscape(regionName) + '"]');
+        const skeletonHtml = skeletonHtmlForRegion(regionName);
+        if (!current || !skeletonHtml || current.classList.contains('pe-skeleton-region')) return null;
+
+        const previous = current.outerHTML;
+        const template = document.createElement('template');
+        template.innerHTML = skeletonHtml.trim();
+        const next = template.content.firstElementChild;
+        if (!next) return null;
+        current.replaceWith(next);
+        return { regionName: regionName, previous: previous };
+    }
+
+    function restoreLiveSkeleton(snapshot) {
+        if (!snapshot) return;
+        const current = document.querySelector('[data-live-region="' + cssEscape(snapshot.regionName) + '"]');
+        if (!current || !current.classList.contains('pe-skeleton-region')) return;
+        const template = document.createElement('template');
+        template.innerHTML = snapshot.previous.trim();
+        const previous = template.content.firstElementChild;
+        if (previous) current.replaceWith(previous);
+    }
+
     function findSearchInput(form) {
         return form.querySelector('input[type="search"], input[name="search"], input[name="q"], input[name="order_code"]');
     }
@@ -312,6 +408,8 @@
         }
 
         const endpointUrl = buildUrl(endpoints.liveSearch, params);
+        const showSkeleton = options && options.showSkeleton === true;
+        const skeletonSnapshot = showSkeleton ? showLiveSkeletonForTarget(target) : null;
         form.dataset.liveLoading = 'true';
 
         return fetch(endpointUrl, {
@@ -320,7 +418,10 @@
         })
             .then(function (response) { return response.json(); })
             .then(function (data) {
-                if (!data || !data.success) return false;
+                if (!data || !data.success) {
+                    restoreLiveSkeleton(skeletonSnapshot);
+                    return false;
+                }
                 replaceLiveRegions(data.regions);
 
                 if (!options || options.updateHistory !== false) {
@@ -329,7 +430,10 @@
                 }
                 return true;
             })
-            .catch(function () { return false; })
+            .catch(function () {
+                restoreLiveSkeleton(skeletonSnapshot);
+                return false;
+            })
             .finally(function () {
                 form.dataset.liveLoading = 'false';
             });
@@ -350,7 +454,7 @@
                 }
 
                 timers.set(form, window.setTimeout(function () {
-                    refreshLiveForm(form);
+                    refreshLiveForm(form, { showSkeleton: true });
                 }, 200));
             });
         });
@@ -406,6 +510,8 @@
         urlParams.forEach(function (value, key) {
             params[key] = value;
         });
+        const showSkeleton = options && options.showSkeleton === true;
+        const skeletonSnapshot = showSkeleton ? showLiveSkeletonForTarget(target) : null;
 
         return fetch(buildUrl(endpoints.liveSearch, params), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -413,11 +519,17 @@
         })
             .then(function (response) { return response.json(); })
             .then(function (data) {
-                if (!data || !data.success) return false;
+                if (!data || !data.success) {
+                    restoreLiveSkeleton(skeletonSnapshot);
+                    return false;
+                }
                 replaceLiveRegions(data.regions);
                 return true;
             })
-            .catch(function () { return false; });
+            .catch(function () {
+                restoreLiveSkeleton(skeletonSnapshot);
+                return false;
+            });
     }
 
     function ownerNotificationTone(item) {
@@ -736,29 +848,73 @@
         });
     }
 
+    function serviceTypeName(item) {
+        return item && typeof item === 'object' ? String(item.service_type || '') : String(item || '');
+    }
+
+    function serviceOnlineAvailable(item) {
+        if (item && typeof item === 'object') return item.online_available !== false;
+        return !['photocopy', 'binding', 'scanning'].includes(serviceTypeName(item).toLowerCase());
+    }
+
+    function serviceCustomerNote(item) {
+        return item && typeof item === 'object' ? String(item.customer_note || '') : '';
+    }
+
     function serviceTypesHtml(types) {
         const items = Array.isArray(types) ? types : [];
-        let html = '';
-        if (items.length > 3) {
-            html += '<span class="customer-service-tag-count">Offers ' + items.length + '</span>';
+        const groups = {
+            online: { label: 'Available Online', items: [] },
+            visit: { label: 'Shop Visit Required', items: [] }
+        };
+        items.forEach(function (item) {
+            groups[serviceOnlineAvailable(item) ? 'online' : 'visit'].items.push(item);
+        });
+        const max = 3;
+        let html = '<span class="customer-service-summary">' + items.length + ' Services Offered</span>';
+        if (groups.online.items.length) {
+            html += '<div class="customer-service-group customer-service-group--online">';
+            html += '<div class="customer-service-group-head"><span class="customer-service-group-title">' + escapeHtml(groups.online.label) + '</span></div>';
+            html += '<div class="customer-service-chip-row">';
+            html += groups.online.items.map(function (item, index) {
+                return '<span class="customer-service-tag customer-service-tag--online"' + (index >= max ? ' data-extra-online-service hidden' : '') + '>' + escapeHtml(serviceTypeName(item)) + '</span>';
+            }).join('');
+            if (groups.online.items.length > max) {
+                html += '<button type="button" class="customer-service-tag-more" data-online-service-toggle data-collapsed-label="+' + (groups.online.items.length - max) + ' more" data-expanded-label="Show less" aria-expanded="false">+' + (groups.online.items.length - max) + ' more</button>';
+            }
+            html += '</div></div>';
         }
-        html += items.map(function (type, index) {
-            return '<span class="customer-service-tag"' + (index >= 3 ? ' data-extra-service-tag hidden' : '') + '>' + escapeHtml(type) + '</span>';
-        }).join('');
-        if (items.length > 3) {
-            html += '<button type="button" class="customer-service-tag-more" data-service-tags-toggle>+' + (items.length - 3) + ' more</button>';
+        if (groups.visit.items.length) {
+            html += '<div class="customer-service-group customer-service-group--visit">';
+            html += '<div class="customer-service-group-head"><span class="customer-service-group-title">' + escapeHtml(groups.visit.label) + '</span>';
+            html += '<button type="button" class="customer-service-tag-more customer-service-requirements-toggle" data-service-requirements-toggle data-collapsed-label="View requirements" data-expanded-label="Hide requirements" aria-expanded="false">View requirements</button></div>';
+            html += '<div class="customer-service-chip-row">';
+            html += groups.visit.items.map(function (item) {
+                const note = serviceCustomerNote(item);
+                const title = note ? ' title="' + escapeHtml(note) + '"' : '';
+                return '<span class="customer-service-tag customer-service-tag--visit"' + title + '>' + escapeHtml(serviceTypeName(item)) + '</span>';
+            }).join('');
+            html += '</div><div class="customer-service-requirements" data-service-requirements hidden>';
+            html += groups.visit.items.map(function (item) {
+                const note = serviceCustomerNote(item) || 'This service requires a shop visit. Please visit the shop to proceed.';
+                return '<div class="customer-service-requirement"><strong>' + escapeHtml(serviceTypeName(item)) + '</strong><small>Requirement: ' + escapeHtml(note) + '</small></div>';
+            }).join('');
+            html += '</div></div>';
         }
         return html;
     }
 
-    function renderOwnerServiceChoice(type, checked, locked, custom) {
+    function renderOwnerServiceChoice(item, checked, locked, custom) {
+        const type = serviceTypeName(item);
         const escaped = escapeHtml(type);
         const required = String(type).toLowerCase() === 'document printing';
+        const onlineAvailable = required || serviceOnlineAvailable(item);
         const disabled = locked || required;
+        const inputState = disabled ? ' disabled' : '';
         return '<label class="service-type-check' + (custom ? ' service-type-check--custom' : '') + '" data-service-type-choice="' + escaped + '"' + (custom ? ' data-custom-service-type="true"' : '') + '>' +
-            '<input type="checkbox" name="service_types[]" value="' + escaped + '"' + (checked || required ? ' checked' : '') + (required ? ' data-required-service="true"' : ' data-editable') + (disabled ? ' disabled' : '') + '>' +
+            '<input type="checkbox" name="service_types[]" value="' + escaped + '"' + (checked || required ? ' checked' : '') + (required ? ' data-required-service="true"' : ' data-editable') + inputState + '>' +
             '<span>' + escaped + '</span>' +
-            (required ? '<small class="service-type-lock-note">Default</small>' : '') +
+            (required ? '<small class="service-type-lock-note">Default</small>' : (onlineAvailable ? '<small class="service-type-lock-note">Online</small>' : '<small class="service-type-lock-note service-type-lock-note--muted">Shop visit</small>')) +
             (custom ? '<button type="button" class="remove-custom-tag"' + (locked ? ' disabled' : '') + '>&times;</button>' : '') +
         '</label>';
     }
@@ -768,8 +924,12 @@
         const grid = document.querySelector('[data-owner-service-grid]');
         if (!form || !grid || form.classList.contains('is-editing')) return false;
 
-        const selectedTypes = Array.isArray(types) ? types.map(String) : [];
-        const selectedLower = new Set(selectedTypes.map(function (type) { return type.toLowerCase(); }));
+        const selectedTypes = Array.isArray(types) ? types : [];
+        const selectedByLower = new Map();
+        selectedTypes.forEach(function (item) {
+            const type = serviceTypeName(item);
+            if (type) selectedByLower.set(type.toLowerCase(), item);
+        });
         const locked = form.classList.contains('is-locked');
         const defaultChoices = Array.from(grid.querySelectorAll('.service-type-check:not([data-custom-service-type])'))
             .map(function (label) {
@@ -780,12 +940,14 @@
         const defaultLower = new Set(defaultChoices.map(function (type) { return type.toLowerCase(); }));
 
         let html = defaultChoices.map(function (type) {
-            return renderOwnerServiceChoice(type, selectedLower.has(type.toLowerCase()), locked, false);
+            const selectedItem = selectedByLower.get(type.toLowerCase()) || type;
+            return renderOwnerServiceChoice(selectedItem, selectedByLower.has(type.toLowerCase()), locked, false);
         }).join('');
 
-        selectedTypes.forEach(function (type) {
-            if (!defaultLower.has(type.toLowerCase())) {
-                html += renderOwnerServiceChoice(type, true, locked, true);
+        selectedTypes.forEach(function (item) {
+            const type = serviceTypeName(item);
+            if (type && !defaultLower.has(type.toLowerCase())) {
+                html += renderOwnerServiceChoice(item, true, locked, true);
             }
         });
 
@@ -799,15 +961,29 @@
             if (!shopId) return;
             document.querySelectorAll('[data-shop-service-tags="' + cssEscape(shopId) + '"]').forEach(function (container) {
                 const types = Array.isArray(shop.service_types) ? shop.service_types : [];
-                const wasExpanded = container.dataset.expanded === 'true';
+                const wasOnlineExpanded = container.dataset.onlineExpanded === 'true';
+                const wasRequirementsExpanded = container.dataset.requirementsExpanded === 'true';
                 container.innerHTML = serviceTypesHtml(types);
-                container.dataset.expanded = wasExpanded ? 'true' : 'false';
-                if (wasExpanded) {
-                    container.querySelectorAll('[data-extra-service-tag]').forEach(function (tag) {
+                container.dataset.onlineExpanded = wasOnlineExpanded ? 'true' : 'false';
+                container.dataset.requirementsExpanded = wasRequirementsExpanded ? 'true' : 'false';
+                if (wasOnlineExpanded) {
+                    container.querySelectorAll('[data-extra-online-service]').forEach(function (tag) {
                         tag.hidden = false;
                     });
-                    const toggle = container.querySelector('[data-service-tags-toggle]');
-                    if (toggle) toggle.textContent = 'Show less';
+                    const toggle = container.querySelector('[data-online-service-toggle]');
+                    if (toggle) {
+                        toggle.textContent = toggle.dataset.expandedLabel || 'Show less';
+                        toggle.setAttribute('aria-expanded', 'true');
+                    }
+                }
+                if (wasRequirementsExpanded) {
+                    const requirements = container.querySelector('[data-service-requirements]');
+                    const toggle = container.querySelector('[data-service-requirements-toggle]');
+                    if (requirements) requirements.hidden = false;
+                    if (toggle) {
+                        toggle.textContent = toggle.dataset.expandedLabel || 'Hide requirements';
+                        toggle.setAttribute('aria-expanded', 'true');
+                    }
                 }
                 container.hidden = types.length === 0;
             });
@@ -934,18 +1110,39 @@
 
     function setupDelegatedModals() {
         document.addEventListener('click', function (event) {
-            const serviceToggle = event.target.closest('[data-service-tags-toggle]');
-            if (serviceToggle) {
-                const container = serviceToggle.closest('[data-shop-service-tags]');
-                if (!container) return;
-                const expanded = container.dataset.expanded === 'true';
-                container.dataset.expanded = expanded ? 'false' : 'true';
-                container.querySelectorAll('[data-extra-service-tag]').forEach(function (tag) {
+            const onlineServiceToggle = event.target.closest('[data-online-service-toggle]');
+            if (onlineServiceToggle) {
+                if (event.printEaseServiceToggleHandled) return;
+                event.printEaseServiceToggleHandled = true;
+                const group = onlineServiceToggle.closest('.customer-service-group');
+                const container = onlineServiceToggle.closest('[data-shop-service-tags]');
+                if (!group) return;
+                const expanded = onlineServiceToggle.getAttribute('aria-expanded') === 'true';
+                group.querySelectorAll('[data-extra-online-service]').forEach(function (tag) {
                     tag.hidden = expanded;
                 });
-                serviceToggle.textContent = expanded
-                    ? '+' + container.querySelectorAll('[data-extra-service-tag]').length + ' more'
-                    : 'Show less';
+                onlineServiceToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                onlineServiceToggle.textContent = expanded
+                    ? (onlineServiceToggle.dataset.collapsedLabel || '+' + group.querySelectorAll('[data-extra-online-service]').length + ' more')
+                    : (onlineServiceToggle.dataset.expandedLabel || 'Show less');
+                if (container) container.dataset.onlineExpanded = expanded ? 'false' : 'true';
+            }
+
+            const serviceRequirementsToggle = event.target.closest('[data-service-requirements-toggle]');
+            if (serviceRequirementsToggle) {
+                if (event.printEaseServiceToggleHandled) return;
+                event.printEaseServiceToggleHandled = true;
+                const group = serviceRequirementsToggle.closest('.customer-service-group');
+                const container = serviceRequirementsToggle.closest('[data-shop-service-tags]');
+                const requirements = group ? group.querySelector('[data-service-requirements]') : null;
+                if (!requirements) return;
+                const expanded = serviceRequirementsToggle.getAttribute('aria-expanded') === 'true';
+                requirements.hidden = expanded;
+                serviceRequirementsToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                serviceRequirementsToggle.textContent = expanded
+                    ? (serviceRequirementsToggle.dataset.collapsedLabel || 'View requirements')
+                    : (serviceRequirementsToggle.dataset.expandedLabel || 'Hide requirements');
+                if (container) container.dataset.requirementsExpanded = expanded ? 'false' : 'true';
             }
 
             const userButton = event.target.closest('[data-user-view]');

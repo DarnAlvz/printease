@@ -104,7 +104,7 @@ function renderAppToasts($role = 'customer')
             </article>
         <?php endforeach; ?>
     </div>
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             const stack = document.getElementById('appToastStack');
             if (!stack) return;

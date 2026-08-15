@@ -193,4 +193,24 @@ function rateLimitClear(mysqli $conn, $action, $identifier, $ip_address)
     mysqli_stmt_execute($stmt);
 }
 
+function rateLimitGuardRequest(mysqli $conn, $action, $max_attempts, $window_seconds)
+{
+    $identifier = rateLimitCurrentUserKey($action);
+    $ip_address = rateLimitClientIp();
+    $check = rateLimitCheck($conn, $action, $identifier, $ip_address, $max_attempts, $window_seconds);
+
+    return [
+        'allowed' => (bool) $check['allowed'],
+        'retry_after' => (int) $check['retry_after'],
+        'reason' => (string) $check['reason'],
+        'identifier' => $identifier,
+        'ip_address' => $ip_address,
+    ];
+}
+
+function rateLimitRecordRequest(mysqli $conn, $action, $identifier, $ip_address, $max_attempts, $window_seconds)
+{
+    rateLimitRecord($conn, $action, $identifier, $ip_address, $max_attempts, $window_seconds);
+}
+
 ?>

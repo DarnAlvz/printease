@@ -261,12 +261,12 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
             <?php echo adminIcon('search'); ?>
             <input type="search" name="search" value="<?php echo e($search); ?>" placeholder="Search by user, role, module, or action...">
         </label>
-        <select name="range" onchange="this.form.submit()" aria-label="Date range">
+        <select name="range" onchange="this.form.submit()" aria-label="Date range" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             <?php foreach ($ranges as $key => $label): ?>
                 <option value="<?php echo e($key); ?>" <?php echo $range === $key ? 'selected' : ''; ?>><?php echo e($label); ?></option>
             <?php endforeach; ?>
         </select>
-        <select name="module" onchange="this.form.submit()" aria-label="Module filter">
+        <select name="module" onchange="this.form.submit()" aria-label="Module filter" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             <option value="all">All Logs</option>
             <?php foreach ($module_values as $module): ?>
                 <option value="<?php echo e($module); ?>" <?php echo $module_filter === $module ? 'selected' : ''; ?>><?php echo e($module); ?></option>
@@ -388,7 +388,7 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     (function () {
         const modal = document.getElementById('adminActivityModal');
         if (!modal) return;
@@ -442,6 +442,8 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') closeModal();
         });
+
+        
     })();
 </script>
 

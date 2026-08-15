@@ -221,7 +221,7 @@ $current_progress = $current_order ? array_search($current_order['order_status']
                         <ol class="customer-order-progress" aria-label="Request progress">
                             <?php foreach ($progress_statuses as $index => $status): ?>
                                 <?php $state = $index < $current_progress ? 'complete' : ($index === $current_progress ? 'current' : 'upcoming'); ?>
-                                <li class="<?php echo $state; ?>" <?php echo $state === 'current' ? 'aria-current="step"' : ''; ?>><span><?php echo $index < $current_progress ? customerIcon('check') : $index + 1; ?></span><strong><?php echo e(dashboardOrderStatusLabel($status)); ?></strong></li>
+                                <li class="<?php echo $state; ?>" title="<?php echo e(dashboardOrderStatusLabel($status)); ?>" <?php echo $state === 'current' ? 'aria-current="step"' : ''; ?>><span><?php echo $index < $current_progress ? customerIcon('check') : $index + 1; ?></span><strong><?php echo e(dashboardOrderStatusLabel($status)); ?></strong></li>
                             <?php endforeach; ?>
                         </ol>
                     <?php else: ?>

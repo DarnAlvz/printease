@@ -120,7 +120,7 @@ $range_new_shops = (int) reportScalar(
     $range_types,
     $range_params
 );
-$pending_users = (int) reportScalar($conn, "SELECT COUNT(*) AS total FROM users WHERE role != 'super_admin' AND account_status IN ('pending', 'incomplete')");
+$pending_users = (int) reportScalar($conn, "SELECT COUNT(*) AS total FROM users WHERE role = 'customer' AND account_status IN ('pending', 'incomplete')");
 $pending_shops = (int) reportScalar($conn, "SELECT COUNT(*) AS total FROM print_shops WHERE permit_status = 'pending'");
 $pending_approvals = $pending_users + $pending_shops;
 
@@ -263,7 +263,7 @@ adminLayoutStart('reports', 'Business Reports', 'Comprehensive analytics and ins
     <form class="admin-report-toolbar" method="GET" action="reports.php">
         <label>
             <?php echo adminIcon('clock'); ?>
-            <select name="range" onchange="this.form.submit()">
+            <select name="range" onchange="this.form.submit()" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                 <?php foreach (['7d' => 'Last 7 Days', '30d' => 'Last 30 Days', '90d' => 'Last 90 Days', 'year' => 'This Year'] as $key => $label): ?>
                     <option value="<?php echo e($key); ?>" <?php echo $range === $key ? 'selected' : ''; ?>><?php echo e($label); ?></option>
                 <?php endforeach; ?>

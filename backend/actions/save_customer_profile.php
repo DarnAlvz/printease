@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("customer");
 
@@ -38,7 +39,7 @@ function saveCustomerUpload($field, $upload_dir, array $allowed_mimes, $prefix)
         redirectCustomerProfileError("Invalid file type. Please upload an allowed file format.");
     }
 
-    $file_name = $prefix . "_" . bin2hex(random_bytes(8)) . "." . $allowed_mimes[$mime];
+    $file_name = $prefix . "_" . bin2hex(random_bytes(16)) . "." . $allowed_mimes[$mime];
     if (!move_uploaded_file($tmp_name, $upload_dir . $file_name)) {
         redirectCustomerProfileError("Unable to save uploaded file. Please try again.");
     }
@@ -72,6 +73,12 @@ function normalizeCustomerFullName($name)
 }
 
 if (isset($_POST['save_profile'])) {
+    $rate_guard = rateLimitGuardRequest($conn, 'save_customer_profile', 10, 3600);
+    if (!$rate_guard['allowed']) {
+        redirectCustomerProfileError("Too many profile save attempts. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".");
+    }
+    rateLimitRecordRequest($conn, 'save_customer_profile', $rate_guard['identifier'], $rate_guard['ip_address'], 10, 3600);
+
     $full_name = normalizeCustomerFullName($_POST['full_name'] ?? '');
     $phone = trim($_POST['phone_number']);
     $address = trim($_POST['address']);
@@ -202,8 +209,9 @@ if (isset($_POST['save_profile'])) {
     $_SESSION['full_name'] = $full_name;
 
     if ($new_status === 'pending' && $current_status !== 'pending') {
-        sendRoleNotification($conn, 'super_admin', 'A customer profile is ready for verification.', [
-            'type' => 'account_submitted', 'title' => 'Customer verification submitted',
+        $customer_email = (string) ($_SESSION['email'] ?? '');
+        sendRoleNotification($conn, 'super_admin', $full_name . ' (' . $customer_email . ') submitted their profile for verification.', [
+            'type' => 'account_submitted', 'title' => 'Customer verification submitted: ' . $full_name,
             'target_url' => BASE_URL . 'frontend/user/superadmin/manage_users.php',
             'metadata' => ['user_id' => $customer_id, 'role' => 'customer'],
         ]);

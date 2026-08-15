@@ -158,7 +158,7 @@ function syncServicePricingRecord(mysqli $conn, int $shop_id, int $pricing_id, a
         return;
     }
 
-    $fetch_sql = "SELECT id, service_type, option_label, unit, price, is_available
+    $fetch_sql = "SELECT id, service_type, option_size, option_label, unit, price, is_available
                   FROM shop_service_pricing
                   WHERE id = ? AND shop_id = ?
                   LIMIT 1";
@@ -176,14 +176,20 @@ function syncServicePricingRecord(mysqli $conn, int $shop_id, int $pricing_id, a
     }
 
     $service_type = trim((string) ($entry['service_type'] ?? ''));
-    $size_name = trim((string) ($entry['option_label'] ?? ''));
+    $option_size = trim((string) ($entry['option_size'] ?? ''));
+    $option_label = trim((string) ($entry['option_label'] ?? ''));
+    $unit = trim((string) ($entry['unit'] ?? ''));
+    $uses_detailed_options = in_array($service_type, ['Photo Printing', 'Tarpaulin Printing', 'ID Printing', 'Invitation / Card Printing'], true);
+    $size_name = $uses_detailed_options ? $option_size : $option_label;
     $legacy_source = 'shop_service_pricing';
     if (empty($advanced)) {
         $advanced = existingPriceRecordAdvancedFields($conn, $shop_id, $legacy_source, $pricing_id);
     }
 
-    $variant = $advanced['variant'] ?? null;
-    $pricing_basis = trim((string) ($entry['unit'] ?? ''));
+    $variant = $uses_detailed_options
+        ? trim($option_label . ($option_label !== '' && $unit !== '' ? ' / ' : '') . $unit)
+        : ($advanced['variant'] ?? null);
+    $pricing_basis = $uses_detailed_options ? 'per item' : $unit;
     $width = $advanced['width'] ?? null;
     $height = $advanced['height'] ?? null;
     $dimension_unit = $advanced['dimension_unit'] ?? null;

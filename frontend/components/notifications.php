@@ -108,7 +108,7 @@ function renderNotificationCenter(array $notifications, array $options = [])
         </div>
     <?php endif; ?>
     </section>
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function(){
             const endpoint = '<?php echo e(printEaseAssetUrl('backend/actions/mark_notification_read.php')); ?>';
             var csrfMeta = document.querySelector('meta[name="csrf-token"]');

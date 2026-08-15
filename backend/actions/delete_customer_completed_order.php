@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("customer");
 validateCsrf();
@@ -12,6 +13,13 @@ $redirect = BASE_URL . "frontend/user/customer/orders.php?status=completed";
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['delete_completed_order'])) {
     redirect($redirect);
 }
+
+$rate_guard = rateLimitGuardRequest($conn, 'delete_customer_completed_order', 60, 3600);
+if (!$rate_guard['allowed']) {
+    setError("Too many request removals. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".");
+    redirect($redirect);
+}
+rateLimitRecordRequest($conn, 'delete_customer_completed_order', $rate_guard['identifier'], $rate_guard['ip_address'], 60, 3600);
 
 $customer_id = (int) ($_SESSION['user_id'] ?? 0);
 $order_id = (int) ($_POST['order_id'] ?? 0);

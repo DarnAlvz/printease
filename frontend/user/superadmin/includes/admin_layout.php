@@ -129,7 +129,7 @@ function adminLayoutStart($active, $title, $subtitle = '')
                         </button>
                         <section class="admin-notification-popover" id="adminNotificationPopover" aria-hidden="true">
                             <header>
-                                <div><strong>Notifications</strong><span><?php echo (int) $unread_count; ?> unread</span></div>
+                                <div><strong>Notifications</strong> <span><?php echo (int) $unread_count; ?> unread</span></div>
                                 <a href="notifications.php">View all</a>
                             </header>
                             <?php if (empty($recent_notifications)): ?>
@@ -170,7 +170,7 @@ function adminLayoutEnd()
     ?>
             </main>
         </div>
-        <script>
+        <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
             (function () {
                 const toggle = document.getElementById('adminNotificationToggle');
                 const popover = document.getElementById('adminNotificationPopover');

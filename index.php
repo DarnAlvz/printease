@@ -159,7 +159,7 @@ if (!isset($_SESSION['seen_splash'])) {
 
     <?php renderPrintEaseSWRegistration(); ?>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         const installAppBtn = document.getElementById('installAppBtn');
         let deferredPrompt = null;
 

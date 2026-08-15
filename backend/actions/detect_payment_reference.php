@@ -25,6 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     paymentReferenceJson(false, 'Invalid request.');
 }
 
+validateCsrf();
+
 checkRole("customer");
 requireVerifiedStatus($conn);
 
@@ -68,7 +70,7 @@ if (!is_dir($ocr_tmp_dir)) {
     mkdir($ocr_tmp_dir, 0775, true);
 }
 
-$tmp_file_name = time() . "_ocr_" . bin2hex(random_bytes(8)) . "." . $proof_extension;
+$tmp_file_name = time() . "_ocr_" . bin2hex(random_bytes(16)) . "." . $proof_extension;
 $tmp_path = $ocr_tmp_dir . $tmp_file_name;
 
 if (!move_uploaded_file($_FILES['proof_of_payment_file']['tmp_name'], $tmp_path)) {

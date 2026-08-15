@@ -3,6 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
+require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("customer");
 
@@ -27,6 +28,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect(BASE_URL . "frontend/user/customer/explore.php");
 }
 
+$rate_guard = rateLimitGuardRequest($conn, 'toggle_favorite_shop', 30, 60);
+if (!$rate_guard['allowed']) {
+    setToast("Too many favorite updates. Please try again in " . rateLimitFormatSeconds($rate_guard['retry_after']) . ".", "warning");
+    redirect(BASE_URL . "frontend/user/customer/explore.php");
+}
+rateLimitRecordRequest($conn, 'toggle_favorite_shop', $rate_guard['identifier'], $rate_guard['ip_address'], 30, 60);
+
 $customer_id = (int) ($_SESSION['user_id'] ?? 0);
 $shop_id = (int) ($_POST['shop_id'] ?? 0);
 $intent = (string) ($_POST['intent'] ?? 'toggle');
@@ -38,11 +46,12 @@ if ($return_to !== '') {
     $parts = parse_url($return_to);
     $path = (string) ($parts['path'] ?? '');
     $query = isset($parts['query']) ? '?' . $parts['query'] : '';
-    if ($path !== '' && !preg_match('/^https?:\/\//i', $return_to) && str_contains($path, '/frontend/user/customer/')) {
+    $has_host = isset($parts['host']) && $parts['host'] !== '';
+    if (!$has_host && $path !== '' && !preg_match('/^https?:\/\//i', $return_to) && str_contains($path, '/frontend/user/customer/')) {
         $return_url = $return_to;
-    } elseif ($path === '' && str_starts_with($return_to, 'explore.php')) {
+    } elseif (!$has_host && $path === '' && str_starts_with($return_to, 'explore.php')) {
         $return_url = BASE_URL . "frontend/user/customer/" . $return_to;
-    } elseif (str_starts_with($path, 'explore.php')) {
+    } elseif (!$has_host && str_starts_with($path, 'explore.php')) {
         $return_url = BASE_URL . "frontend/user/customer/" . $path . $query;
     }
 }

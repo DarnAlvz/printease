@@ -19,6 +19,7 @@ $error_messages = [
     'session_expired' => 'Your reset session has expired. Please request a new OTP.',
     'weak_password' => 'Password must be at least 8 characters long.',
     'server' => 'An unexpected error occurred. Please try again.',
+    'too_many_reset_attempts' => 'Too many reset attempts. Please request a new OTP and try again later.',
 ];
 
 if (!$can_reset) {
@@ -124,7 +125,7 @@ if (!$can_reset) {
         </section>
     </main>
 
-    <script>
+    <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
             button.addEventListener('click', function () {
                 var input = document.getElementById(button.dataset.passwordToggle);
