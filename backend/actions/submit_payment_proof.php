@@ -102,6 +102,7 @@ $ocr_text = '';
 
 if (!$ocr_customer_limit['allowed'] || !$ocr_ip_limit['allowed']) {
     $retry_after = max((int) $ocr_customer_limit['retry_after'], (int) $ocr_ip_limit['retry_after']);
+    error_log('[OCR] Rate limited in submit_payment_proof. customer_reason=' . ($ocr_customer_limit['reason'] ?? '?') . ' ip_reason=' . ($ocr_ip_limit['reason'] ?? '?'));
     setToast("OCR was skipped because it is temporarily rate limited. Your payment proof was still submitted for review.", "warning");
 } else {
     rateLimitRecord($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60, 60);

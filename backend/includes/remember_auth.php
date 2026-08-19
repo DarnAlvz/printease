@@ -240,6 +240,7 @@ function rememberRestoreSession($conn)
     $_SESSION['auth_provider'] = $token['auth_provider'] === 'google' ? 'google' : 'password';
     $_SESSION['auth_version'] = (int) $token['auth_version'];
     $_SESSION['remember_duration_days'] = rememberNormalizeDurationDays($token['remember_duration_days'] ?? REMEMBER_LONG_DURATION_DAYS);
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
     rememberDeleteSelector($conn, $cookie['selector']);
     rememberCreateForUser($conn, (int) $token['user_id'], $_SESSION['auth_provider'], $_SESSION['remember_duration_days']);

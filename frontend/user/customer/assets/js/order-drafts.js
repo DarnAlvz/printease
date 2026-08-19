@@ -314,7 +314,7 @@
             '<button type="button" class="customer-pending-draft__btn customer-pending-draft__btn--danger" data-draft-remove="' + esc(draft.id) + '">Remove</button>' +
             '</div>' +
             '<div class="customer-pending-draft__reschedule" data-draft-reschedule-form="' + esc(draft.id) + '" hidden>' +
-            '<input type="datetime-local" data-draft-pickup-input="' + esc(draft.id) + '" class="customer-pending-draft__input">' +
+            '<input type="datetime-local" data-draft-pickup="' + esc(draft.id) + '" class="customer-pending-draft__input">' +
             '<button type="button" class="customer-pending-draft__btn" data-draft-pickup-save="' + esc(draft.id) + '">Save</button>' +
             '</div>' +
             '</div>';
@@ -413,14 +413,14 @@
         if (saveBtn) {
             event.preventDefault();
             var sid = saveBtn.getAttribute("data-draft-pickup-save");
-            var input = document.querySelector('[data-draft-pickup-input="' + sid + '"]');
-            if (input && input.value) {
-                var d = new Date(input.value);
+            var pickupInput = document.querySelector('[data-draft-pickup="' + sid + '"]');
+            if (pickupInput && pickupInput.value) {
+                var d = new Date(pickupInput.value);
                 if (Number.isNaN(d.getTime()) || d.getTime() < Date.now()) {
                     notify("Please choose a future pickup time.", "error", { title: "Invalid pickup" });
                     return;
                 }
-                updatePickup(sid, input.value).then(function () {
+                updatePickup(sid, pickupInput.value).then(function () {
                     notify("Pickup time updated.", "success", { title: "Rescheduled" });
                     refreshPendingUi();
                 });

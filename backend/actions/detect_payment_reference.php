@@ -57,6 +57,7 @@ $ocr_ip_limit = rateLimitCheck($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60);
 
 if (!$ocr_customer_limit['allowed'] || !$ocr_ip_limit['allowed']) {
     $retry_after = max((int) $ocr_customer_limit['retry_after'], (int) $ocr_ip_limit['retry_after']);
+    error_log('[OCR] Rate limited in detect_payment_reference. customer_reason=' . ($ocr_customer_limit['reason'] ?? '?') . ' ip_reason=' . ($ocr_ip_limit['reason'] ?? '?'));
     paymentReferenceJson(false, 'OCR is temporarily rate limited. Please wait ' . rateLimitFormatSeconds($retry_after) . ' before trying again.');
 }
 

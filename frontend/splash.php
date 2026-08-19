@@ -11,13 +11,13 @@ require_once __DIR__ . '/components/head.php';
     <meta name="theme-color" content="#070566">
     <title>PrintEase</title>
     <?php renderPrintEaseIcons(); ?>
+    <link rel="prefetch" href="../index.php">
     <style>
         :root {
             --navy: #070566;
             --navy-deep: #05035f;
             --cyan: #08b7d0;
             --cyan-dark: #008fc1;
-            --loader-size: clamp(180px, 42vw, 250px);
         }
 
         * {
@@ -37,43 +37,63 @@ require_once __DIR__ . '/components/head.php';
             display: grid;
             place-items: center;
             padding: 24px;
-            background:
-                radial-gradient(circle at 50% 42%, rgba(8, 183, 208, .22), transparent 28%),
-                linear-gradient(145deg, var(--navy-deep) 0%, var(--navy) 52%, var(--cyan-dark) 100%);
+            background: var(--navy);
             font-family: Arial, sans-serif;
         }
 
         .splash {
+            width: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
             display: grid;
+            place-items: center;
             justify-items: center;
             gap: 18px;
             color: #fff;
             text-align: center;
+            background:
+                radial-gradient(circle at 50% 42%, rgba(8, 183, 208, .22), transparent 28%),
+                linear-gradient(145deg, var(--navy-deep) 0%, var(--navy) 52%, var(--cyan-dark) 100%);
             animation: splash-in .35s ease-out both;
         }
 
-        .splash.is-leaving {
-            animation: splash-out .25s ease-in both;
+        .splash-status {
+            position: relative;
+            z-index: 1;
+            font-size: 14px;
+            color: rgba(255, 255, 255, .7);
+            letter-spacing: .5px;
+            margin-top: 12px;
         }
-
+        
         .logo-loader {
             position: relative;
             width: var(--loader-size);
-            aspect-ratio: 1;
-            display: grid;
-            place-items: center;
+            height: var(--loader-size);
+        
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .spinner-ring {
+      .spinner-ring {
             position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
+        
+            /* Bigger than logo container */
+            width: 125%;
+            height: 125%;
+        
+            top: -12.5%;
+            left: -12.5%;
+        
             overflow: visible;
+        
             filter: drop-shadow(0 0 10px rgba(8, 183, 208, .82));
+        
             transform-box: fill-box;
             transform-origin: center;
-            animation: ring-spin 2s linear 1 both;
+        
+            animation: ring-spin 1s linear infinite both;
         }
 
         .spinner-track {
@@ -95,48 +115,22 @@ require_once __DIR__ . '/components/head.php';
             filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 8px var(--cyan));
         }
 
-        .brand-logo {
+       .brand-logo {
             position: relative;
-            z-index: 1;
-            width: 78%;
-            aspect-ratio: 1;
+        
+            z-index: 2;
+        
+            /* Responsive logo size */
+            width: 52%;
+            height: 52%;
+        
             object-fit: contain;
-            border-radius: 50%;
-            filter: drop-shadow(0 16px 30px rgba(0, 0, 0, .24));
-        }
-
-        .loading-status {
-            width: min(190px, 64vw);
-            margin-top: -7px;
-        }
-
-        .loading-label {
-            display: block;
-            margin-bottom: 8px;
-            color: rgba(255, 255, 255, .78);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: .16em;
-            text-transform: uppercase;
-        }
-
-        .loading-track {
-            height: 4px;
-            overflow: hidden;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, .18);
-        }
-
-        .loading-progress {
-            width: 100%;
-            height: 100%;
-            border-radius: inherit;
-            background: linear-gradient(90deg, #fff 0%, var(--cyan) 58%, #8cefff 100%);
-            box-shadow: 0 0 12px rgba(8, 183, 208, .8);
-            transform: scaleX(0);
-            transform-origin: left center;
-            animation: loading-progress 2s linear 1 both;
-        }
+        
+            border-radius: 18%;
+        
+            filter:
+                drop-shadow(0 16px 30px rgba(0,0,0,.24));
+        }   
 
         .noscript-link {
             color: #fff;
@@ -147,12 +141,6 @@ require_once __DIR__ . '/components/head.php';
         @keyframes ring-spin {
             to {
                 transform: rotate(720deg);
-            }
-        }
-
-        @keyframes loading-progress {
-            to {
-                transform: scaleX(1);
             }
         }
 
@@ -168,13 +156,6 @@ require_once __DIR__ . '/components/head.php';
             }
         }
 
-        @keyframes splash-out {
-            to {
-                opacity: 0;
-                transform: scale(.98);
-            }
-        }
-
         @media (max-height: 500px) and (orientation: landscape) {
             :root {
                 --loader-size: min(58vh, 190px);
@@ -185,10 +166,27 @@ require_once __DIR__ . '/components/head.php';
                 align-items: center;
                 column-gap: 24px;
             }
+        }
+        
+        @media (max-width: 360px) {
 
-            .loading-status {
-                grid-column: 2;
+            :root {
+                --loader-size: 160px;
             }
+        
+            .brand-logo {
+                width: 50%;
+                height: 50%;
+            }
+        
+        }
+        
+        @media (min-width: 768px) {
+
+            :root {
+                --loader-size: 300px;
+            }
+        
         }
     </style>
 </head>
@@ -210,12 +208,6 @@ require_once __DIR__ . '/components/head.php';
             </svg>
             <?php renderPrintEaseLogo(['class' => 'brand-logo', 'decorative' => true]); ?>
         </div>
-        <div class="loading-status" aria-live="polite">
-            <span class="loading-label" id="loadingLabel">Loading</span>
-            <div class="loading-track" aria-hidden="true">
-                <div class="loading-progress"></div>
-            </div>
-        </div>
     </main>
 
     <noscript>
@@ -224,34 +216,54 @@ require_once __DIR__ . '/components/head.php';
 
     <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
-            const splash = document.getElementById('printEaseSplash');
-            const spinner = document.getElementById('splashSpinner');
-            const loadingLabel = document.getElementById('loadingLabel');
-            const destination = '../index.php';
-            const completionPauseMs = 250;
-            const exitDurationMs = 250;
-            let isFinishing = false;
+            var destination = '../index.php';
+            var maxWaitMs = 10000;
+            var logoReady = false;
+            var pageReady = false;
+            var done = false;
 
-            function finishSplash() {
-                if (isFinishing) return;
-                isFinishing = true;
-                loadingLabel.textContent = 'Ready';
-
-                window.setTimeout(function () {
-                    splash.classList.add('is-leaving');
-                    window.setTimeout(function () {
-                        window.location.replace(destination);
-                    }, exitDurationMs);
-                }, completionPauseMs);
+            function checkReady() {
+                if (done) return;
+                if (logoReady && pageReady) {
+                    done = true;
+                    window.location.replace(destination);
+                }
             }
 
-            spinner.addEventListener('animationend', function (event) {
-                if (event.animationName === 'ring-spin') {
-                    finishSplash();
+            var logo = document.querySelector('.brand-logo');
+            if (logo) {
+                if (logo.complete) {
+                    logoReady = true;
+                } else {
+                    logo.onload = function () {
+                        logoReady = true;
+                        checkReady();
+                    };
+                    logo.onerror = function () {
+                        logoReady = true;
+                        checkReady();
+                    };
                 }
-            });
+            } else {
+                logoReady = true;
+            }
 
-            window.setTimeout(finishSplash, 2300);
+            fetch(destination, { credentials: 'same-origin' })
+                .then(function () {
+                    pageReady = true;
+                    checkReady();
+                })
+                .catch(function () {
+                    pageReady = true;
+                    checkReady();
+                });
+
+            setTimeout(function () {
+                if (!done) {
+                    done = true;
+                    window.location.replace(destination);
+                }
+            }, maxWaitMs);
         })();
     </script>
 </body>

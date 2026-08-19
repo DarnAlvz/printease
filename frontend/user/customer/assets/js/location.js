@@ -1,7 +1,11 @@
 
 (function () {
+    var busy = false;
+
     function useCurrentLocation() {
-        const status = document.getElementById("locationStatus");
+        if (busy) return;
+
+        var status = document.getElementById("locationStatus");
         status.innerText = "Getting your current location...";
 
         if (!navigator.geolocation) {
@@ -9,20 +13,22 @@
             return;
         }
 
+        busy = true;
+
         navigator.geolocation.getCurrentPosition(
             async function(position) {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
+                var lat = position.coords.latitude;
+                var lng = position.coords.longitude;
 
                 document.getElementById("latitude").value = lat;
                 document.getElementById("longitude").value = lng;
 
                 try {
-                    const response = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+                    var response = await fetch(
+                        "https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&addressdetails=1"
                     );
 
-                    const data = await response.json();
+                    var data = await response.json();
 
                     if (data && data.display_name) {
                         document.getElementById("address").value = data.display_name;
@@ -33,19 +39,30 @@
                 } catch (error) {
                     status.innerText = "Unable to convert location to address. Please type your address manually.";
                 }
+
+                busy = false;
             },
-            function() {
-                status.innerText = "Location permission denied. Please type your address manually.";
+            function(error) {
+                if (error && error.code === 1) {
+                    status.innerText = "Location permission denied. Please type your address manually.";
+                } else if (error && error.code === 2) {
+                    status.innerText = "Location unavailable. Please type your address manually.";
+                } else if (error && error.code === 3) {
+                    status.innerText = "Location detection timed out. Please type your address manually.";
+                } else {
+                    status.innerText = "Could not detect location. Please type your address manually.";
+                }
+                busy = false;
             },
             {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
+                enableHighAccuracy: false,
+                timeout: 20000,
+                maximumAge: 300000
             }
         );
     }
 
-    const button = document.getElementById("useCurrentLocationButton");
+    var button = document.getElementById("useCurrentLocationButton");
     if (button) {
         button.addEventListener("click", useCurrentLocation);
     }

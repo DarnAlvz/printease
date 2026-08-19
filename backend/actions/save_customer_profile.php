@@ -24,7 +24,7 @@ function saveCustomerUpload($field, $upload_dir, array $allowed_mimes, $prefix)
     }
 
     if ($_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
-        redirectCustomerProfileError("Upload failed. Please choose the file again.");
+        redirectCustomerProfileError("Upload failed. The file must be 2MB or smaller. Please compress or resize and try again.");
     }
 
     if ($_FILES[$field]['size'] > 5 * 1024 * 1024) {

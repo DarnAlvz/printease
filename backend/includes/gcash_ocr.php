@@ -1,5 +1,16 @@
 <?php
 
+global $ocr_debug_log;
+$ocr_debug_log = [];
+
+function ocrLog($message)
+{
+    global $ocr_debug_log;
+    $entry = date('H:i:s') . ' ' . $message;
+    $ocr_debug_log[] = $entry;
+    error_log('[OCR] ' . $message);
+}
+
 function normalizeGcashReference($value)
 {
     return preg_replace('/\D+/', '', (string) $value);
@@ -9,15 +20,18 @@ function gcashReferenceCaptureToNumber($value)
 {
     $value = preg_replace('/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b.*$/i', '', (string) $value);
     $value = preg_replace('/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b.*$/', '', $value);
+    $value = preg_replace('/\b\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b.*$/', '', $value);
     return normalizeGcashReference($value);
 }
 
 function detectGcashReferenceFromText($text)
 {
     $patterns = [
-        '/(?:Reference\s*(?:No\.?|Number)?|Ref\s*No\.?|Transaction\s*(?:No\.?|ID))\s*[:#\-]?\s*([0-9][0-9\s\-]{5,}(?=\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|$)))/im',
-        '/(?:Reference\s*(?:No\.?|Number)?|Ref\s*No\.?|Transaction\s*(?:No\.?|ID))\s*[:#\-]?\s*([0-9][0-9\s\-]{5,})/i',
+        '/(?:Reference\s*(?:No\.?|Number)?|Ref\.?\s*No\.?|Transaction\s*(?:No\.?|ID))\s*[:#\-]?\s*([0-9][0-9\s\-]{5,}(?=\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|$)))/im',
+        '/(?:Reference\s*(?:No\.?|Number)?|Ref\.?\s*No\.?|Transaction\s*(?:No\.?|ID))\s*[:#\-]?\s*([0-9][0-9\s\-]{5,})/i',
         '/(?:Ref(?:erence)?|Transaction)\s*[:#\-]?\s*([0-9][0-9\s\-]{5,})/i',
+        '/\b(\d{12})\b/',
+        '/\b(\d{10,16})\b/',
     ];
 
     foreach ($patterns as $pattern) {
@@ -36,11 +50,14 @@ function detectGcashPaymentDateFromText($text)
 {
     $text = (string) $text;
     $month_names = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+    $date_labels = '(?:Date|Paid\s*on|Sent\s*on|Transaction\s*date)';
     $patterns = [
-        '/(?:Date|Paid\s*on|Sent\s*on|Transaction\s*date)\s*[:#\-]?\s*(' . $month_names . '\s+\d{1,2},?\s+\d{4})/i',
-        '/(?:Date|Paid\s*on|Sent\s*on|Transaction\s*date)\s*[:#\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i',
+        '/' . $date_labels . '\s*[:#\-]?\s*(' . $month_names . '\s+\d{1,2},?\s+\d{4})/i',
+        '/' . $date_labels . '\s*[:#\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i',
+        '/' . $date_labels . '\s*[:#\-]?\s*(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/i',
         '/\b(' . $month_names . '\s+\d{1,2},?\s+\d{4})\b/i',
         '/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/',
+        '/\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/',
     ];
 
     foreach ($patterns as $pattern) {
@@ -75,120 +92,107 @@ function runReceiptOcr($image_path)
 {
     $allowed_image_path = resolveAllowedOcrImagePath($image_path);
     if ($allowed_image_path === null) {
+        ocrLog('Image path validation failed: ' . $image_path);
         return '';
     }
 
-    $binary = resolveTesseractBinary();
-    if ($binary === null || !tesseractBinaryIsAvailable($binary)) {
+    $ocr_text = runOcrSpaceApi($allowed_image_path);
+    if ($ocr_text !== '') {
+        ocrLog('OCR.space success (' . strlen($ocr_text) . ' bytes): ' . substr($ocr_text, 0, 500));
+        return $ocr_text;
+    }
+
+    ocrLog('OCR.space returned no text for: ' . basename((string) $image_path));
+    return '';
+}
+
+function runOcrSpaceApi($image_path)
+{
+    $api_key = trim((string) getenv('OCR_SPACE_API_KEY'));
+    if ($api_key === '') {
+        ocrLog('OCR.space API key is empty');
         return '';
     }
 
-    $ocr_output = runOcrProcess([$binary, $allowed_image_path, 'stdout', '--psm', '6'], 10);
-
-    return is_string($ocr_output) ? $ocr_output : '';
-}
-
-function resolveTesseractBinary()
-{
-    $binary = trim((string) getenv('TESSERACT_PATH'));
-
-    if ($binary === '') {
-        return 'tesseract';
-    }
-
-    $binary = trim($binary, "\"'");
-    if ($binary === '' || preg_match('/[\r\n\0]/', $binary)) {
-        return null;
-    }
-
-    if (is_dir($binary)) {
-        $binary = rtrim($binary, "\\/") . DIRECTORY_SEPARATOR . ocrTesseractExecutableName();
-    }
-
-    $resolved = realpath($binary);
-    if ($resolved === false || !is_file($resolved)) {
-        return null;
-    }
-
-    if (strtolower(basename($resolved)) !== strtolower(ocrTesseractExecutableName())) {
-        return null;
-    }
-
-    if (PHP_OS_FAMILY !== 'Windows' && !is_executable($resolved)) {
-        return null;
-    }
-
-    return $resolved;
-}
-
-function ocrTesseractExecutableName()
-{
-    return PHP_OS_FAMILY === 'Windows' ? 'tesseract.exe' : 'tesseract';
-}
-
-function tesseractBinaryIsAvailable($binary)
-{
-    static $available = [];
-
-    $key = (string) $binary;
-    if (array_key_exists($key, $available)) {
-        return $available[$key];
-    }
-
-    $version_output = runOcrProcess([$key, '--version'], 3);
-    $available[$key] = is_string($version_output) && trim($version_output) !== '';
-
-    return $available[$key];
-}
-
-function runOcrProcess(array $command, $timeout_seconds = 10)
-{
-    if (!function_exists('proc_open')) {
+    if (!function_exists('curl_init')) {
+        ocrLog('curl extension not available for OCR.space');
         return '';
     }
 
-    $descriptor_spec = [
-        0 => ['pipe', 'r'],
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ];
-
-    $process = @proc_open($command, $descriptor_spec, $pipes);
-    if (!is_resource($process)) {
+    $image_data = @file_get_contents($image_path);
+    if ($image_data === false) {
+        ocrLog('OCR.space: failed to read image: ' . basename((string) $image_path));
         return '';
     }
 
-    fclose($pipes[0]);
-    stream_set_blocking($pipes[1], false);
-    stream_set_blocking($pipes[2], false);
+    $mime = @mime_content_type($image_path);
+    if (!$mime) {
+        $mime = 'image/jpeg';
+    }
+    $b64 = base64_encode($image_data);
+    $data_uri = 'data:' . $mime . ';base64,' . $b64;
 
-    $output = '';
-    $started_at = microtime(true);
+    $url = 'https://api.ocr.space/parse/image';
 
-    do {
-        $output .= stream_get_contents($pipes[1]);
-        stream_get_contents($pipes[2]);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => [
+            'apikey'          => $api_key,
+            'base64Image'     => $data_uri,
+            'language'        => 'eng',
+            'isOverlayRequired' => 'false',
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+    ]);
 
-        $status = proc_get_status($process);
-        if (!$status['running']) {
-            break;
-        }
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
 
-        if ((microtime(true) - $started_at) >= (int) $timeout_seconds) {
-            proc_terminate($process);
-            break;
-        }
+    if ($response === false) {
+        ocrLog('OCR.space curl failed: ' . $curl_error);
+        return '';
+    }
 
-        usleep(100000);
-    } while (true);
+    if ($http_code !== 200) {
+        ocrLog('OCR.space HTTP ' . $http_code . ': ' . substr((string) $response, 0, 500));
+        return '';
+    }
 
-    $output .= stream_get_contents($pipes[1]);
+    $data = json_decode($response, true);
+    if (!is_array($data)) {
+        ocrLog('OCR.space: failed to decode JSON response');
+        return '';
+    }
 
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    proc_close($process);
+    if (isset($data['IsErroredOnProcessing']) && $data['IsErroredOnProcessing'] === true) {
+        $err_msg = $data['ErrorMessage'][0] ?? $data['ErrorDetails'][0] ?? 'unknown';
+        ocrLog('OCR.space error: ' . $err_msg);
+        return '';
+    }
 
-    return $output;
+    $exit_code = $data['OCRExitCode'] ?? 0;
+    if ((int) $exit_code !== 1) {
+        ocrLog('OCR.space exit code: ' . $exit_code . '. Response: ' . substr($response, 0, 500));
+        return '';
+    }
+
+    $parsed_results = $data['ParsedResults'] ?? [];
+    if (empty($parsed_results)) {
+        ocrLog('OCR.space returned no parsed results. Response: ' . substr($response, 0, 500));
+        return '';
+    }
+
+    $text = $parsed_results[0]['ParsedText'] ?? '';
+    if (!is_string($text) || trim($text) === '') {
+        ocrLog('OCR.space parsed text is empty. Response: ' . substr($response, 0, 500));
+        return '';
+    }
+
+    return $text;
 }
 
 function resolveAllowedOcrImagePath($path, $allowed_roots = null)

@@ -27,7 +27,16 @@ if (!isset($_SESSION['seen_splash'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            animation: page-fade-in 0.4s ease-out both;
+        }
 
+        @keyframes page-fade-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+    </style>
 </head>
 
 <body>

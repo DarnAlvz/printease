@@ -332,8 +332,19 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     <div class="customer-order-grid">
                         <label class="customer-order-field">
                             <span>Pickup Date and Time</span>
-                            <input type="datetime-local" name="pickup_datetime" id="pickup_datetime"
-                                min="<?php echo $min_pickup; ?>" required class="w-full border rounded-xl p-3">
+                            <div class="customer-datetime-wrap">
+                                <input type="datetime-local" name="pickup_datetime" id="pickup_datetime"
+                                    min="<?php echo $min_pickup; ?>" required
+                                    class="customer-datetime-input">
+                                <span class="customer-datetime-placeholder">Select date &amp; time</span>
+                                <span class="customer-datetime-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                                        stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                                        <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                                        <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none"/>
+                                    </svg>
+                                </span>
+                            </div>
                         </label>
 
                         <label class="customer-order-field">
@@ -1140,6 +1151,13 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             updateReview();
         };
         pickupDatetime.onchange = updateReview;
+        if (pickupDatetime) {
+            function toggleDatetimeClass() {
+                pickupDatetime.classList.toggle('has-value', !!pickupDatetime.value);
+            }
+            pickupDatetime.addEventListener('change', toggleDatetimeClass);
+            toggleDatetimeClass();
+        }
         instruction.oninput = updateReview;
 
         backButton.addEventListener("click", () => goToStep(currentStep - 1));

@@ -456,6 +456,14 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
             const photoInput = document.getElementById('customerProfilePictureInput');
             const photoPreview = document.querySelector('[data-profile-picture-preview]');
             const photoStatus = document.querySelector('[data-profile-picture-status]');
+            const validIdInput = editForm ? editForm.querySelector('input[name="valid_id_file"]') : null;
+
+            let selectedProfileBlob = null;
+            let selectedProfileBlobName = '';
+            let profileReading = false;
+            let selectedValidIdBlob = null;
+            let selectedValidIdBlobName = '';
+            let validIdReading = false;
 
             if (!editTrigger || !editForm || !cancelEdit) return;
 
@@ -482,6 +490,17 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
             editTrigger.addEventListener('click', openEditor);
             cancelEdit.addEventListener('click', closeEditor);
 
+            function readFileIntoBlob(file) {
+                return new Promise(function (resolve) {
+                    var reader = new FileReader();
+                    reader.addEventListener('load', function () {
+                        resolve(new Blob([reader.result], { type: file.type }));
+                    });
+                    reader.addEventListener('error', function () { resolve(null); });
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
             if (photoButton && photoInput && photoPreview && photoStatus) {
                 photoButton.addEventListener('click', function () {
                     photoInput.click();
@@ -491,14 +510,17 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     const file = photoInput.files && photoInput.files[0];
                     if (!file) {
                         photoStatus.textContent = 'JPG, PNG, or WebP only.';
+                        selectedProfileBlob = null;
+                        selectedProfileBlobName = '';
                         return;
                     }
 
-                    photoStatus.textContent = file.name + ' selected. Save profile to apply.';
+                    selectedProfileBlobName = file.name;
+                    photoStatus.textContent = file.name + ' selected. Reading into memory…';
 
                     if (file.type && file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.addEventListener('load', function () {
+                        var previewReader = new FileReader();
+                        previewReader.addEventListener('load', function () {
                             let image = photoPreview.querySelector('img');
                             const initials = photoPreview.querySelector('b');
                             if (!image) {
@@ -507,12 +529,105 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                                 photoPreview.prepend(image);
                             }
                             if (initials) initials.hidden = true;
-                            image.src = reader.result;
+                            image.src = previewReader.result;
                         });
-                        reader.readAsDataURL(file);
+                        previewReader.readAsDataURL(file);
                     }
+
+                    profileReading = true;
+                    readFileIntoBlob(file).then(function (blob) {
+                        selectedProfileBlob = blob;
+                        profileReading = false;
+                        photoStatus.textContent = file.name + ' ready. Save profile to apply.';
+                    });
                 });
             }
+
+            if (validIdInput) {
+                validIdInput.addEventListener('change', function () {
+                    const file = validIdInput.files && validIdInput.files[0];
+                    if (!file) {
+                        selectedValidIdBlob = null;
+                        selectedValidIdBlobName = '';
+                        return;
+                    }
+                    selectedValidIdBlobName = file.name;
+                    validIdReading = true;
+                    readFileIntoBlob(file).then(function (blob) {
+                        selectedValidIdBlob = blob;
+                        validIdReading = false;
+                    });
+                });
+            }
+
+            editForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                if (profileReading || validIdReading) {
+                    if (window.customerShowToast) window.customerShowToast('Still reading file. Please wait a moment.', 'warning');
+                    return;
+                }
+
+                var maxSize = 2 * 1024 * 1024;
+                if (selectedProfileBlob && selectedProfileBlob.size > maxSize) {
+                    if (window.customerShowToast) window.customerShowToast('Profile picture must be 2MB or smaller.', 'error');
+                    return;
+                }
+                if (selectedValidIdBlob && selectedValidIdBlob.size > maxSize) {
+                    if (window.customerShowToast) window.customerShowToast('Valid ID file must be 2MB or smaller.', 'error');
+                    return;
+                }
+
+                var fd = new FormData();
+                fd.append('save_profile', '1');
+                fd.append('full_name', editForm.querySelector('input[name="full_name"]').value);
+                fd.append('phone_number', editForm.querySelector('input[name="phone_number"]').value);
+                fd.append('address', editForm.querySelector('textarea[name="address"]').value);
+
+                var latInput = editForm.querySelector('input[name="latitude"]');
+                var lngInput = editForm.querySelector('input[name="longitude"]');
+                if (latInput) fd.append('latitude', latInput.value);
+                if (lngInput) fd.append('longitude', lngInput.value);
+
+                var csrfInput = editForm.querySelector('input[name="csrf_token"]');
+                if (csrfInput) fd.append('csrf_token', csrfInput.value);
+
+                if (selectedProfileBlob) {
+                    fd.append('profile_picture', selectedProfileBlob, selectedProfileBlobName || 'profile.jpg');
+                }
+                if (selectedValidIdBlob) {
+                    fd.append('valid_id_file', selectedValidIdBlob, selectedValidIdBlobName || 'valid_id.jpg');
+                }
+
+                var submitBtn = editForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Saving…';
+                }
+
+                fetch(editForm.action, { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (res) {
+                        if (!res.ok) {
+                            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Profile'; }
+                            if (window.customerShowToast) window.customerShowToast('Upload failed. File must be 2MB or smaller.', 'error');
+                            return;
+                        }
+                        if (res.redirected || res.url) {
+                            window.location.href = res.url;
+                        } else {
+                            window.location.reload();
+                        }
+                    })
+                    .catch(function () {
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Save Profile';
+                        }
+                        if (window.customerShowToast) {
+                            window.customerShowToast('Upload failed. Check your connection and file size (max 2MB).', 'error');
+                        }
+                    });
+            });
         })();
 
         

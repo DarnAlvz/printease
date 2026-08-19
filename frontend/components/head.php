@@ -11,7 +11,7 @@ function renderPrintEaseIcons()
     echo '<link rel="icon" type="image/png" sizes="16x16" href="' . $icon16 . '">' . PHP_EOL;
     echo '    <link rel="icon" type="image/png" sizes="32x32" href="' . $icon32 . '">' . PHP_EOL;
     echo '    <link rel="apple-touch-icon" sizes="180x180" href="' . $appleIcon . '">' . PHP_EOL;
-    echo '    <meta name="theme-color" content="#03045e">' . PHP_EOL;
+    echo '    <meta name="theme-color" content="#070566">' . PHP_EOL;
     echo '    <link rel="manifest" href="' . htmlspecialchars(printEaseAssetUrl('manifest.json'), ENT_QUOTES, 'UTF-8') . '">' . PHP_EOL;
 
     if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['csrf_token'])) {

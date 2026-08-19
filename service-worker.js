@@ -1,19 +1,20 @@
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v8";
 const SHELL_CACHE = "printease-shell-" + CACHE_VERSION;
 const RUNTIME_CACHE = "printease-runtime-" + CACHE_VERSION;
 
 const BASE_PATH = self.location.pathname.replace(/\/[^\/]*$/, "/");
 
 const urlsToCache = [
-  BASE_PATH,
-  BASE_PATH + "index.php",
+  BASE_PATH + "frontend/splash.php",
   BASE_PATH + "manifest.json",
   BASE_PATH + "assets/css/index.css",
   BASE_PATH + "assets/css/tailwind.css",
   BASE_PATH + "assets/js/pdf.min.js",
   BASE_PATH + "assets/js/pdf.worker.min.js",
   BASE_PATH + "assets/images/printing-logo-192.png",
-  BASE_PATH + "assets/images/printing-logo-512.png"
+  BASE_PATH + "assets/images/printing-logo-512.png",
+  BASE_PATH + "assets/images/printing-logo-512-maskable.png",
+  BASE_PATH + "assets/images/printing-logo.png"
 ];
 
 // INSTALL
@@ -44,12 +45,16 @@ function isShellRequest(url) {
   return (
     url.pathname === BASE_PATH ||
     url.pathname === BASE_PATH + "index.php" ||
+    url.pathname === BASE_PATH + "frontend/splash.php" ||
     url.pathname.indexOf(BASE_PATH + "assets/") === 0
   );
 }
 
 function isCacheable(response) {
-  return response && response.status === 200 && response.type === "basic";
+  if (!response || response.status !== 200 || response.type !== "basic") return false;
+  var contentType = response.headers.get("content-type") || "";
+  if (contentType.indexOf("text/html") !== -1) return false;
+  return true;
 }
 
 function cachePut(cacheName, request, response) {
