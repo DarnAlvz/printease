@@ -7,7 +7,7 @@ class RedisSessionHandler implements SessionHandlerInterface {
     private string $prefix;
     private int $lifetime;
 
-    public function __construct(Predis\Client $redis, int $lifetime = 1440) {
+    public function __construct(Predis\Client $redis, int $lifetime = 604800) {
         $this->redis = $redis;
         $this->prefix = 'printease:session:';
         $this->lifetime = $lifetime;
@@ -47,7 +47,7 @@ function secureSession(): void {
     }
 
     session_set_cookie_params([
-        'lifetime' => 0,
+        'lifetime' => 86400,
         'path' => '/',
         'httponly' => true,
         'samesite' => 'Lax',

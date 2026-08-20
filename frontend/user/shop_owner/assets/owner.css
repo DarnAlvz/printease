@@ -1239,8 +1239,9 @@ button.btn,
   box-shadow: none;
 }
 
-.btn-danger {
+button.btn-danger {
   background: var(--red);
+  box-shadow: 0 6px 12px rgba(239, 68, 68, 0.22);
 }
 
 .form-grid {
@@ -2580,23 +2581,11 @@ body.order-modal-open .owner-main {
   font-size: 12px;
 }
 
-.transactions-chip-row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.transactions-chip-row span,
-.transactions-method-chip {
-  min-height: 26px;
-  padding: 5px 9px;
-  border-radius: 8px;
+.transactions-reference-number {
   color: #334155;
-  background: #eef6fb;
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
+  word-break: break-all;
 }
 
 .transactions-method-chip {

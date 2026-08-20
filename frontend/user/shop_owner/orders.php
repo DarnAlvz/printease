@@ -778,7 +778,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                                 </button>
                                             </form>
 
-                                            <button type="button" class="btn order-btn-danger" data-payment-reject-toggle>
+                                            <button type="button" class="btn btn-danger" data-payment-reject-toggle>
                                                 Reject Payment
                                             </button>
 
@@ -792,7 +792,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                                 <textarea id="reject-reason-<?php echo e($order['payment_id']); ?>" name="rejection_reason"
                                                     placeholder="Tell the customer what needs to be corrected"
                                                     class="payment-reject-textarea" maxlength="500" required></textarea>
-                                                <button type="submit" name="reject_payment" class="btn order-btn-danger">
+                                                <button type="submit" name="reject_payment" class="btn btn-danger">
                                                     Confirm Reject
                                                 </button>
                                             </form>

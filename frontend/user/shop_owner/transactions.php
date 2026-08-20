@@ -65,10 +65,12 @@ if ($search !== '') {
                             OR LOWER(u.full_name) LIKE ?
                             OR LOWER(u.email) LIKE ?
                             OR LOWER(p.payment_method) LIKE ?
+                            OR LOWER(p.reference_number) LIKE ?
+                            OR LOWER(p.ocr_reference_number) LIKE ?
                         )";
     $like = '%' . strtolower($search) . '%';
-    $search_params = [$like, $like, $like, $like];
-    $search_types = 'ssss';
+    $search_params = [$like, $like, $like, $like, $like, $like];
+    $search_types = 'ssssss';
 }
 
 $summary_sql = "SELECT
@@ -252,7 +254,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
                         <tr>
                             <th>Job Code</th>
                             <th>Customer</th>
-                            <th>Print Details</th>
+                            <th>Reference No.</th>
                             <th>Payment Method</th>
                             <th>Amount</th>
                             <th>Date Paid</th>
@@ -262,6 +264,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
                     <tbody>
                         <?php foreach ($transactions as $transaction): ?>
                             <?php $payment_date = $transaction['created_at'] ?? $transaction['order_created_at'] ?? ''; ?>
+                            <?php $ref_display = $transaction['ocr_reference_number'] ?? ($transaction['reference_number'] ?? ''); ?>
                             <tr>
                                 <td><strong class="transactions-order-code"><?php echo e($transaction['order_code']); ?></strong></td>
                                 <td>
@@ -272,12 +275,11 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
                                     <span class="transactions-subtext"><?php echo e($transaction['email']); ?></span>
                                 </td>
                                 <td>
-                                    <div class="transactions-chip-row">
-                                        <span><?php echo e($transaction['paper_size']); ?></span>
-                                        <span><?php echo e($transaction['paper_type']); ?></span>
-                                        <span><?php echo e($transaction['print_type']); ?></span>
-                                        <span>x<?php echo e($transaction['copies']); ?></span>
-                                    </div>
+                                    <?php if (!empty($ref_display)): ?>
+                                        <span class="transactions-reference-number"><?php echo e($ref_display); ?></span>
+                                    <?php else: ?>
+                                        <span class="muted">&mdash;</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="transactions-method-chip"><?php echo e(transactionPaymentMethodLabel($transaction['payment_method'] ?? '')); ?></span>
@@ -304,6 +306,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
             <div class="order-mobile-list transactions-mobile-list">
                 <?php foreach ($transactions as $transaction): ?>
                     <?php $payment_date = $transaction['created_at'] ?? $transaction['order_created_at'] ?? ''; ?>
+                    <?php $ref_display = $transaction['ocr_reference_number'] ?? ($transaction['reference_number'] ?? ''); ?>
                     <article class="owner-card order-card-mobile">
                         <div class="card-head">
                             <h2><?php echo e($transaction['order_code']); ?></h2>
@@ -314,7 +317,7 @@ ownerLayoutStart('transactions', 'Transactions', '', $notif_count, $shop, $owner
                         <p><strong>Customer:</strong> <?php echo e($transaction['full_name']); ?></p>
                         <p><strong>Amount:</strong> <?php echo ownerMoney($transaction['amount']); ?></p>
                         <p><strong>Method:</strong> <?php echo e(transactionPaymentMethodLabel($transaction['payment_method'] ?? '')); ?></p>
-                        <p><strong>Details:</strong> <?php echo e($transaction['paper_size']); ?>, <?php echo e($transaction['paper_type']); ?>, <?php echo e($transaction['print_type']); ?>, x<?php echo e($transaction['copies']); ?></p>
+                        <p><strong>Reference:</strong> <?php echo !empty($ref_display) ? e($ref_display) : '&mdash;'; ?></p>
                         <p><strong>Date:</strong> <?php echo !empty($payment_date) ? e(date("Y-m-d", strtotime($payment_date))) : 'Not available'; ?></p>
                     </article>
                 <?php endforeach; ?>
