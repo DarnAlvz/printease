@@ -19,7 +19,7 @@ function ownerStatusClass($status)
         return 'status-info';
     }
 
-    if ($status === 'rejected' || $status === 'not_accepting') {
+    if ($status === 'rejected' || $status === 'not_accepting' || $status === 'cancelled') {
         return 'status-danger';
     }
 

@@ -8,7 +8,12 @@ require_once __DIR__ . "/../includes/rate_limit.php";
 checkRole("customer");
 validateCsrf();
 
-$redirect = BASE_URL . "frontend/user/customer/orders.php?status=completed";
+$allowed_redirect_tabs = ['active', 'completed', 'cancelled'];
+$redirect_tab = 'completed';
+if (isset($_POST['redirect_tab']) && in_array((string) $_POST['redirect_tab'], $allowed_redirect_tabs, true)) {
+    $redirect_tab = (string) $_POST['redirect_tab'];
+}
+$redirect = BASE_URL . "frontend/user/customer/orders.php?status=" . urlencode($redirect_tab);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['delete_completed_order'])) {
     redirect($redirect);
@@ -25,7 +30,7 @@ $customer_id = (int) ($_SESSION['user_id'] ?? 0);
 $order_id = (int) ($_POST['order_id'] ?? 0);
 
 if ($order_id <= 0 || $customer_id <= 0) {
-    setError("Invalid completed request.");
+    setError("Invalid request.");
     redirect($redirect);
 }
 
@@ -44,31 +49,31 @@ mysqli_stmt_execute($order_stmt);
 $order = mysqli_fetch_assoc(mysqli_stmt_get_result($order_stmt));
 
 if (!$order) {
-    setError("Completed request not found.");
+    setError("Request not found.");
     redirect($redirect);
 }
 
-if (($order['order_status'] ?? '') !== 'completed') {
-    setError("Only completed requests can be removed from your history.");
+if (!in_array(($order['order_status'] ?? ''), ['completed', 'cancelled'], true)) {
+    setError("Only completed or declined requests can be removed from your history.");
     redirect($redirect);
 }
 
 if (!empty($order['customer_deleted_at'])) {
-    setToast("This completed request is already removed from your history.", "info");
+    setToast("This request is already removed from your history.", "info");
     redirect($redirect);
 }
 
 $delete_sql = "UPDATE orders
                SET customer_deleted_at = NOW()
-               WHERE order_id = ? AND customer_id = ? AND order_status = 'completed' AND customer_deleted_at IS NULL";
+               WHERE order_id = ? AND customer_id = ? AND order_status IN ('completed', 'cancelled') AND customer_deleted_at IS NULL";
 $delete_stmt = mysqli_prepare($conn, $delete_sql);
 mysqli_stmt_bind_param($delete_stmt, "ii", $order_id, $customer_id);
 
 if (mysqli_stmt_execute($delete_stmt) && mysqli_stmt_affected_rows($delete_stmt) > 0) {
-    logActivity($conn, $customer_id, "Removed completed request from customer history: {$order['order_code']}", "Customer Requests");
-    setToast("Completed request removed from your history.", "success");
+    logActivity($conn, $customer_id, "Removed {$order['order_status']} request from customer history: {$order['order_code']}", "Customer Requests");
+    setToast("Request removed from your history.", "success");
 } else {
-    setError("Failed to remove completed request. Please try again.");
+    setError("Failed to remove request. Please try again.");
 }
 
 redirect($redirect);

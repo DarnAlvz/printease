@@ -1170,6 +1170,8 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             const fileInput = isDocumentOrder() ? documentFile : serviceFile;
             const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
             const shopIdInput = wizard.querySelector('[name="shop_id"]');
+            const docMode = isDocumentOrder();
+            const selected = docMode ? selectedService() : selectedServicePrice();
             return {
                 shop_id: shopIdInput ? shopIdInput.value : '',
                 shop_name: <?php echo json_encode($shop['shop_name']); ?>,
@@ -1182,7 +1184,12 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 pickup_datetime: pickupDatetime ? pickupDatetime.value : '',
                 customer_instruction: instruction ? instruction.value.trim() : '',
                 file_key: isDocumentOrder() ? 'document_file' : 'service_file',
-                file: file ? { name: file.name, type: file.type, size: file.size, blob: file } : null
+                file: file ? { name: file.name, type: file.type, size: file.size, blob: file } : null,
+                unit_price: selected ? String(docMode ? (selected.price_per_page || "0") : (selected.price || "0")) : "0",
+                paper_size: docMode ? (paperSize ? paperSize.value : '') : (serviceSize ? serviceSize.value : ''),
+                paper_type: docMode ? (paperType ? paperType.value : '') : (serviceMaterial ? serviceMaterial.value : ''),
+                print_type: docMode ? (printType ? printType.value : '') : (servicePrintType ? servicePrintType.value : ''),
+                total_amount: total ? total.textContent : '0.00'
             };
         }
 

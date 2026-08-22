@@ -252,6 +252,15 @@ function ownerOrderIsPaidAndPending(array $order)
         && ($order['verification_status'] ?? '') === 'verified';
 }
 
+function orderHasActivePaymentProof(array $order)
+{
+    if (empty($order['payment_id'])) {
+        return false;
+    }
+
+    return !(($order['payment_status'] ?? '') === 'unpaid' && ($order['verification_status'] ?? '') === 'rejected');
+}
+
 function ownerSelectedServiceName(array $order, array $service_type_lookup)
 {
     $instruction = trim((string) ($order['customer_instruction'] ?? ''));
@@ -268,6 +277,13 @@ function ownerSelectedServiceName(array $order, array $service_type_lookup)
     }
 
     return 'Document Printing';
+}
+
+function ownerOrderCustomerInstruction(array $order)
+{
+    $instruction = trim((string) ($order['customer_instruction'] ?? ''));
+
+    return trim((string) preg_replace('/^Service request:.*?\.\s*/is', '', $instruction));
 }
 
 function ownerDownloadFileUrl(array $file)
@@ -372,8 +388,22 @@ function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = fals
             <?php endif; ?>
         <?php endforeach; ?>
         <button type="submit" name="update_order" class="btn order-btn-completed">
-            Accept & Download
+            Accept &amp; Download
         </button>
+    </form>
+<?php
+}
+
+function renderDeclineOrderForm(array $order)
+{
+?>
+    <form action="<?php echo BASE_URL; ?>backend/actions/decline_order.php" method="POST"
+        class="orders-update-form orders-status-action" data-decline-order-form
+        data-order-id="<?php echo e($order['order_id']); ?>">
+        <?php echo csrfField(); ?>
+        <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
+        <input type="hidden" name="decline_order" value="1">
+        <button type="submit" name="decline_order" class="btn btn-danger">Decline Request</button>
     </form>
 <?php
 }
@@ -589,7 +619,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             <?php echo ownerIcon('info', 'icon-sm'); ?>
                             <div>
                                 <h3>Customer Instructions</h3>
-                                <p><?php echo e($order['customer_instruction'] ?: 'No instruction'); ?></p>
+                                <p><?php echo e(ownerOrderCustomerInstruction($order) ?: 'No instruction'); ?></p>
                             </div>
                         </section>
 
@@ -603,8 +633,8 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                 <?php else: ?>
                                     <strong><?php echo e(count($file_rows) > 1 ? count($file_rows) . ' Uploaded Files' : 'PDF Document'); ?></strong>
                                     <?php foreach ($file_rows as $file): ?>
-                                        <a href="<?php echo e(printEaseFileUrl($file['file_path'])); ?>"
-                                            target="_blank"><?php echo e($file['file_name']); ?></a>
+                                        <a href="<?php echo e(ownerDownloadFileUrl($file)); ?>"
+                                            target="_blank" rel="noopener"><?php echo e($file['file_name']); ?></a>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
@@ -811,6 +841,9 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                         <button type="button" class="btn order-modal-secondary" data-order-modal-close>Close</button>
                         <?php if ($owner_is_verified && $order['order_status'] === 'pending'): ?>
                             <?php renderAcceptDownloadForm($order, $file_rows, !ownerOrderIsPaidAndPending($order)); ?>
+                            <?php if (!orderHasActivePaymentProof($order)): ?>
+                                <?php renderDeclineOrderForm($order); ?>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </footer>
                 </section>
@@ -860,7 +893,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                         <p><strong>Details:</strong> Size: <?php echo e($order['paper_size']); ?>, Quantity: <?php echo e($order['copies']); ?></p>
                     <?php endif; ?>
                     <p><strong>Total:</strong> <?php echo ownerMoney($order['total_amount']); ?></p>
-                    <p><strong>Instruction:</strong> <?php echo e($order['customer_instruction'] ?: 'No instruction'); ?></p>
+                    <p><strong>Instruction:</strong> <?php echo e(ownerOrderCustomerInstruction($order) ?: 'No instruction'); ?></p>
                     <div class="row-actions">
                         <button type="button" class="btn order-btn-navy"
                             data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View Details</button>
@@ -880,6 +913,15 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
                             <input type="hidden" name="order_status" value="completed">
                             <button type="submit" name="update_order" class="btn order-btn-completed">Mark as Completed</button>
+                        </form>
+                    <?php elseif ($owner_is_verified && $order['order_status'] === 'pending' && !orderHasActivePaymentProof($order)): ?>
+                        <form action="<?php echo BASE_URL; ?>backend/actions/decline_order.php" method="POST"
+                            class="orders-update-form orders-status-action mobile" data-decline-order-form
+                            data-order-id="<?php echo e($order['order_id']); ?>">
+                            <?php echo csrfField(); ?>
+                            <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
+                            <input type="hidden" name="decline_order" value="1">
+                            <button type="submit" name="decline_order" class="btn btn-danger">Decline Request</button>
                         </form>
                     <?php endif; ?>
                 </article>
@@ -1194,6 +1236,23 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             window.ownerShowToast(error.message || 'Failed to reject payment. Please try again.', 'error');
                         }
                     });
+            });
+        });
+
+        document.querySelectorAll('[data-decline-order-form]').forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                const confirmed = window.confirm('Decline this print request? The customer will be notified.');
+                if (!confirmed) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+
+                const declineButton = form.querySelector('[type="submit"]');
+                if (declineButton) {
+                    declineButton.disabled = true;
+                    declineButton.textContent = 'Declining...';
+                }
             });
         });
 

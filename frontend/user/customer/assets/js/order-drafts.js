@@ -99,6 +99,11 @@
         return d.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     }
 
+    function draftFormatMoney(value) {
+        var n = parseFloat(value);
+        return Number.isFinite(n) ? "\u20b1" + n.toFixed(2) : "\u20b10.00";
+    }
+
     function saveDraft(payload) {
         var draft = Object.assign({
             id: randomHex32(),
@@ -116,7 +121,12 @@
             pickup_datetime: "",
             customer_instruction: "",
             file_key: "document_file",
-            file: null
+            file: null,
+            unit_price: "0",
+            paper_size: "",
+            paper_type: "",
+            print_type: "",
+            total_amount: "0.00"
         }, payload);
 
         return putDraft(draft).then(function () {
@@ -293,14 +303,20 @@
 
         var detailParts = [String(draft.order_service_type || "Document Printing")];
         if (draft.file && draft.file.name) detailParts.push(draft.file.name);
+        if (String(draft.paper_size || "") !== "") detailParts.push(draft.paper_size);
+        if (String(draft.paper_type || "") !== "") detailParts.push(draft.paper_type);
+        if (String(draft.print_type || "") !== "") detailParts.push(draft.print_type);
         if (String(draft.order_service_type || "Document Printing") === "Document Printing") {
             var pages = parseInt(draft.detected_page_count || "1", 10) || 1;
             var copies = parseInt(draft.copies || "1", 10) || 1;
             if (pages > 1 || copies > 1) detailParts.push(pages + " page" + (pages === 1 ? "" : "s") + " x " + copies + " cop" + (copies === 1 ? "y" : "ies"));
         } else {
             var qty = parseInt(draft.service_quantity || "1", 10) || 1;
-            if (qty > 1) detailParts.push(qty + " item" + (qty === 1 ? "" : "s"));
+            var unitLabel = (String(draft.order_service_type || "") === "Tarpaulin Printing" || String(draft.order_service_type || "") === "ID Printing" || String(draft.order_service_type || "") === "Invitation / Card Printing") ? "piece" : "item";
+            if (qty > 1) detailParts.push(qty + " " + unitLabel + "s");
         }
+        var totalVal = parseFloat(draft.total_amount || "0");
+        if (Number.isFinite(totalVal) && totalVal > 0) detailParts.push(draftFormatMoney(totalVal));
 
         return '<div class="customer-pending-draft" data-draft-row="' + esc(draft.id) + '">' +
             '<div class="customer-pending-draft__main">' +

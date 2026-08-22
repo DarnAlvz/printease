@@ -17,7 +17,7 @@ $customer_id = $_SESSION['user_id'];
 $search = trim($_GET['order_code'] ?? '');
 $focus_order_id = max(0, (int) ($_GET['focus_order_id'] ?? 0));
 $focus_order_code = trim($_GET['focus_order_code'] ?? '');
-$allowed_tabs = ['active', 'completed'];
+$allowed_tabs = ['active', 'completed', 'cancelled'];
 $status_tab = $_GET['status'] ?? 'active';
 if (!in_array($status_tab, $allowed_tabs, true)) {
     $status_tab = 'active';
@@ -40,6 +40,8 @@ function countCustomerOrdersByTab($conn, $customer_id, $status_tab)
 
     if ($status_tab === 'active') {
         $sql .= " AND COALESCE(NULLIF(order_status, ''), 'pending') IN ('pending', 'accepted', 'processing', 'ready_for_pickup')";
+    } elseif ($status_tab === 'cancelled') {
+        $sql .= " AND order_status = 'cancelled'";
     } else {
         $sql .= " AND order_status = 'completed'";
     }
@@ -55,6 +57,7 @@ function countCustomerOrdersByTab($conn, $customer_id, $status_tab)
 $tab_counts = [
     'active' => countCustomerOrdersByTab($conn, $customer_id, 'active'),
     'completed' => countCustomerOrdersByTab($conn, $customer_id, 'completed'),
+    'cancelled' => countCustomerOrdersByTab($conn, $customer_id, 'cancelled'),
 ];
 
 $sql = "SELECT o.*, ps.shop_name, 
@@ -76,6 +79,8 @@ $sql = "SELECT o.*, ps.shop_name,
 
 if ($status_tab === 'active') {
     $sql .= " AND COALESCE(NULLIF(o.order_status, ''), 'pending') IN ('pending', 'accepted', 'processing', 'ready_for_pickup')";
+} elseif ($status_tab === 'cancelled') {
+    $sql .= " AND o.order_status = 'cancelled'";
 } else {
     $sql .= " AND o.order_status = 'completed'";
 }
@@ -248,11 +253,12 @@ function formatDateTime12Hour($datetime)
                     <button class="bg-blue-600 text-white px-4 rounded-xl">Search</button>
                 </form>
 
-                <nav class="grid grid-cols-2 gap-2 mb-4" aria-label="Request filters" data-live-region="customer-order-tabs">
+                <nav class="grid grid-cols-3 gap-2 mb-4" aria-label="Request filters" data-live-region="customer-order-tabs">
                     <?php
                     $order_tabs = [
                         'active' => 'Active',
                         'completed' => 'Completed',
+                        'cancelled' => 'Declined',
                     ];
                     foreach ($order_tabs as $tab_key => $tab_label):
                         $is_active_tab = $status_tab === $tab_key;
@@ -408,6 +414,7 @@ function formatDateTime12Hour($datetime)
                                     </button>
                                 </div>
 
+                                <?php if ($order['order_status'] !== 'cancelled'): ?>
                                 <?php if (!empty($order['proof_of_payment_file'])): ?>
                                     <?php $proof_ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION)); ?>
                                     <button type="button" class="text-blue-600 font-semibold proof-view-btn"
@@ -453,14 +460,20 @@ function formatDateTime12Hour($datetime)
                                         Pay Now
                                     </a>
                                 <?php endif; ?>
+                                <?php else: ?>
+                                    <div class="mt-4 bg-red-50 text-red-700 p-3 rounded-xl text-sm">
+                                        This request was declined by the shop. You may safely remove it from your list.
+                                    </div>
+                                <?php endif; ?>
 
-                                <?php if ($status_tab === 'completed'): ?>
+                                <?php if (in_array($status_tab, ['completed', 'cancelled'], true)): ?>
                                     <form action="<?php echo BASE_URL; ?>backend/actions/delete_customer_completed_order.php"
                                         method="POST"
                                         class="mt-3"
                                         data-delete-request-form>
                                         <?php echo csrfField(); ?>
                                         <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
+                                        <input type="hidden" name="redirect_tab" value="<?php echo e($status_tab); ?>">
                                         <input type="hidden" name="delete_completed_order" value="1">
                                         <button type="button"
                                             data-open-delete-request
@@ -483,8 +496,8 @@ function formatDateTime12Hour($datetime)
             <section class="customer-request-delete-panel" role="dialog" aria-modal="true" aria-labelledby="deleteRequestTitle" tabindex="-1">
                 <div class="customer-request-delete-icon" aria-hidden="true">!</div>
                 <div class="customer-request-delete-copy">
-                    <h2 id="deleteRequestTitle">Remove completed request?</h2>
-                    <p>This only hides the completed request from your history. The print shop keeps the record for payment and service tracking.</p>
+                    <h2 id="deleteRequestTitle">Remove this request?</h2>
+                    <p>This only hides the request from your history. The print shop keeps the record for payment and service tracking.</p>
                 </div>
                 <div class="customer-request-delete-actions">
                     <button type="button" class="customer-request-delete-cancel" data-close-delete-request>Cancel</button>

@@ -64,7 +64,14 @@ function dashboardOrderUnitPrice(array $order)
 
 function dashboardOrderLink(array $order)
 {
-    $tab = ($order['order_status'] ?? '') === 'completed' ? 'completed' : 'active';
+    $status = (string) ($order['order_status'] ?? '');
+    if ($status === 'completed') {
+        $tab = 'completed';
+    } elseif ($status === 'cancelled') {
+        $tab = 'cancelled';
+    } else {
+        $tab = 'active';
+    }
     return 'orders.php?status=' . $tab . '&focus_order_code=' . urlencode((string) $order['order_code']);
 }
 

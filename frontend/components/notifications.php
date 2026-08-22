@@ -55,6 +55,10 @@ function notificationTone(array $notification)
         return 'danger';
     }
 
+    if ($status === 'cancelled' || str_contains($text, 'declined') || str_contains($text, 'cancelled')) {
+        return 'danger';
+    }
+
     if ($type === 'order_status' && ($status === 'ready_for_pickup' || str_contains($text, 'ready for pickup'))) {
         return 'success';
     }

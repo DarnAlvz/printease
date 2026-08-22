@@ -1843,6 +1843,11 @@ select:focus {
   background: #dcfce7;
 }
 
+.order-status-cancelled {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
 .orders-mobile-list {
   display: none;
 }

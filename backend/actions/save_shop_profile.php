@@ -618,7 +618,27 @@ if (isset($_POST['save_profile'])) {
             }
         }
 
-        $service_types = array_values(array_unique(array_filter(array_map('trim', $_POST['service_types'] ?? []))));
+        $allowed_service_types = [
+            'Document Printing',
+            'Lamination',
+            'Photo Printing',
+            'Tarpaulin Printing',
+            'ID Printing',
+            'Invitation / Card Printing',
+            'Photocopy',
+            'Binding',
+            'Scanning',
+        ];
+        $visit_only_service_types = ['Photocopy', 'Binding', 'Scanning'];
+        $default_service_notes = [
+            'Photocopy' => 'This service requires physical documents. Online request is unavailable.',
+            'Binding' => 'Physical document submission is required. Please visit the shop.',
+            'Scanning' => 'Original documents are required. Online request is unavailable.',
+        ];
+        $service_types = array_values(array_unique(array_intersect(
+            array_filter(array_map('trim', $_POST['service_types'] ?? [])),
+            $allowed_service_types
+        )));
         if (!in_array('Document Printing', $service_types, true)) {
             array_unshift($service_types, 'Document Printing');
         }
@@ -626,10 +646,11 @@ if (isset($_POST['save_profile'])) {
         mysqli_stmt_bind_param($del_st, "i", $shop_id);
         mysqli_stmt_execute($del_st);
         if (!empty($service_types)) {
-            $ins_st = mysqli_prepare($conn, "INSERT INTO shop_service_types (shop_id, service_type) VALUES (?, ?)");
+            $ins_st = mysqli_prepare($conn, "INSERT INTO shop_service_types (shop_id, service_type, service_offered, online_available, customer_note) VALUES (?, ?, 1, ?, ?)");
             foreach ($service_types as $st) {
-                $st = substr($st, 0, 100);
-                mysqli_stmt_bind_param($ins_st, "is", $shop_id, $st);
+                $online_available = in_array($st, $visit_only_service_types, true) ? 0 : 1;
+                $customer_note = $default_service_notes[$st] ?? null;
+                mysqli_stmt_bind_param($ins_st, "isis", $shop_id, $st, $online_available, $customer_note);
                 mysqli_stmt_execute($ins_st);
             }
         }
