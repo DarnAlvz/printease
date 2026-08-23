@@ -91,7 +91,7 @@ if ($shop_id) {
                     COALESCE(SUM(CASE WHEN DATE(created_at) = CURDATE() THEN total_amount ELSE 0 END), 0) AS today_revenue,
                     COUNT(DISTINCT customer_id) AS active_customers
                   FROM orders
-                  WHERE shop_id = ?";
+                  WHERE shop_id = ? AND order_status != 'cancelled'";
     $stats_stmt = mysqli_prepare($conn, $stats_sql);
     mysqli_stmt_bind_param($stats_stmt, "i", $shop_id);
     mysqli_stmt_execute($stats_stmt);
@@ -125,7 +125,7 @@ if ($shop_id) {
                           ) AS file_name
                    FROM orders o
                    JOIN users u ON o.customer_id = u.user_id
-                   WHERE o.shop_id = ?
+                   WHERE o.shop_id = ? AND o.order_status != 'cancelled'
                    ORDER BY o.created_at DESC
                    LIMIT 4";
     $orders_stmt = mysqli_prepare($conn, $orders_sql);
@@ -142,6 +142,7 @@ if ($shop_id) {
     $weekly_sql = "SELECT WEEKDAY(created_at) AS day_index, COALESCE(SUM(total_amount), 0) AS total
                    FROM orders
                    WHERE shop_id = ?
+                   AND order_status != 'cancelled'
                    AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
                    GROUP BY WEEKDAY(created_at)";
     $weekly_stmt = mysqli_prepare($conn, $weekly_sql);

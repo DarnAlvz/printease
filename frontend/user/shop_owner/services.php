@@ -436,7 +436,8 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                                                                 </button>
                                                             </form>
                                                             <form method="POST" action="../../../backend/actions/delete_service.php"
-                                                                onsubmit="return confirm('Delete this document price? If it has existing orders, it will be blocked.');" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+                                                                data-confirm-title="Delete this document price?"
+                                                                data-confirm-message="If it has existing orders, the deletion will be blocked." nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                                                                 <?php echo csrfField(); ?>
                                                                 <input type="hidden" name="service_id" value="<?php echo (int) $service['service_id']; ?>">
                                                                 <button type="submit" name="delete_service" class="is-danger" title="Delete this price record">
@@ -541,7 +542,8 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                                                                 </button>
                                                             </form>
                                                             <form method="POST" action="../../../backend/actions/delete_service_pricing.php"
-                                                                onsubmit="return confirm('Delete this service price? This cannot be undone.');" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+                                                                data-confirm-title="Delete this service price?"
+                                                                data-confirm-message="This cannot be undone." nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                                                                 <?php echo csrfField(); ?>
                                                                 <input type="hidden" name="pricing_id" value="<?php echo (int) $entry['id']; ?>">
                                                                 <button type="submit" name="delete_service_pricing" class="is-danger" title="Delete this price record">
@@ -879,6 +881,31 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
 
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') closeAll();
+        });
+    })();
+</script>
+
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function() {
+        document.addEventListener('submit', function(event) {
+            var form = event.target.closest('form[data-confirm-title]');
+            if (!form) return;
+
+            event.preventDefault();
+            if (form.dataset.confirmSubmitting === 'true') return;
+
+            window.appConfirm({
+                    title: form.dataset.confirmTitle || 'Are you sure?',
+                    message: form.dataset.confirmMessage || '',
+                    confirmText: 'Delete',
+                    cancelText: 'Cancel',
+                    tone: 'danger'
+                })
+                .then(function(confirmed) {
+                    if (!confirmed) return;
+                    form.dataset.confirmSubmitting = 'true';
+                    form.submit();
+                });
         });
     })();
 </script>

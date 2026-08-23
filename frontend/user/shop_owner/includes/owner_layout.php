@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../components/head.php';
 require_once __DIR__ . '/../../../components/toasts.php';
+require_once __DIR__ . '/../../../components/confirm_modal.php';
 
 function ownerStatusLabel($status)
 {
@@ -422,6 +423,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
             </div>
 
             <?php renderAppToasts('owner'); ?>
+            <?php renderAppConfirmModal(); ?>
 
             <main class="owner-main">
                 <div class="page-heading">

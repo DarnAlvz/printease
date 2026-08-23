@@ -118,6 +118,7 @@ $per_page = 5;
 $page = max(1, (int) ($_GET['page'] ?? 1));
 
 $where = "WHERE o.shop_id = ?";
+$where .= " AND o.order_status != 'cancelled'";
 $types = "i";
 $params = [$shop_id];
 
@@ -217,7 +218,7 @@ $counts = [
     'completed' => 0,
 ];
 $count_sql = "SELECT
-                COUNT(*) AS total,
+                SUM(CASE WHEN order_status != 'cancelled' THEN 1 ELSE 0 END) AS total,
                 SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END) AS pending,
                 SUM(CASE WHEN order_status = 'processing' THEN 1 ELSE 0 END) AS processing,
                 SUM(CASE WHEN order_status = 'ready_for_pickup' THEN 1 ELSE 0 END) AS ready_for_pickup,
@@ -1045,6 +1046,37 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             });
         }
 
+        function setOrderCancelled(orderId) {
+            document.querySelectorAll('[data-decline-order-form][data-order-id="' + orderId + '"], [data-accept-download-form][data-order-id="' + orderId + '"]').forEach(function(form) {
+                form.remove();
+            });
+
+            let removedOrderRow = false;
+            document.querySelectorAll('[data-order-row="' + orderId + '"], [data-order-card="' + orderId + '"]').forEach(function(element) {
+                element.remove();
+                removedOrderRow = true;
+            });
+
+            const pendingTabCount = document.querySelector('[data-live-region="owner-order-tabs"] a[href*="status=pending"] span');
+            if (pendingTabCount) {
+                pendingTabCount.textContent = Math.max(0, (parseInt(pendingTabCount.textContent, 10) || 0) - 1);
+            }
+
+            const allTabCount = document.querySelector('[data-live-region="owner-order-tabs"] a:not([href*="status="]) span');
+            if (allTabCount) {
+                allTabCount.textContent = Math.max(0, (parseInt(allTabCount.textContent, 10) || 0) - 1);
+            }
+
+            const pendingSummaryCount = document.querySelector('[data-live-region="owner-order-summary"] .orders-summary-card.pending strong');
+            if (pendingSummaryCount) {
+                pendingSummaryCount.textContent = Math.max(0, (parseInt(pendingSummaryCount.textContent, 10) || 0) - 1);
+            }
+
+            if (removedOrderRow && !document.querySelector('.orders-table tbody tr') && !document.querySelector('.order-card-mobile')) {
+                setTimeout(function() { window.location.reload(); }, 1500);
+            }
+        }
+
         function createReadyForm(orderId, isMobile) {
             const readyForm = document.createElement('form');
             readyForm.action = '<?php echo BASE_URL; ?>backend/actions/update_order_status.php';
@@ -1241,18 +1273,72 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
 
         document.querySelectorAll('[data-decline-order-form]').forEach(function(form) {
             form.addEventListener('submit', function(event) {
-                const confirmed = window.confirm('Decline this print request? The customer will be notified.');
-                if (!confirmed) {
-                    event.preventDefault();
-                    event.stopPropagation();
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (form.dataset.declineSubmitting === 'true') {
                     return;
                 }
 
                 const declineButton = form.querySelector('[type="submit"]');
-                if (declineButton) {
-                    declineButton.disabled = true;
-                    declineButton.textContent = 'Declining...';
-                }
+
+                window.appConfirm({
+                        title: 'Decline this print request?',
+                        message: 'The customer will be notified.',
+                        confirmText: 'Decline Request',
+                        cancelText: 'Keep Request',
+                        tone: 'danger'
+                    })
+                    .then(function(confirmed) {
+                        if (!confirmed) {
+                            return;
+                        }
+
+                        form.dataset.declineSubmitting = 'true';
+                        if (declineButton) {
+                            declineButton.disabled = true;
+                            declineButton.textContent = 'Declining...';
+                        }
+
+                        const parentModal = form.closest('.order-modal.is-open');
+                        if (parentModal) {
+                            closeModal(parentModal);
+                        }
+
+                        fetch(form.action, {
+                                method: 'POST',
+                                body: new FormData(form),
+                                credentials: 'same-origin',
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            })
+                            .then(function(response) {
+                                return response.json().then(function(data) {
+                                    if (!response.ok || !data || !data.success) {
+                                        throw new Error((data && data.message) || 'Failed to decline the print request.');
+                                    }
+                                    return data;
+                                });
+                            })
+                            .then(function(data) {
+                                setOrderCancelled(data.order_id || form.dataset.orderId);
+
+                                if (window.ownerShowToast) {
+                                    window.ownerShowToast(data.message || 'Print request declined. The customer has been notified.', 'success');
+                                }
+                            })
+                            .catch(function(error) {
+                                form.dataset.declineSubmitting = 'false';
+                                if (declineButton) {
+                                    declineButton.disabled = false;
+                                    declineButton.textContent = 'Decline Request';
+                                }
+                                if (window.ownerShowToast) {
+                                    window.ownerShowToast(error.message || 'Failed to decline the print request. Please try again.', 'error');
+                                }
+                            });
+                    });
             });
         });
 

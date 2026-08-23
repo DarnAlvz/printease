@@ -138,10 +138,10 @@ $summary_sql = "SELECT COUNT(*) AS total_orders,
                        SUM(CASE WHEN o.order_status = 'completed' THEN 1 ELSE 0 END) AS completed_orders,
                        COUNT(DISTINCT o.customer_id) AS unique_customers,
                        COALESCE(SUM(pay.paid_amount), 0) AS paid_revenue,
-                       COALESCE(AVG(CASE WHEN pay.paid_amount > 0 THEN pay.paid_amount END), 0) AS average_paid
-                FROM orders o
-                $paid_join
-                WHERE o.shop_id = ? AND o.created_at >= ? AND o.created_at < ?";
+                        COALESCE(AVG(CASE WHEN pay.paid_amount > 0 THEN pay.paid_amount END), 0) AS average_paid
+                 FROM orders o
+                 $paid_join
+                 WHERE o.shop_id = ? AND o.order_status != 'cancelled' AND o.created_at >= ? AND o.created_at < ?";
 $summary_stmt = mysqli_prepare($conn, $summary_sql);
 mysqli_stmt_bind_param($summary_stmt, "iss", $shop_id, $start_date, $end_exclusive);
 mysqli_stmt_execute($summary_stmt);
@@ -154,7 +154,7 @@ $completion_rate = (int) $summary['total_orders'] > 0
 $status_counts = ['pending' => 0, 'processing' => 0, 'ready_for_pickup' => 0, 'completed' => 0];
 $status_sql = "SELECT order_status, COUNT(*) AS total
                FROM orders
-               WHERE shop_id = ? AND created_at >= ? AND created_at < ?
+               WHERE shop_id = ? AND order_status != 'cancelled' AND created_at >= ? AND created_at < ?
                GROUP BY order_status";
 $status_stmt = mysqli_prepare($conn, $status_sql);
 mysqli_stmt_bind_param($status_stmt, "iss", $shop_id, $start_date, $end_exclusive);
@@ -173,7 +173,7 @@ $trend_sql = "SELECT DATE_FORMAT(o.created_at, '$trend_format') AS bucket,
                      COALESCE(SUM(pay.paid_amount), 0) AS revenue
               FROM orders o
               $paid_join
-              WHERE o.shop_id = ? AND o.created_at >= ? AND o.created_at < ?
+              WHERE o.shop_id = ? AND o.order_status != 'cancelled' AND o.created_at >= ? AND o.created_at < ?
               GROUP BY bucket
               ORDER BY bucket";
 $trend_stmt = mysqli_prepare($conn, $trend_sql);
@@ -221,7 +221,7 @@ function reportTopValues($conn, $shop_id, $start_date, $end_exclusive, $column)
     }
     $sql = "SELECT COALESCE(NULLIF(TRIM($column), ''), 'Not specified') AS label, COUNT(*) AS total
             FROM orders
-            WHERE shop_id = ? AND created_at >= ? AND created_at < ?
+            WHERE shop_id = ? AND order_status != 'cancelled' AND created_at >= ? AND created_at < ?
             GROUP BY label
             ORDER BY total DESC, label ASC
             LIMIT 5";
@@ -242,7 +242,7 @@ $customer_sql = "SELECT u.full_name, u.email, COUNT(*) AS order_count,
                  FROM orders o
                  JOIN users u ON u.user_id = o.customer_id
                  $paid_join
-                 WHERE o.shop_id = ? AND o.created_at >= ? AND o.created_at < ?
+                 WHERE o.shop_id = ? AND o.order_status != 'cancelled' AND o.created_at >= ? AND o.created_at < ?
                  GROUP BY o.customer_id, u.full_name, u.email
                  ORDER BY spending DESC, order_count DESC
                  LIMIT 5";
@@ -254,11 +254,11 @@ $top_customers = mysqli_fetch_all(mysqli_stmt_get_result($customer_stmt), MYSQLI
 $order_select = "SELECT o.order_code, o.paper_size, o.paper_type, o.print_type, o.copies,
                         o.order_status, o.total_amount, o.created_at, u.full_name, u.email,
                         COALESCE(pay.paid_amount, 0) AS paid_amount,
-                        pay.payment_status, pay.verification_status
-                 FROM orders o
-                 JOIN users u ON u.user_id = o.customer_id
-                 $paid_join
-                 WHERE o.shop_id = ? AND o.created_at >= ? AND o.created_at < ?";
+                         pay.payment_status, pay.verification_status
+                  FROM orders o
+                  JOIN users u ON u.user_id = o.customer_id
+                  $paid_join
+                  WHERE o.shop_id = ? AND o.order_status != 'cancelled' AND o.created_at >= ? AND o.created_at < ?";
 
 if (($_GET['export'] ?? '') === 'csv') {
     $export_stmt = mysqli_prepare($conn, $order_select . " ORDER BY o.created_at DESC");
@@ -286,7 +286,7 @@ if (($_GET['export'] ?? '') === 'csv') {
     exit();
 }
 
-$count_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS total FROM orders WHERE shop_id = ? AND created_at >= ? AND created_at < ?");
+$count_stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS total FROM orders WHERE shop_id = ? AND order_status != 'cancelled' AND created_at >= ? AND created_at < ?");
 mysqli_stmt_bind_param($count_stmt, "iss", $shop_id, $start_date, $end_exclusive);
 mysqli_stmt_execute($count_stmt);
 $filtered_total = (int) (mysqli_fetch_assoc(mysqli_stmt_get_result($count_stmt))['total'] ?? 0);

@@ -21,7 +21,7 @@ function renderAppToasts($role = 'customer')
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 10060;
+            z-index: 11100;
             display: grid;
             gap: 12px;
             width: min(420px, calc(100vw - 32px));
