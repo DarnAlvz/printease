@@ -4,8 +4,64 @@ require_once __DIR__ . "/../config/app.php";
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
 
 require __DIR__ . '/../../vendor/autoload.php';
+
+function logMailError($context, $message)
+{
+    $timestamp = date('Y-m-d H:i:s');
+    $logEntry = "[$timestamp] [$context] $message\n";
+
+    $logDir = __DIR__ . '/../runtime';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $logFile = $logDir . '/mail_errors.log';
+    @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+    $_SESSION['last_mail_error'] = $message;
+}
+
+function configureSmtp($mail)
+{
+    $mail->isSMTP();
+    $mail->Host = getenv('SMTP_HOST', 'cpanel11wh.jpt1.cloud.z.com');
+    $mail->SMTPAuth = true;
+    $mail->Username = getenv('SMTP_USER');
+    $mail->Password = getenv('SMTP_PASS');
+    $mail->SMTPSecure = 'tls';
+    $mail->Port = 587;
+    $mail->SMTPAutoTLS = false;
+    $mail->Timeout = 15;
+    $mail->SMTPOptions = [
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'allow_self_signed' => true,
+        ],
+    ];
+}
+
+function fallbackMail($to, $subject, $htmlBody, $altBody)
+{
+    $headers = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-type: text/html; charset=UTF-8\r\n";
+    $headers .= "From: PrintEase <noreply@" . parse_url(BASE_URL, PHP_URL_HOST) . ">\r\n";
+
+    $sent = @mail($to, $subject, $htmlBody, $headers);
+
+    if (!$sent) {
+        logMailError('fallback_mail', "PHP mail() failed for recipient: $to");
+        return false;
+    }
+
+    logMailError('fallback_mail', "PHP mail() succeeded for recipient: $to");
+    return true;
+}
 
 function sendOTP($email, $otp)
 {
@@ -14,15 +70,9 @@ function sendOTP($email, $otp)
     $logo_url = htmlspecialchars(BASE_URL . 'assets/images/printing-logo.png', ENT_QUOTES, 'UTF-8');
 
     try {
-        $mail->isSMTP();
-        $mail->Host = 'smtp.gmail.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = getenv('MAIL_USER');
-        $mail->Password = getenv('MAIL_PASS');
-        $mail->SMTPSecure = 'tls';
-        $mail->Port = 587;
+        configureSmtp($mail);
 
-        $mail->setFrom(getenv('MAIL_USER'), 'PrintEase');
+        $mail->setFrom('noreply@' . parse_url(BASE_URL, PHP_URL_HOST), 'PrintEase');
         $mail->addAddress($email);
 
         $mail->isHTML(true);
@@ -58,9 +108,11 @@ function sendOTP($email, $otp)
         $mail->AltBody = "Your PrintEase password reset code is {$otp}. This code expires in 5 minutes. If you did not request a password reset, you can ignore this email.";
 
         $mail->send();
+        logMailError('sendOTP', "SMTP success to $email");
         return true;
     } catch (Exception $e) {
-        return false;
+        logMailError('sendOTP', "SMTP failed: " . $e->getMessage() . " | ErrorInfo: " . $mail->ErrorInfo);
+        return fallbackMail($email, "Your PrintEase password reset code", $mail->Body, $mail->AltBody);
     }
 }
 
@@ -70,15 +122,9 @@ function sendRegistrationOTP($email, $otp)
     $safe_otp = htmlspecialchars((string) $otp, ENT_QUOTES, 'UTF-8');
 
     try {
-        $mail->isSMTP();
-        $mail->Host = 'smtp.gmail.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = getenv('MAIL_USER');
-        $mail->Password = getenv('MAIL_PASS');
-        $mail->SMTPSecure = 'tls';
-        $mail->Port = 587;
+        configureSmtp($mail);
 
-        $mail->setFrom(getenv('MAIL_USER'), 'PrintEase');
+        $mail->setFrom('noreply@' . parse_url(BASE_URL, PHP_URL_HOST), 'PrintEase');
         $mail->addAddress($email);
 
         $mail->isHTML(true);
@@ -114,8 +160,10 @@ function sendRegistrationOTP($email, $otp)
         $mail->AltBody = "Your PrintEase registration code is {$otp}. This code expires in 5 minutes. If you did not create a PrintEase account, you can ignore this email.";
 
         $mail->send();
+        logMailError('sendRegistrationOTP', "SMTP success to $email");
         return true;
     } catch (Exception $e) {
-        return false;
+        logMailError('sendRegistrationOTP', "SMTP failed: " . $e->getMessage() . " | ErrorInfo: " . $mail->ErrorInfo);
+        return fallbackMail($email, "Verify your PrintEase account", $mail->Body, $mail->AltBody);
     }
 }

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 const SHELL_CACHE = "printease-shell-" + CACHE_VERSION;
 const RUNTIME_CACHE = "printease-runtime-" + CACHE_VERSION;
 
@@ -41,13 +41,16 @@ self.addEventListener("activate", event => {
   );
 });
 
-function isShellRequest(url) {
+function isHtmlShellRequest(url) {
   return (
     url.pathname === BASE_PATH ||
     url.pathname === BASE_PATH + "index.php" ||
-    url.pathname === BASE_PATH + "frontend/splash.php" ||
-    url.pathname.indexOf(BASE_PATH + "assets/") === 0
+    url.pathname === BASE_PATH + "frontend/splash.php"
   );
+}
+
+function isStaticShellAsset(url) {
+  return url.pathname.indexOf(BASE_PATH + "assets/") === 0;
 }
 
 function isCacheable(response) {
@@ -71,7 +74,9 @@ function cachePut(cacheName, request, response) {
 }
 
 // FETCH
-// - Shell assets (splash, css, icons, pdf.js): cache-first with background refresh.
+// - HTML shell pages (root, index.php, splash.php): network-first so logged-in
+//   users always get the live page; cached copy only serves as offline fallback.
+// - Static shell assets (css, icons, pdf.js): cache-first with background refresh.
 //   These live in their own cache and are never evicted, so pdf.js keeps working offline.
 // - Pages and same-origin GETs: network-first, cached in a capped runtime cache and
 //   served from there offline so pages like place_order.php remain usable offline.
@@ -87,7 +92,33 @@ self.addEventListener("fetch", event => {
   }
   if (url.origin !== self.location.origin) return;
 
-  if (isShellRequest(url)) {
+  if (isHtmlShellRequest(url)) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.status === 200 && response.type === "basic") {
+            cachePut(SHELL_CACHE, request, response.clone());
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.open(SHELL_CACHE)
+            .then(cache => cache.match(request))
+            .then(cached => {
+              if (cached) return cached;
+              if (request.mode === "navigate") {
+                return caches.open(SHELL_CACHE).then(shell =>
+                  shell.match(BASE_PATH + "index.php")
+                );
+              }
+              return new Response("", { status: 504, statusText: "Offline" });
+            })
+        )
+    );
+    return;
+  }
+
+  if (isStaticShellAsset(url)) {
     event.respondWith(
       caches.open(SHELL_CACHE)
         .then(cache => cache.match(request))

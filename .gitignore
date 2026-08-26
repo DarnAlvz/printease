@@ -2,6 +2,9 @@
 uploads/*
 !uploads/.htaccess
 
+#runtime session storage
+backend/runtime/
+
 vendor/
 
 NEED TO DOWNLOAD.txt

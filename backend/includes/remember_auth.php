@@ -1,9 +1,10 @@
 <?php
 
 const REMEMBER_COOKIE_NAME = 'printease_remember';
-const REMEMBER_SHORT_DURATION_DAYS = 1;
-const REMEMBER_LONG_DURATION_DAYS = 7;
+const REMEMBER_SHORT_DURATION_DAYS = 30;
+const REMEMBER_LONG_DURATION_DAYS = 180;
 const REMEMBER_RENEW_INTERVAL_SECONDS = 3600;
+const REMEMBER_COOKIE_BUFFER_SECONDS = 86400;
 
 function rememberCookiePath()
 {
@@ -99,6 +100,11 @@ function rememberDurationSeconds($duration_days)
     return rememberNormalizeDurationDays($duration_days) * 86400;
 }
 
+function rememberCookieExpiresTimestamp($duration_days)
+{
+    return time() + rememberDurationSeconds($duration_days) + REMEMBER_COOKIE_BUFFER_SECONDS;
+}
+
 function rememberTokenSupportsColumn($conn, $column_name)
 {
     static $supported_columns = [];
@@ -140,8 +146,6 @@ function rememberCreateForUser($conn, $user_id, $auth_provider = 'password', $du
     $validator = bin2hex(random_bytes(32));
     $validator_hash = hash('sha256', $validator);
     $duration_days = rememberNormalizeDurationDays($duration_days);
-    $expires_timestamp = time() + rememberDurationSeconds($duration_days);
-    $expires_at = date('Y-m-d H:i:s', $expires_timestamp);
     $auth_provider = $auth_provider === 'google' ? 'google' : 'password';
     $supports_auth_provider = rememberTokenSupportsAuthProvider($conn);
     $supports_duration = rememberTokenSupportsDuration($conn);
@@ -150,37 +154,37 @@ function rememberCreateForUser($conn, $user_id, $auth_provider = 'password', $du
         $stmt = mysqli_prepare(
             $conn,
             "INSERT INTO user_remember_tokens (user_id, selector, validator_hash, auth_provider, remember_duration_days, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))"
         );
-        mysqli_stmt_bind_param($stmt, "isssis", $user_id, $selector, $validator_hash, $auth_provider, $duration_days, $expires_at);
+        mysqli_stmt_bind_param($stmt, "isssii", $user_id, $selector, $validator_hash, $auth_provider, $duration_days, $duration_days);
     } elseif ($supports_auth_provider) {
         $stmt = mysqli_prepare(
             $conn,
             "INSERT INTO user_remember_tokens (user_id, selector, validator_hash, auth_provider, expires_at)
-             VALUES (?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))"
         );
-        mysqli_stmt_bind_param($stmt, "issss", $user_id, $selector, $validator_hash, $auth_provider, $expires_at);
+        mysqli_stmt_bind_param($stmt, "isssi", $user_id, $selector, $validator_hash, $auth_provider, $duration_days);
     } elseif ($supports_duration) {
         $stmt = mysqli_prepare(
             $conn,
             "INSERT INTO user_remember_tokens (user_id, selector, validator_hash, remember_duration_days, expires_at)
-             VALUES (?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))"
         );
-        mysqli_stmt_bind_param($stmt, "issis", $user_id, $selector, $validator_hash, $duration_days, $expires_at);
+        mysqli_stmt_bind_param($stmt, "issii", $user_id, $selector, $validator_hash, $duration_days, $duration_days);
     } else {
         $stmt = mysqli_prepare(
             $conn,
             "INSERT INTO user_remember_tokens (user_id, selector, validator_hash, expires_at)
-             VALUES (?, ?, ?, ?)"
+             VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))"
         );
-        mysqli_stmt_bind_param($stmt, "isss", $user_id, $selector, $validator_hash, $expires_at);
+        mysqli_stmt_bind_param($stmt, "issi", $user_id, $selector, $validator_hash, $duration_days);
     }
 
     if (!mysqli_stmt_execute($stmt)) {
         return false;
     }
 
-    rememberSetCookie($selector . ':' . $validator, $expires_timestamp);
+    rememberSetCookie($selector . ':' . $validator, rememberCookieExpiresTimestamp($duration_days));
     $_SESSION['remember_last_renewal'] = time();
     $_SESSION['remember_duration_days'] = $duration_days;
     return true;
@@ -272,18 +276,16 @@ function rememberRenewCurrentDevice($conn)
     }
 
     $duration_days = rememberNormalizeDurationDays($token['remember_duration_days'] ?? ($_SESSION['remember_duration_days'] ?? REMEMBER_LONG_DURATION_DAYS));
-    $expires_timestamp = time() + rememberDurationSeconds($duration_days);
-    $expires_at = date('Y-m-d H:i:s', $expires_timestamp);
     $stmt = mysqli_prepare(
         $conn,
         "UPDATE user_remember_tokens
-         SET expires_at = ?, last_used_at = CURRENT_TIMESTAMP
+         SET expires_at = DATE_ADD(NOW(), INTERVAL ? DAY), last_used_at = CURRENT_TIMESTAMP
          WHERE selector = ?"
     );
-    mysqli_stmt_bind_param($stmt, "ss", $expires_at, $cookie['selector']);
+    mysqli_stmt_bind_param($stmt, "is", $duration_days, $cookie['selector']);
     mysqli_stmt_execute($stmt);
 
-    rememberSetCookie($cookie['selector'] . ':' . $cookie['validator'], $expires_timestamp);
+    rememberSetCookie($cookie['selector'] . ':' . $cookie['validator'], rememberCookieExpiresTimestamp($duration_days));
     $_SESSION['remember_last_renewal'] = time();
     $_SESSION['remember_duration_days'] = $duration_days;
 }

@@ -85,11 +85,14 @@ Must-haves after upload:
 - [] OAuth consent screen → set status to **In production** (scopes `openid email profile` are non-sensitive; no full verification is required).
 - [] Add any human testers as **Test users** while still in Testing, or publish to Production when ready.
 
-## 8. Mail (Gmail SMTP)
+## 8. Mail (SMTP)
 
-- [] `MAIL_USER` / `MAIL_PASS` point to a Gmail account using an **app password** (2-Step Verification required for the Google account).
+- [] z.com shared hosting blocks external SMTP (Gmail). Use the **hosting server's own SMTP** instead.
+- [] Set `SMTP_HOST` to your cPanel mail server hostname (find in cPanel → Email Accounts → Configure Mail Client).
+- [] Set `SMTP_USER` / `SMTP_PASS` to your **cPanel email account** credentials (not the cPanel login).
+- [] `MAIL_USER` / `MAIL_PASS` are kept for local dev (Gmail SMTP) — ignored in production.
 - [] Test from production: registration OTP, forgot-password OTP, and password-reset emails arrive (check spam).
-- [] If the server is blocked from Gmail SMTP, switch to another SMTP provider by editing `backend/helper/mailer.php` — or contact host support.
+- [] Emails are sent from `noreply@printease.org` via the server's Exim mailer.
 
 ## 9. Cron (optional)
 
