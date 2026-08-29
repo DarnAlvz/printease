@@ -12,7 +12,7 @@ require_once __DIR__ . "/../../components/customer_toasts.php";
 $customer_id = $_SESSION['user_id'];
 
 // Fetch current user info including account status
-$stmt = mysqli_prepare($conn, "SELECT full_name, email, phone_number, address, profile_picture, valid_id_file, account_status, created_at FROM users WHERE user_id = ?");
+$stmt = mysqli_prepare($conn, "SELECT full_name, email, phone_number, address, profile_picture, valid_id_front_file, valid_id_back_file, account_status, created_at FROM users WHERE user_id = ?");
 mysqli_stmt_bind_param($stmt, "i", $customer_id);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -20,10 +20,8 @@ $user = mysqli_fetch_assoc($result);
 
 $account_status = $user['account_status'] ?? 'incomplete';
 $profile_picture_url = !empty($user['profile_picture']) ? BASE_URL . e($user['profile_picture']) : '';
-$valid_id_url = !empty($user['valid_id_file']) ? BASE_URL . e($user['valid_id_file']) : '';
-$valid_id_extension = strtolower(pathinfo((string) ($user['valid_id_file'] ?? ''), PATHINFO_EXTENSION));
-$valid_id_is_pdf = $valid_id_extension === 'pdf';
-$valid_id_is_image = in_array($valid_id_extension, ['jpg', 'jpeg', 'png', 'webp'], true);
+$valid_id_front_url = !empty($user['valid_id_front_file']) ? BASE_URL . e($user['valid_id_front_file']) : '';
+$valid_id_back_url = !empty($user['valid_id_back_file']) ? BASE_URL . e($user['valid_id_back_file']) : '';
 $customer_name = (string) ($user['full_name'] ?? ($_SESSION['full_name'] ?? 'Customer'));
 $customer_email = (string) ($user['email'] ?? ($_SESSION['email'] ?? ''));
 $created_at = !empty($user['created_at']) ? date('M j, Y', strtotime($user['created_at'])) : 'N/A';
@@ -81,11 +79,29 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
             width: min(100%, 720px);
         }
 
+        .customer-valid-id-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .customer-valid-id-side {
+            margin: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .customer-valid-id-side figcaption {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1e3a8a;
+            text-align: center;
+        }
+
         .customer-valid-id-preview {
             display: grid;
             place-items: center;
-            min-height: 55vh;
-            max-height: 68vh;
+            max-height: 60vh;
             overflow: auto;
             border: 1px solid #e5e7eb;
             border-radius: 16px;
@@ -101,13 +117,19 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
         .customer-valid-id-preview img {
             height: auto;
-            max-height: 68vh;
+            max-height: 60vh;
             object-fit: contain;
         }
 
         .customer-valid-id-preview iframe {
             min-height: 62vh;
             background: #fff;
+        }
+
+        @media (max-width: 640px) {
+            .customer-valid-id-pair {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -187,7 +209,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                         <span class="customer-profile-detail-icon"><?php echo customerIcon('orders'); ?></span>
                         <span>
                             <small>Valid ID</small>
-                            <?php if ($valid_id_url !== ''): ?>
+                            <?php if ($valid_id_front_url !== '' && $valid_id_back_url !== ''): ?>
                                 <button type="button" class="text-blue-600 font-semibold text-left"
                                     data-valid-id-modal-open aria-haspopup="dialog"
                                     aria-controls="customerValidIdModal">View uploaded ID</button>
@@ -272,17 +294,27 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold mb-1">Valid ID</label>
-                        <input type="file" name="valid_id_file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                        <label class="block text-sm font-semibold mb-1">Valid ID - Front</label>
+                        <input type="file" name="valid_id_front_file" accept="image/jpeg,image/png,image/webp"
                             class="w-full border rounded-xl p-3">
-                        <p class="text-xs text-gray-500 mt-1">Upload only if you need to replace your verification document.</p>
-                        <?php if ($valid_id_url !== ''): ?>
-                            <button type="button" data-valid-id-modal-open
-                                class="inline-block mt-2 text-blue-600 font-semibold">
-                                View Current ID
-                            </button>
-                        <?php endif; ?>
+                        <p class="text-xs text-gray-500 mt-1">Upload the front side of your valid ID. JPG, PNG, or WebP only, max 2MB.</p>
                     </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Valid ID - Back</label>
+                        <input type="file" name="valid_id_back_file" accept="image/jpeg,image/png,image/webp"
+                            class="w-full border rounded-xl p-3">
+                        <p class="text-xs text-gray-500 mt-1">Upload the back side of your valid ID. JPG, PNG, or WebP only, max 2MB.</p>
+                    </div>
+
+                    <?php if ($valid_id_front_url !== '' && $valid_id_back_url !== ''): ?>
+                        <div>
+                            <button type="button" data-valid-id-modal-open
+                                class="inline-block mt-1 text-blue-600 font-semibold">
+                                View Uploaded ID
+                            </button>
+                        </div>
+                    <?php endif; ?>
 
                     <button type="submit" name="save_profile"
                         class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold">
@@ -411,7 +443,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
         </section>
     </div>
 
-    <?php if ($valid_id_url !== ''): ?>
+    <?php if ($valid_id_front_url !== '' && $valid_id_back_url !== ''): ?>
         <div class="customer-modal" id="customerValidIdModal" role="dialog" aria-modal="true"
             aria-labelledby="customerValidIdTitle" hidden>
             <section class="customer-modal-panel customer-valid-id-panel bg-white rounded-2xl shadow-2xl p-5 md:p-6"
@@ -419,19 +451,23 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 <header class="flex items-start justify-between gap-4 mb-5">
                     <div>
                         <h2 class="text-xl font-bold text-gray-900" id="customerValidIdTitle">Valid ID</h2>
-                        <p class="text-sm text-gray-600 mt-1">Review your uploaded verification document.</p>
+                        <p class="text-sm text-gray-600 mt-1">Review the front and back of your uploaded verification document.</p>
                     </div>
-                  
                 </header>
 
-                <div class="customer-valid-id-preview">
-                    <?php if ($valid_id_is_image): ?>
-                        <img src="<?php echo $valid_id_url; ?>" alt="Uploaded valid ID preview">
-                    <?php elseif ($valid_id_is_pdf): ?>
-                        <iframe src="<?php echo $valid_id_url; ?>#toolbar=0" title="Uploaded valid ID PDF preview"></iframe>
-                    <?php else: ?>
-                        <p class="text-sm text-gray-600 p-5 text-center">Preview is not available for this file type.</p>
-                    <?php endif; ?>
+                <div class="customer-valid-id-pair">
+                    <figure class="customer-valid-id-side">
+                        <figcaption>Front</figcaption>
+                        <div class="customer-valid-id-preview">
+                            <img src="<?php echo $valid_id_front_url; ?>" alt="Valid ID front preview">
+                        </div>
+                    </figure>
+                    <figure class="customer-valid-id-side">
+                        <figcaption>Back</figcaption>
+                        <div class="customer-valid-id-preview">
+                            <img src="<?php echo $valid_id_back_url; ?>" alt="Valid ID back preview">
+                        </div>
+                    </figure>
                 </div>
 
                 <div class="flex justify-end gap-3 pt-4">
@@ -444,7 +480,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
 
     <?php renderCustomerLayoutEnd('profile'); ?>
 
-    <script src="assets/js/location.js" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
+    <script src="assets/js/location.js?v=<?php echo filemtime(__DIR__ . '/assets/js/location.js'); ?>" data-base-url="<?php echo e(BASE_URL); ?>" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>"></script>
     <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
         (function () {
             const editTrigger = document.getElementById('customerEditProfileTrigger');
@@ -456,14 +492,18 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
             const photoInput = document.getElementById('customerProfilePictureInput');
             const photoPreview = document.querySelector('[data-profile-picture-preview]');
             const photoStatus = document.querySelector('[data-profile-picture-status]');
-            const validIdInput = editForm ? editForm.querySelector('input[name="valid_id_file"]') : null;
+            const validIdFrontInput = editForm ? editForm.querySelector('input[name="valid_id_front_file"]') : null;
+            const validIdBackInput = editForm ? editForm.querySelector('input[name="valid_id_back_file"]') : null;
 
             let selectedProfileBlob = null;
             let selectedProfileBlobName = '';
             let profileReading = false;
-            let selectedValidIdBlob = null;
-            let selectedValidIdBlobName = '';
-            let validIdReading = false;
+            let selectedValidIdFrontBlob = null;
+            let selectedValidIdFrontBlobName = '';
+            let validIdFrontReading = false;
+            let selectedValidIdBackBlob = null;
+            let selectedValidIdBackBlobName = '';
+            let validIdBackReading = false;
 
             if (!editTrigger || !editForm || !cancelEdit) return;
 
@@ -543,27 +583,43 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 });
             }
 
-            if (validIdInput) {
-                validIdInput.addEventListener('change', function () {
-                    const file = validIdInput.files && validIdInput.files[0];
-                    if (!file) {
-                        selectedValidIdBlob = null;
-                        selectedValidIdBlobName = '';
-                        return;
-                    }
-                    selectedValidIdBlobName = file.name;
-                    validIdReading = true;
-                    readFileIntoBlob(file).then(function (blob) {
-                        selectedValidIdBlob = blob;
-                        validIdReading = false;
+            if (validIdFrontInput || validIdBackInput) {
+                function bindValidIdInput(input, setBlob, setBlobName, setReading) {
+                    input.addEventListener('change', function () {
+                        const file = input.files && input.files[0];
+                        if (!file) {
+                            setBlob(null);
+                            setBlobName('');
+                            return;
+                        }
+                        setBlobName(file.name);
+                        setReading(true);
+                        readFileIntoBlob(file).then(function (blob) {
+                            setBlob(blob);
+                            setReading(false);
+                        });
                     });
-                });
+                }
+
+                if (validIdFrontInput) {
+                    bindValidIdInput(validIdFrontInput,
+                        function (b) { selectedValidIdFrontBlob = b; },
+                        function (n) { selectedValidIdFrontBlobName = n; },
+                        function (r) { validIdFrontReading = r; });
+                }
+
+                if (validIdBackInput) {
+                    bindValidIdInput(validIdBackInput,
+                        function (b) { selectedValidIdBackBlob = b; },
+                        function (n) { selectedValidIdBackBlobName = n; },
+                        function (r) { validIdBackReading = r; });
+                }
             }
 
             editForm.addEventListener('submit', function (e) {
                 e.preventDefault();
 
-                if (profileReading || validIdReading) {
+                if (profileReading || validIdFrontReading || validIdBackReading) {
                     if (window.customerShowToast) window.customerShowToast('Still reading file. Please wait a moment.', 'warning');
                     return;
                 }
@@ -573,8 +629,12 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     if (window.customerShowToast) window.customerShowToast('Profile picture must be 2MB or smaller.', 'error');
                     return;
                 }
-                if (selectedValidIdBlob && selectedValidIdBlob.size > maxSize) {
-                    if (window.customerShowToast) window.customerShowToast('Valid ID file must be 2MB or smaller.', 'error');
+                if (selectedValidIdFrontBlob && selectedValidIdFrontBlob.size > maxSize) {
+                    if (window.customerShowToast) window.customerShowToast('Valid ID front must be 2MB or smaller.', 'error');
+                    return;
+                }
+                if (selectedValidIdBackBlob && selectedValidIdBackBlob.size > maxSize) {
+                    if (window.customerShowToast) window.customerShowToast('Valid ID back must be 2MB or smaller.', 'error');
                     return;
                 }
 
@@ -595,8 +655,11 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 if (selectedProfileBlob) {
                     fd.append('profile_picture', selectedProfileBlob, selectedProfileBlobName || 'profile.jpg');
                 }
-                if (selectedValidIdBlob) {
-                    fd.append('valid_id_file', selectedValidIdBlob, selectedValidIdBlobName || 'valid_id.jpg');
+                if (selectedValidIdFrontBlob) {
+                    fd.append('valid_id_front_file', selectedValidIdFrontBlob, selectedValidIdFrontBlobName || 'valid_id_front.jpg');
+                }
+                if (selectedValidIdBackBlob) {
+                    fd.append('valid_id_back_file', selectedValidIdBackBlob, selectedValidIdBackBlobName || 'valid_id_back.jpg');
                 }
 
                 var submitBtn = editForm.querySelector('button[type="submit"]');

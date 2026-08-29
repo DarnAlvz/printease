@@ -2924,6 +2924,46 @@ body.admin-dashboard-body .approval-btn {
     font-size: 13px;
 }
 
+.admin-user-modal__preview[hidden],
+.admin-user-valid-id[hidden] {
+    display: none;
+}
+
+.admin-user-valid-id {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.admin-user-valid-id__side {
+    margin: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.admin-user-valid-id__side figcaption {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--admin-muted, #475569);
+    text-align: center;
+}
+
+.admin-user-valid-id__side img {
+    width: 100%;
+    max-height: 45vh;
+    object-fit: contain;
+    border: 1px solid #e2e8f0;
+    border-radius: 13px;
+    background: #f8fdff;
+}
+
+@media (max-width: 540px) {
+    .admin-user-valid-id {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 540px) {
     .admin-user-modal {
         padding: 12px;
@@ -4384,6 +4424,107 @@ body.admin-dashboard-body .metric-card {
 
     .admin-activity-badge {
         width: fit-content;
+    }
+}
+
+@media (max-width: 980px) {
+    .admin-shop-table th,
+    .admin-shop-table td,
+    .admin-user-table th,
+    .admin-user-table td {
+        padding: 12px 14px;
+    }
+
+    .admin-shop-table th:nth-child(5),
+    .admin-shop-table td:nth-child(5) {
+        display: none;
+    }
+
+    .admin-user-table th:nth-child(5),
+    .admin-user-table td:nth-child(5),
+    .admin-user-table th:nth-child(6),
+    .admin-user-table td:nth-child(6) {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .admin-shop-table,
+    .admin-user-table {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .admin-shop-table th,
+    .admin-shop-table td,
+    .admin-user-table th,
+    .admin-user-table td {
+        padding: 10px 10px;
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .admin-shop-table th:last-child,
+    .admin-shop-table td:last-child,
+    .admin-user-table th:last-child,
+    .admin-user-table td:last-child {
+        padding-right: 14px;
+    }
+
+    .admin-user-table th:nth-child(3),
+    .admin-user-table td:nth-child(3) {
+        display: none;
+    }
+
+    .admin-shop-name,
+    .admin-user-name {
+        gap: 8px;
+    }
+
+    .admin-shop-avatar,
+    .admin-user-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .admin-shop-actions,
+    .admin-user-actions {
+        justify-content: flex-start;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .admin-user-action {
+        min-height: 36px;
+        padding: 0 11px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 420px) {
+    .admin-shop-table th,
+    .admin-shop-table td,
+    .admin-user-table th,
+    .admin-user-table td {
+        padding: 8px 8px;
+    }
+
+    .admin-shop-name strong,
+    .admin-user-name strong {
+        font-size: 13px;
+    }
+
+    .admin-shop-name small,
+    .admin-user-name small {
+        font-size: 11px;
+    }
+
+    .admin-shop-avatar,
+    .admin-user-avatar {
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
     }
 }
 

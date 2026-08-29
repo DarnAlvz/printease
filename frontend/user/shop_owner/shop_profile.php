@@ -890,7 +890,7 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     })();
 </script>
 
-<script src="assets/js/shopLocation.js?v=<?php echo filemtime(__DIR__ . '/assets/js/shopLocation.js'); ?>"></script>
+<script src="assets/js/shopLocation.js?v=<?php echo filemtime(__DIR__ . '/assets/js/shopLocation.js'); ?>" data-base-url="<?php echo e(BASE_URL); ?>"></script>
 
 
 <?php ownerLayoutEnd(); ?>

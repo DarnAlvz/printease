@@ -26,10 +26,26 @@
     let locationEditEnabled = false;
     let map = null;
     let marker = null;
+    let locationBusy = false;
 
     if (!form || !editButton || !saveButton) {
         return;
     }
+
+    function currentScriptBaseUrl() {
+        const scripts = document.getElementsByTagName('script');
+        for (let i = 0; i < scripts.length; i++) {
+            const src = scripts[i].getAttribute('src') || '';
+            if (src.indexOf('shopLocation.js') !== -1) {
+                const base = scripts[i].getAttribute('data-base-url');
+                if (base) return base.replace(/\/$/, '') + '/';
+            }
+        }
+        return '/';
+    }
+
+    const baseUrl = currentScriptBaseUrl();
+    const reverseGeocodeUrl = baseUrl + 'backend/actions/reverse_geocode.php';
 
     logoTargets.forEach(function (target) {
         originalLogoMarkup.set(target.dataset.shopLogoPreview, target.outerHTML);
@@ -111,15 +127,21 @@
     }
 
     async function reverseGeocode(latlng) {
+        if (!addressInput) return;
+
         try {
             const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}`
+                reverseGeocodeUrl + '?lat=' + encodeURIComponent(latlng.lat) + '&lng=' + encodeURIComponent(latlng.lng)
             );
 
             const data = await response.json();
 
-            if (data && data.display_name && addressInput) {
-                addressInput.value = data.display_name;
+            if (data && data.success && data.address) {
+                addressInput.value = data.address;
+            } else {
+                if (coordinateNote) {
+                    coordinateNote.textContent = 'Pin selected, but address was not detected. You may type the address manually.';
+                }
             }
         } catch (error) {
             if (coordinateNote) {
@@ -219,15 +241,19 @@
     }
 
     function detectCurrentLocation() {
+        if (locationBusy) return;
+
         if (!navigator.geolocation) {
             coordinateNote.textContent = 'GPS is not supported by this browser. Click the map manually.';
             return;
         }
 
+        locationBusy = true;
         coordinateNote.textContent = 'Getting your current shop location...';
 
         navigator.geolocation.getCurrentPosition(
             function (position) {
+                locationBusy = false;
                 const latlng = L.latLng(
                     position.coords.latitude,
                     position.coords.longitude
@@ -237,6 +263,7 @@
                 placeMarker(latlng, true);
             },
             function (error) {
+                locationBusy = false;
                 coordinateNote.textContent = locationErrorMessage(error);
             },
             {

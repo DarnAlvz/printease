@@ -2,6 +2,21 @@
 (function () {
     var busy = false;
 
+    function currentScriptBaseUrl() {
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+            var src = scripts[i].getAttribute('src') || '';
+            if (src.indexOf('location.js') !== -1) {
+                var base = scripts[i].getAttribute('data-base-url');
+                if (base) return base.replace(/\/$/, '') + '/';
+            }
+        }
+        return '/';
+    }
+
+    var baseUrl = currentScriptBaseUrl();
+    var reverseGeocodeUrl = baseUrl + 'backend/actions/reverse_geocode.php';
+
     function useCurrentLocation() {
         if (busy) return;
 
@@ -25,16 +40,16 @@
 
                 try {
                     var response = await fetch(
-                        "https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&addressdetails=1"
+                        reverseGeocodeUrl + "?lat=" + encodeURIComponent(lat) + "&lng=" + encodeURIComponent(lng)
                     );
 
                     var data = await response.json();
 
-                    if (data && data.display_name) {
-                        document.getElementById("address").value = data.display_name;
+                    if (data && data.success && data.address) {
+                        document.getElementById("address").value = data.address;
                         status.innerText = "Location address detected successfully.";
                     } else {
-                        status.innerText = "Location found, but address was not detected. Please type your address manually.";
+                        status.innerText = (data && data.message) ? data.message : "Location found, but address was not detected. Please type your address manually.";
                     }
                 } catch (error) {
                     status.innerText = "Unable to convert location to address. Please type your address manually.";

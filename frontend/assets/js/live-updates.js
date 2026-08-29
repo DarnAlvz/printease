@@ -636,6 +636,9 @@
                 if (data.role === 'shop_owner') {
                     renderOwnerNotifications(data.items || []);
                     handleOwnerOrderSoundAlerts(data.items || []);
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('ownerNotificationsRendered'));
+                    }
                 }
                 if (data.role === 'super_admin') renderAdminNotifications(data.items || []);
             })
@@ -1069,7 +1072,10 @@
                 refresh: function () { return refreshLiveForm(ownerServicesForm, { updateHistory: false }); },
                 canRefresh: function () {
                     return !document.body.classList.contains('pricing-modal-open') &&
-                        !document.querySelector('.pricing-edit-row:not([hidden])');
+                        !document.querySelector('.pricing-edit-row:not([hidden])') &&
+                        !document.querySelector('.pricing-row-actions[open]') &&
+                        !(document.getElementById('appConfirmModal') &&
+                            document.getElementById('appConfirmModal').classList.contains('is-open'));
                 }
             });
         }

@@ -83,14 +83,15 @@ if (isset($_POST['save_profile'])) {
     $phone = trim($_POST['phone_number']);
     $address = trim($_POST['address']);
 
-    $current_sql = "SELECT full_name, phone_number, address, profile_picture, valid_id_file, account_status FROM users WHERE user_id = ? LIMIT 1";
+    $current_sql = "SELECT full_name, phone_number, address, profile_picture, valid_id_front_file, valid_id_back_file, account_status FROM users WHERE user_id = ? LIMIT 1";
     $current_stmt = mysqli_prepare($conn, $current_sql);
     mysqli_stmt_bind_param($current_stmt, "i", $customer_id);
     mysqli_stmt_execute($current_stmt);
     $current_user = mysqli_fetch_assoc(mysqli_stmt_get_result($current_stmt));
 
     $profile_picture_path = $current_user['profile_picture'] ?? null;
-    $valid_id_path = $current_user['valid_id_file'] ?? null;
+    $valid_id_front_path = $current_user['valid_id_front_file'] ?? null;
+    $valid_id_back_path = $current_user['valid_id_back_file'] ?? null;
     $current_status = $current_user['account_status'] ?? 'incomplete';
 
     $upload_dir = "../../uploads/customers/";
@@ -112,24 +113,37 @@ if (isset($_POST['save_profile'])) {
         $profile_picture_path = $new_profile_picture_path;
     }
 
-    $new_valid_id_path = saveCustomerUpload('valid_id_file', $upload_dir, [
+    $new_valid_id_front_path = saveCustomerUpload('valid_id_front_file', $upload_dir, [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
-        'application/pdf' => 'pdf',
-    ], 'valid_id_' . $customer_id);
+    ], 'valid_id_front_' . $customer_id);
 
-    if ($new_valid_id_path !== null) {
-        if (!empty($current_user['valid_id_file']) && $current_user['valid_id_file'] !== $new_valid_id_path) {
-            $old_file = __DIR__ . '/../../' . $current_user['valid_id_file'];
+    if ($new_valid_id_front_path !== null) {
+        if (!empty($current_user['valid_id_front_file']) && $current_user['valid_id_front_file'] !== $new_valid_id_front_path) {
+            $old_file = __DIR__ . '/../../' . $current_user['valid_id_front_file'];
             if (is_file($old_file)) @unlink($old_file);
         }
-        $valid_id_path = $new_valid_id_path;
+        $valid_id_front_path = $new_valid_id_front_path;
+    }
+
+    $new_valid_id_back_path = saveCustomerUpload('valid_id_back_file', $upload_dir, [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ], 'valid_id_back_' . $customer_id);
+
+    if ($new_valid_id_back_path !== null) {
+        if (!empty($current_user['valid_id_back_file']) && $current_user['valid_id_back_file'] !== $new_valid_id_back_path) {
+            $old_file = __DIR__ . '/../../' . $current_user['valid_id_back_file'];
+            if (is_file($old_file)) @unlink($old_file);
+        }
+        $valid_id_back_path = $new_valid_id_back_path;
     }
 
     if ($current_status === 'verified') {
         $new_status = 'verified';
-    } elseif (!empty($phone) && !empty($address) && !empty($valid_id_path)) {
+    } elseif (!empty($phone) && !empty($address) && !empty($valid_id_front_path) && !empty($valid_id_back_path)) {
         $new_status = 'pending';
     } else {
         $new_status = 'incomplete';
@@ -158,7 +172,8 @@ if (isset($_POST['save_profile'])) {
         phone_number = ?, 
         address = ?, 
         profile_picture = ?, 
-        valid_id_file = ?, 
+        valid_id_front_file = ?, 
+        valid_id_back_file = ?, 
         latitude = ?, 
         longitude = ?, 
         account_status = ?
@@ -170,7 +185,7 @@ if (isset($_POST['save_profile'])) {
         redirectCustomerProfileError("Unable to save profile. Please try again.");
     }
 
-    mysqli_stmt_bind_param($stmt, "sssssddsi", $full_name, $phone, $address, $profile_picture_path, $valid_id_path, $lat, $lng, $new_status, $customer_id);
+    mysqli_stmt_bind_param($stmt, "ssssssddsi", $full_name, $phone, $address, $profile_picture_path, $valid_id_front_path, $valid_id_back_path, $lat, $lng, $new_status, $customer_id);
     if (!mysqli_stmt_execute($stmt)) {
         error_log("SQL execute error in save_customer_profile: " . mysqli_stmt_error($stmt));
         redirectCustomerProfileError("Unable to save profile. Please try again.");
@@ -181,7 +196,8 @@ if (isset($_POST['save_profile'])) {
     if (($current_user['phone_number'] ?? '') !== $phone) $changed_fields[] = 'phone_number';
     if (($current_user['address'] ?? '') !== $address) $changed_fields[] = 'address';
     if ($new_profile_picture_path !== null) $changed_fields[] = 'profile_picture';
-    if ($new_valid_id_path !== null) $changed_fields[] = 'valid_id_file';
+    if ($new_valid_id_front_path !== null) $changed_fields[] = 'valid_id_front_file';
+    if ($new_valid_id_back_path !== null) $changed_fields[] = 'valid_id_back_file';
     if ($current_status !== $new_status) $changed_fields[] = 'account_status';
 
     logActivity($conn, $customer_id, "Updated customer profile", "Customer Profile", [
@@ -193,7 +209,8 @@ if (isset($_POST['save_profile'])) {
             'address' => $current_user['address'] ?? null,
             'account_status' => $current_status,
             'has_profile_picture' => !empty($current_user['profile_picture']),
-            'has_valid_id' => !empty($current_user['valid_id_file']),
+            'has_valid_id_front' => !empty($current_user['valid_id_front_file']),
+            'has_valid_id_back' => !empty($current_user['valid_id_back_file']),
         ],
         'new_value' => [
             'full_name' => $full_name,
@@ -202,7 +219,8 @@ if (isset($_POST['save_profile'])) {
             'account_status' => $new_status,
             'changed_fields' => $changed_fields,
             'profile_picture_updated' => $new_profile_picture_path !== null,
-            'valid_id_updated' => $new_valid_id_path !== null,
+            'valid_id_front_updated' => $new_valid_id_front_path !== null,
+            'valid_id_back_updated' => $new_valid_id_back_path !== null,
         ],
     ]);
 

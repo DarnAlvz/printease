@@ -568,6 +568,22 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
   white-space: nowrap;
 }
 
+.notification-read-all {
+  color: #0077b6;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.notification-read-all:disabled {
+  color: #98a2b3;
+  cursor: default;
+}
+
 .notification-popover-list {
   max-height: 320px;
   overflow-y: auto;
@@ -5934,6 +5950,15 @@ button.btn.order-btn-completed:focus-visible {
 .notification-popover-head a {
   font-size: 13px;
   font-weight: 700;
+}
+
+.notification-read-all {
+  font-size: 13px;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
 .notification-popover-head span,

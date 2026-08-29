@@ -131,7 +131,8 @@ $sql = "
         u.email,
         u.role,
         u.account_status,
-        u.valid_id_file,
+        u.valid_id_front_file,
+        u.valid_id_back_file,
         u.profile_picture,
         u.created_at,
         ps.shop_id,
@@ -277,11 +278,11 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                             $profile_url = !empty($user['profile_picture']) ? BASE_URL . $user['profile_picture'] : '';
                             $document_url = '';
                             $document_type = '';
-                            if ($user['role'] === 'customer' && !empty($user['valid_id_file'])) {
-                                $document_url = BASE_URL . $user['valid_id_file'];
-                                $document_ext = strtolower(pathinfo($user['valid_id_file'], PATHINFO_EXTENSION));
-                                $document_type = in_array($document_ext, ['jpg', 'jpeg', 'png', 'webp', 'jfif'], true) ? 'image'
-                                    : ($document_ext === 'pdf' ? 'pdf' : '');
+                            $document_front_url = '';
+                            $document_back_url = '';
+                            if ($user['role'] === 'customer') {
+                                $document_front_url = !empty($user['valid_id_front_file']) ? BASE_URL . $user['valid_id_front_file'] : '';
+                                $document_back_url = !empty($user['valid_id_back_file']) ? BASE_URL . $user['valid_id_back_file'] : '';
                             } elseif ($user['role'] === 'shop_owner' && !empty($user['business_permit_file'])) {
                                 $document_url = PERMITS_URL . $user['business_permit_file'];
                                 $document_ext = strtolower(pathinfo($user['business_permit_file'], PATHINFO_EXTENSION));
@@ -323,6 +324,8 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                                         data-created="<?php echo e($created_at); ?>"
                                         data-document-url="<?php echo e($document_url); ?>"
                                         data-document-type="<?php echo e($document_type); ?>"
+                                        data-document-front-url="<?php echo e($document_front_url); ?>"
+                                        data-document-back-url="<?php echo e($document_back_url); ?>"
                                         data-avatar="<?php echo e($profile_url); ?>"
                                     >
                                         <?php echo adminIcon('search'); ?>View
@@ -397,6 +400,16 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             <iframe data-user-modal-preview-pdf hidden title="Document PDF preview"></iframe>
             <p data-user-modal-preview-fallback hidden class="admin-user-modal__preview-fallback">Preview is not available for this file type.</p>
         </div>
+        <div class="admin-user-valid-id" data-user-modal-valid-id hidden>
+            <figure class="admin-user-valid-id__side">
+                <figcaption>Front</figcaption>
+                <img data-user-modal-valid-id-front alt="Valid ID front preview">
+            </figure>
+            <figure class="admin-user-valid-id__side">
+                <figcaption>Back</figcaption>
+                <img data-user-modal-valid-id-back alt="Valid ID back preview">
+            </figure>
+        </div>
     </div>
 </div>
 
@@ -427,12 +440,16 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
 
         document.querySelectorAll('[data-confirm-action]').forEach(function (form) {
             form.addEventListener('submit', function (event) {
+                if (form.dataset.confirmSubmitting === 'true') return;
                 event.preventDefault();
                 var isReject = form.querySelector('.admin-user-action-reject') !== null;
                 openConfirmModal(
                     form.dataset.confirmAction,
                     isReject ? 'reject' : 'deactivate',
-                    function () { form.submit(); }
+                    function () {
+                        form.dataset.confirmSubmitting = 'true';
+                        form.submit();
+                    }
                 );
             });
         });
@@ -501,6 +518,9 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             previewImg: modal.querySelector('[data-user-modal-preview-img]'),
             previewPdf: modal.querySelector('[data-user-modal-preview-pdf]'),
             previewFallback: modal.querySelector('[data-user-modal-preview-fallback]'),
+            validIdWrap: modal.querySelector('[data-user-modal-valid-id]'),
+            validIdFront: modal.querySelector('[data-user-modal-valid-id-front]'),
+            validIdBack: modal.querySelector('[data-user-modal-valid-id-back]'),
             avatarWrap: modal.querySelector('[data-user-modal-avatar-wrap]'),
             avatarImg: modal.querySelector('[data-user-modal-avatar]')
         };
@@ -512,6 +532,9 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
             fields.previewPdf.hidden = true;
             fields.previewPdf.src = '';
             fields.previewFallback.hidden = true;
+            if (fields.validIdWrap) fields.validIdWrap.hidden = true;
+            if (fields.validIdFront) { fields.validIdFront.src = ''; }
+            if (fields.validIdBack) { fields.validIdBack.src = ''; }
             if (fields.avatarWrap) fields.avatarWrap.hidden = true;
             if (fields.avatarImg) fields.avatarImg.src = '';
         }
@@ -539,7 +562,11 @@ adminLayoutStart('users', 'User Management', 'Review, approve, and manage custom
                     fields.avatarImg.src = button.dataset.avatar;
                 }
 
-                if (button.dataset.documentUrl) {
+                if (button.dataset.documentFrontUrl && button.dataset.documentBackUrl) {
+                    fields.validIdWrap.hidden = false;
+                    fields.validIdFront.src = button.dataset.documentFrontUrl;
+                    fields.validIdBack.src = button.dataset.documentBackUrl;
+                } else if (button.dataset.documentUrl) {
                     var docUrl = button.dataset.documentUrl;
                     var docType = button.dataset.documentType || '';
 

@@ -436,9 +436,10 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                                                                 </button>
                                                             </form>
                                                             <form method="POST" action="../../../backend/actions/delete_service.php"
-                                                                data-confirm-title="Delete this document price?"
+                                                                data-confirm-title="Are you sure you want to delete it?"
                                                                 data-confirm-message="If it has existing orders, the deletion will be blocked." nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                                                                 <?php echo csrfField(); ?>
+                                                                <input type="hidden" name="delete_service" value="1">
                                                                 <input type="hidden" name="service_id" value="<?php echo (int) $service['service_id']; ?>">
                                                                 <button type="submit" name="delete_service" class="is-danger" title="Delete this price record">
                                                                     <?php echo ownerIcon('circle-alert', 'icon-sm'); ?>Delete
@@ -542,9 +543,10 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
                                                                 </button>
                                                             </form>
                                                             <form method="POST" action="../../../backend/actions/delete_service_pricing.php"
-                                                                data-confirm-title="Delete this service price?"
-                                                                data-confirm-message="This cannot be undone." nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+                                                                data-confirm-title="Are you sure you want to delete it?"
+                                                                data-confirm-message="This cannot be undone. You can re-add this price later if needed." nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
                                                                 <?php echo csrfField(); ?>
+                                                                <input type="hidden" name="delete_service_pricing" value="1">
                                                                 <input type="hidden" name="pricing_id" value="<?php echo (int) $entry['id']; ?>">
                                                                 <button type="submit" name="delete_service_pricing" class="is-danger" title="Delete this price record">
                                                                     <?php echo ownerIcon('circle-alert', 'icon-sm'); ?>Delete
@@ -891,21 +893,26 @@ ownerLayoutStart('services', 'Service Pricing Management', 'Manage document prin
             var form = event.target.closest('form[data-confirm-title]');
             if (!form) return;
 
-            event.preventDefault();
             if (form.dataset.confirmSubmitting === 'true') return;
+            event.preventDefault();
 
-            window.appConfirm({
-                    title: form.dataset.confirmTitle || 'Are you sure?',
-                    message: form.dataset.confirmMessage || '',
-                    confirmText: 'Delete',
-                    cancelText: 'Cancel',
-                    tone: 'danger'
-                })
-                .then(function(confirmed) {
-                    if (!confirmed) return;
-                    form.dataset.confirmSubmitting = 'true';
-                    form.submit();
-                });
+            var options = {
+                title: form.dataset.confirmTitle || 'Are you sure?',
+                message: form.dataset.confirmMessage || '',
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                tone: 'danger'
+            };
+
+            var ask = (typeof window.appConfirm === 'function')
+                ? window.appConfirm(options)
+                : Promise.resolve(window.confirm(form.dataset.confirmMessage || form.dataset.confirmTitle));
+
+            ask.then(function(confirmed) {
+                if (!confirmed) return;
+                form.dataset.confirmSubmitting = 'true';
+                form.submit();
+            });
         });
     })();
 </script>

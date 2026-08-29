@@ -695,8 +695,8 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                     <?php renderOwnerCustomerIdentity($order, true); ?>
                                 </div>
                                 <div>
-                                    <span>Date</span>
-                                    <strong><?php echo e(!empty($order['created_at']) ? date('Y-m-d', strtotime($order['created_at'])) : 'Not set'); ?></strong>
+                                    <span>Request Sent</span>
+                                    <strong><?php echo e(!empty($order['created_at']) ? date('M d, Y - g:i A', strtotime($order['created_at'])) : 'Not set'); ?></strong>
                                 </div>
                                 <div>
                                     <span>Preferred Pickup Time</span>

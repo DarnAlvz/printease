@@ -60,7 +60,7 @@ function requireCompleteCustomerProfile($conn) {
 
     $customer_id = $_SESSION['user_id'];
 
-    $sql = "SELECT phone_number, address, valid_id_file 
+    $sql = "SELECT phone_number, address, valid_id_front_file, valid_id_back_file 
             FROM users 
             WHERE user_id = ? 
             AND role = 'customer'
@@ -82,7 +82,8 @@ function requireCompleteCustomerProfile($conn) {
         !$customer ||
         empty($customer['phone_number']) ||
         empty($customer['address']) ||
-        empty($customer['valid_id_file'])
+        empty($customer['valid_id_front_file']) ||
+        empty($customer['valid_id_back_file'])
     ) {
         setToast("Please complete your customer profile first.", "warning");
         header("Location: ../../../frontend/user/customer/profile.php");

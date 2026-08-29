@@ -294,7 +294,7 @@ function ownerLayoutStart($active, $title, $subtitle = '', $notif_count = 0, $sh
                                     <strong>Notifications</strong>
                                     <span id="ownerNotificationUnreadText"><?php echo (int) $notif_count; ?> unread</span>
                                 </div>
-                                <a href="notifications.php">View all</a>
+                                <button type="button" class="notification-read-all" id="ownerReadAllButton">Read all</button>
                             </header>
                             <?php if (empty($recent_notifications)): ?>
                                 <div class="notification-popover-empty">
@@ -631,6 +631,11 @@ function ownerLayoutEnd()
                 const pageUnreadBadge = document.getElementById('unread-badge');
                 const readNotificationIcon = <?php echo json_encode(ownerIcon('info', 'icon-sm')); ?>;
 
+                function sessionCsrfToken() {
+                    const input = document.querySelector('input[name="csrf_token"]');
+                    return (input && input.value) ? input.value : '';
+                }
+
                 function setUnreadCount(count) {
                     const nextCount = Math.max(0, count);
                     if (badge) {
@@ -676,7 +681,7 @@ function ownerLayoutEnd()
                             'Content-Type': 'application/x-www-form-urlencoded',
                             'X-Requested-With': 'XMLHttpRequest'
                         },
-                        body: 'notification_id=' + encodeURIComponent(notificationId)
+                        body: 'notification_id=' + encodeURIComponent(notificationId) + '&csrf_token=' + encodeURIComponent(sessionCsrfToken())
                     })
                         .then(response => response.json())
                         .then(data => {
@@ -714,6 +719,49 @@ function ownerLayoutEnd()
                         });
                     });
                 });
+
+                const readAllButton = document.getElementById('ownerReadAllButton');
+                if (readAllButton) {
+                    function syncReadAllButton() {
+                        const hasUnread = document.querySelector('.notification-popover-item[data-is-read="0"]') !== null;
+                        readAllButton.disabled = !hasUnread;
+                    }
+
+                    readAllButton.addEventListener('click', function () {
+                        if (readAllButton.disabled) {
+                            return;
+                        }
+                        readAllButton.disabled = true;
+
+                        fetch(markReadUrl, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: 'mark_all=1&csrf_token=' + encodeURIComponent(sessionCsrfToken())
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (!data || !data.success) {
+                                    syncReadAllButton();
+                                    return;
+                                }
+                                document.querySelectorAll('.notification-popover-item[data-is-read="0"]').forEach(function (item) {
+                                    markItemVisualRead(item);
+                                });
+                                setUnreadCount(0);
+                                syncReadAllButton();
+                            })
+                            .catch(function () {
+                                syncReadAllButton();
+                            });
+                    });
+
+                    syncReadAllButton();
+                    window.addEventListener('ownerNotificationsRendered', syncReadAllButton);
+                }
             })();
 
             (function () {

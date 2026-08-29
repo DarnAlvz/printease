@@ -13,13 +13,13 @@ $customer_id = (int) $_SESSION['user_id'];
 $full_name = (string) ($_SESSION['full_name'] ?? 'Customer');
 $first_name = trim(explode(' ', trim($full_name))[0] ?? 'Customer');
 
-$stmt = mysqli_prepare($conn, "SELECT phone_number, address, valid_id_file, account_status FROM users WHERE user_id = ?");
+$stmt = mysqli_prepare($conn, "SELECT phone_number, address, valid_id_front_file, valid_id_back_file, account_status FROM users WHERE user_id = ?");
 mysqli_stmt_bind_param($stmt, "i", $customer_id);
 mysqli_stmt_execute($stmt);
 $user = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
 $account_status = $user['account_status'] ?? 'incomplete';
-$profile_complete = !empty($user['phone_number']) && !empty($user['address']) && !empty($user['valid_id_file']);
+$profile_complete = !empty($user['phone_number']) && !empty($user['address']) && !empty($user['valid_id_front_file']) && !empty($user['valid_id_back_file']);
 $dashboard_status = $profile_complete ? $account_status : 'incomplete';
 
 function dashboardOrderStatusLabel($status)

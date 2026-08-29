@@ -224,6 +224,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                         <span data-service-visit-note>Please contact or visit the shop to proceed.</span>
                         <small><?php echo e(trim((string) ($shop['shop_address'] ?? '')) !== '' ? $shop['shop_address'] : 'Shop address not provided'); ?></small>
                     </div>
+                    <div class="customer-service-notice customer-service-no-price" data-service-no-price-notice hidden>
+                        <strong>This service is not yet available.</strong>
+                        <span data-service-no-price-note>It has not been configured with pricing yet. Please contact the shop or choose another service.</span>
+                    </div>
 
                     <label class="customer-order-field" data-document-upload-field>
                         <span>Upload Document</span>
@@ -420,6 +424,8 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         const otherUploadField = document.querySelector("[data-other-upload-field]");
         const serviceVisitNotice = document.querySelector("[data-service-visit-notice]");
         const serviceVisitNote = document.querySelector("[data-service-visit-note]");
+        const serviceNoPriceNotice = document.querySelector("[data-service-no-price-notice]");
+        const serviceNoPriceNote = document.querySelector("[data-service-no-price-note]");
         const documentSettings = document.querySelector("[data-document-settings]");
         const otherSettings = document.querySelector("[data-other-settings]");
         const visitRequiredSettings = document.querySelector("[data-visit-required-settings]");
@@ -540,6 +546,11 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
         function isShopVisitOnlyOrder() {
             return !selectedAvailability().online;
+        }
+
+        function serviceHasNoPricing() {
+            if (isDocumentOrder() || isShopVisitOnlyOrder()) return false;
+            return serviceOptionsForSelectedType().length === 0;
         }
 
         function isPhotoPrintingOrder() {
@@ -893,9 +904,12 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             }
             if (serviceBasisField) serviceBasisField.hidden = true;
 
+            const noPriceMode = serviceHasNoPricing();
+            if (serviceNoPriceNotice) serviceNoPriceNotice.hidden = !noPriceMode;
+
             if (documentFile) documentFile.required = documentMode && !visitOnlyMode;
-            if (serviceFile) serviceFile.required = !documentMode && !visitOnlyMode;
-            if (serviceQuantity) serviceQuantity.required = !documentMode && !visitOnlyMode;
+            if (serviceFile) serviceFile.required = !documentMode && !visitOnlyMode && !noPriceMode;
+            if (serviceQuantity) serviceQuantity.required = !documentMode && !visitOnlyMode && !noPriceMode;
 
             if (visitOnlyMode) {
                 serviceId.value = "";
@@ -906,6 +920,14 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 servicePricingId.value = "";
                 updateAll();
                 detectDocumentPages();
+            } else if (noPriceMode) {
+                serviceId.value = "";
+                servicePricingId.value = "";
+                if (serviceNoPriceNote) serviceNoPriceNote.textContent = availability.note
+                    ? availability.note
+                    : "It has not been configured with pricing yet. Please contact the shop or choose another service.";
+                setPageCount(1, "This service is not available yet.");
+                computeTotal();
             } else {
                 serviceId.value = services[0] ? services[0].service_id : "";
                 setPageCount(1, "Page count is not needed for this service.");
@@ -978,6 +1000,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             if (step === 0) {
                 if (isShopVisitOnlyOrder()) {
                     return true;
+                }
+                if (serviceHasNoPricing()) {
+                    showAlert("okay, ");
+                    return false;
                 }
                 const file = isDocumentOrder()
                     ? (documentFile.files && documentFile.files[0] ? documentFile.files[0] : null)
