@@ -245,42 +245,46 @@ function formatDateTime12Hour($datetime)
         <div class="max-w-md md:max-w-6xl mx-auto min-h-screen">
             <?php renderCustomerLayout(['title' => 'My Requests', 'subtitle' => 'Track your print requests and payments.']); ?>
 
-            <main class="p-4 md:p-6">
-                <form method="GET" class="flex gap-2 mb-4" data-live-search-form data-live-target="customer_orders" data-live-min="1">
+            <main class="p-4 md:p-6 customer-requests-main">
+                <form method="GET" class="customer-request-search-panel" data-live-search-form data-live-target="customer_orders" data-live-min="1">
                     <input type="hidden" name="status" value="<?php echo e($status_tab); ?>">
-                    <input type="text" name="order_code" value="<?php echo e($search); ?>"
-                        placeholder="Search request code" class="flex-1 border rounded-xl p-3">
-                    <button class="bg-blue-600 text-white px-4 rounded-xl">Search</button>
+                    <label class="customer-request-search-field">
+                        <?php echo customerIcon('search'); ?>
+                        <input type="text" name="order_code" value="<?php echo e($search); ?>"
+                            placeholder="Search request code">
+                    </label>
+                    <button class="customer-request-search-button">Search</button>
                 </form>
 
-                <nav class="grid grid-cols-3 gap-2 mb-4" aria-label="Request filters" data-live-region="customer-order-tabs">
+                <nav class="customer-request-tabs" aria-label="Request filters" data-live-region="customer-order-tabs">
                     <?php
                     $order_tabs = [
-                        'active' => 'Active',
-                        'completed' => 'Completed',
-                        'cancelled' => 'Declined',
+                        'active' => ['label' => 'Active', 'icon' => 'wallet'],
+                        'completed' => ['label' => 'Completed', 'icon' => 'check'],
+                        'cancelled' => ['label' => 'Declined', 'icon' => 'x-circle'],
                     ];
-                    foreach ($order_tabs as $tab_key => $tab_label):
+                    foreach ($order_tabs as $tab_key => $tab):
                         $is_active_tab = $status_tab === $tab_key;
                     ?>
                         <a href="<?php echo e(customerOrdersUrl($tab_key, $search)); ?>"
-                            class="rounded-xl border px-3 py-3 text-center text-sm font-semibold <?php echo $is_active_tab ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-gray-700 border-gray-200'; ?>">
-                            <?php echo e($tab_label); ?>
-                            <span class="<?php echo $is_active_tab ? 'text-blue-100' : 'text-gray-400'; ?>">
+                            class="customer-request-tab customer-request-tab--<?php echo e($tab_key); ?> <?php echo $is_active_tab ? 'is-active' : ''; ?>">
+                            <?php echo customerIcon($tab['icon']); ?>
+                            <span><?php echo e($tab['label']); ?></span>
+                            <b>
                                 (<?php echo (int) $tab_counts[$tab_key]; ?>)
-                            </span>
+                            </b>
                         </a>
                     <?php endforeach; ?>
                 </nav>
 
                 <?php if (mysqli_num_rows($result) == 0): ?>
-                    <div class="bg-white p-5 rounded-2xl shadow text-center" data-live-region="customer-order-results">
+                    <div class="customer-request-empty bg-white p-5 rounded-2xl shadow text-center" data-live-region="customer-order-results">
                         <p class="text-gray-500">No requests found.</p>
                         <a href="explore.php?view=all" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl">Request
                             Print</a>
                     </div>
                 <?php else: ?>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-live-region="customer-order-results">
+                    <div class="customer-request-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-live-region="customer-order-results">
                         <?php while ($order = mysqli_fetch_assoc($result)): ?>
                             <?php
                             $is_focused_order = ((int) $order['order_id'] === $focus_order_id) || ($focus_order_code !== '' && strcasecmp($focus_order_code, $order['order_code']) === 0);
@@ -310,6 +314,7 @@ function formatDateTime12Hour($datetime)
                             ?>
 
                             <div <?php echo $is_focused_order ? 'id="focused-order"' : ''; ?>
+                                data-request-details
                                 class="customer-request-card bg-white p-5 rounded-2xl shadow <?php echo $is_focused_order ? 'ring-2 ring-blue-500 border border-blue-300' : ''; ?>">
                                 <div class="flex justify-between items-start gap-3">
                                     <div class="customer-request-card-header">
@@ -323,7 +328,7 @@ function formatDateTime12Hour($datetime)
                                     </div>
 
                                     <span
-                                        class="text-xs px-3 py-1 rounded-full <?php echo orderBadge($order['order_status']); ?>">
+                                        class="customer-request-status-pill text-xs px-3 py-1 rounded-full <?php echo orderBadge($order['order_status']); ?>">
                                         <?php echo e(orderStatusLabel($order['order_status'])); ?>
                                     </span>
                                 </div>
@@ -340,7 +345,7 @@ function formatDateTime12Hour($datetime)
                                     </ol>
                                 <?php endif; ?>
 
-                                <div class="customer-request-details mt-4 text-sm text-gray-700" data-request-details>
+                                <div class="customer-request-details mt-4 text-sm text-gray-700">
                                     <div class="customer-request-section">
                                         <div class="customer-request-section-title">Request Information</div>
                                         <div class="customer-request-detail-row">
@@ -409,23 +414,32 @@ function formatDateTime12Hour($datetime)
                                         </div>
                                     </div>
 
-                                    <button type="button" class="customer-request-more-toggle" data-request-toggle aria-expanded="false">
-                                        Show more
-                                    </button>
                                 </div>
 
                                 <?php if ($order['order_status'] !== 'cancelled'): ?>
                                 <?php if (!empty($order['proof_of_payment_file'])): ?>
                                     <?php $proof_ext = strtolower(pathinfo($order['proof_of_payment_file'], PATHINFO_EXTENSION)); ?>
-                                    <button type="button" class="text-blue-600 font-semibold proof-view-btn"
-                                        data-proof-url="<?php echo BASE_URL . e($order['proof_of_payment_file']); ?>?v=<?php echo time(); ?>"
-                                        data-proof-type="<?php echo e($proof_ext); ?>">
-                                        View Uploaded Proof
-                                    </button>
+                                    <div class="customer-request-action-row">
+                                        <button type="button" class="proof-view-btn customer-request-proof-button"
+                                            data-proof-url="<?php echo BASE_URL . e($order['proof_of_payment_file']); ?>?v=<?php echo time(); ?>"
+                                            data-proof-type="<?php echo e($proof_ext); ?>">
+                                            <?php echo customerIcon('orders'); ?>
+                                            <span>View Uploaded Proof</span>
+                                        </button>
+                                        <button type="button" class="customer-request-more-toggle" data-request-toggle aria-expanded="false">
+                                            Show more
+                                        </button>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="customer-request-action-row customer-request-action-row--single">
+                                        <button type="button" class="customer-request-more-toggle" data-request-toggle aria-expanded="false">
+                                            Show more
+                                        </button>
+                                    </div>
                                 <?php endif; ?>
 
                                 <?php if (($order['verification_status'] ?? '') === 'rejected'): ?>
-                                    <div class="mt-4 bg-red-100 text-red-700 p-3 rounded-xl text-sm">
+                                    <div class="customer-request-alert customer-request-alert--failed mt-4 bg-red-100 text-red-700 p-3 rounded-xl text-sm">
                                         <p class="font-semibold">Payment proof rejected.</p>
 
                                         <?php if (!empty($order['rejection_reason'])): ?>
@@ -440,28 +454,36 @@ function formatDateTime12Hour($datetime)
                                     </div>
 
                                     <a href="payment.php?order_id=<?php echo e($order['order_id']); ?>"
-                                        class="block text-center w-full bg-green-600 text-white py-3 rounded-xl font-semibold mt-4">
+                                        class="customer-request-pay-link block text-center w-full bg-green-600 text-white py-3 rounded-xl font-semibold mt-4">
                                         Submit New Proof
                                     </a>
 
                                 <?php elseif (($order['verification_status'] ?? '') === 'pending'): ?>
-                                    <p class="mt-4 bg-yellow-100 text-yellow-700 p-3 rounded-xl text-sm">
+                                    <p class="customer-request-alert customer-request-alert--pending mt-4 bg-yellow-100 text-yellow-700 p-3 rounded-xl text-sm">
                                         Payment submitted for verification.
                                     </p>
 
                                 <?php elseif (($order['payment_status'] ?? '') === 'paid'): ?>
-                                    <p class="mt-4 bg-green-100 text-green-700 p-3 rounded-xl text-sm">
+                                    <p class="customer-request-alert customer-request-alert--success mt-4 bg-green-100 text-green-700 p-3 rounded-xl text-sm">
+                                        <?php echo customerIcon('check'); ?>
+                                        <span>
                                         Payment verified.
+                                        </span>
                                     </p>
 
                                 <?php else: ?>
                                     <a href="payment.php?order_id=<?php echo e($order['order_id']); ?>"
-                                        class="block text-center w-full bg-green-600 text-white py-3 rounded-xl font-semibold mt-4">
+                                        class="customer-request-pay-link block text-center w-full bg-green-600 text-white py-3 rounded-xl font-semibold mt-4">
                                         Pay Now
                                     </a>
                                 <?php endif; ?>
                                 <?php else: ?>
-                                    <div class="mt-4 bg-red-50 text-red-700 p-3 rounded-xl text-sm">
+                                    <div class="customer-request-action-row customer-request-action-row--single">
+                                        <button type="button" class="customer-request-more-toggle" data-request-toggle aria-expanded="false">
+                                            Show more
+                                        </button>
+                                    </div>
+                                    <div class="customer-request-alert customer-request-alert--declined mt-4 bg-red-50 text-red-700 p-3 rounded-xl text-sm">
                                         This request was declined by the shop. You may safely remove it from your list.
                                     </div>
                                 <?php endif; ?>
