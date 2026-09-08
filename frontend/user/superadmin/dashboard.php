@@ -166,12 +166,56 @@ if ($daily_result) {
     }
 }
 
-$weekly_shops = [];
+$weekly_users = [];
 $weekly_labels = [];
 for ($i = 6; $i >= 0; $i--) {
     $monday = date('Y-m-d', strtotime("monday this week -$i weeks"));
-    $weekly_shops[$monday] = 0;
+    $weekly_users[$monday] = 0;
     $weekly_labels[$monday] = 'W' . date('W', strtotime($monday));
+}
+
+$weekly_users_result = mysqli_query($conn, "
+    SELECT DATE_SUB(DATE(created_at), INTERVAL WEEKDAY(created_at) DAY) AS week_key, COUNT(*) AS total
+    FROM users
+    WHERE role != 'super_admin' AND created_at >= DATE_SUB(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 WEEK)
+    GROUP BY week_key
+");
+if ($weekly_users_result) {
+    while ($row = mysqli_fetch_assoc($weekly_users_result)) {
+        if (isset($weekly_users[$row['week_key']])) {
+            $weekly_users[$row['week_key']] = (int) $row['total'];
+        }
+    }
+}
+
+$monthly_users = [];
+$monthly_labels = [];
+for ($i = 6; $i >= 0; $i--) {
+    $month_key = date('Y-m', strtotime("first day of this month -$i months"));
+    $monthly_users[$month_key] = 0;
+    $monthly_labels[$month_key] = date('M', strtotime($month_key . '-01'));
+}
+
+$monthly_users_result = mysqli_query($conn, "
+    SELECT DATE_FORMAT(created_at, '%Y-%m') AS month_key, COUNT(*) AS total
+    FROM users
+    WHERE role != 'super_admin' AND created_at >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 6 MONTH)
+    GROUP BY month_key
+");
+if ($monthly_users_result) {
+    while ($row = mysqli_fetch_assoc($monthly_users_result)) {
+        if (isset($monthly_users[$row['month_key']])) {
+            $monthly_users[$row['month_key']] = (int) $row['total'];
+        }
+    }
+}
+
+$weekly_shops = [];
+$weekly_shops_labels = [];
+for ($i = 6; $i >= 0; $i--) {
+    $monday = date('Y-m-d', strtotime("monday this week -$i weeks"));
+    $weekly_shops[$monday] = 0;
+    $weekly_shops_labels[$monday] = 'W' . date('W', strtotime($monday));
 }
 
 $weekly_result = mysqli_query($conn, "
@@ -189,7 +233,13 @@ if ($weekly_result) {
 }
 
 $daily_values = array_values($daily_users);
+$daily_labels_list = array_values($daily_labels);
+$weekly_users_values = array_values($weekly_users);
+$weekly_users_labels_list = array_values($weekly_labels);
+$monthly_users_values = array_values($monthly_users);
+$monthly_users_labels_list = array_values($monthly_labels);
 $weekly_values = array_values($weekly_shops);
+$weekly_shops_labels_list = array_values($weekly_shops_labels);
 $max_weekly = max(1, max($weekly_values));
 adminLayoutStart('dashboard', 'Dashboard', 'Monitor platform activity, user growth, and pending admin work.');
 ?>
@@ -277,33 +327,83 @@ adminLayoutStart('dashboard', 'Dashboard', 'Monitor platform activity, user grow
                                 <h3>User Growth</h3>
                                 <p>Track user registration trends</p>
                             </div>
-                            <div class="tabs">
-                                <span class="tab active">Daily</span>
-                                <span class="tab">Weekly</span>
-                                <span class="tab">Monthly</span>
+                            <div class="tabs" data-ug-tabs>
+                                <span class="tab active" data-ug-tab="daily">Daily</span>
+                                <span class="tab" data-ug-tab="weekly">Weekly</span>
+                                <span class="tab" data-ug-tab="monthly">Monthly</span>
                             </div>
                         </div>
-                        <svg class="line-chart" viewBox="0 0 700 260" preserveAspectRatio="none" role="img" aria-label="Daily user growth chart">
-                            <defs>
-                                <pattern id="grid" width="110" height="52" patternUnits="userSpaceOnUse">
-                                    <path d="M110 0H0V52" fill="none" stroke="#d9e2ec" stroke-width="1" stroke-dasharray="3 3"></path>
-                                </pattern>
-                            </defs>
-                            <rect x="40" y="0" width="640" height="220" fill="url(#grid)"></rect>
-                            <path d="M40 0V220H680" fill="none" stroke="#8d99a8" stroke-width="1.5"></path>
-                            <polyline points="<?php echo dashboardLinePoints($daily_values); ?>" fill="none" stroke="#08b7d4" stroke-width="4" transform="translate(40 0)"></polyline>
-                            <?php
-                            $point_pairs = explode(' ', dashboardLinePoints($daily_values));
-                            foreach ($point_pairs as $pair):
-                                [$x, $y] = explode(',', $pair);
-                            ?>
-                                <circle cx="<?php echo 40 + (float) $x; ?>" cy="<?php echo (float) $y; ?>" r="5" fill="#08b7d4" stroke="#fff" stroke-width="2"></circle>
-                            <?php endforeach; ?>
-                        </svg>
-                        <div class="axis-labels">
-                            <?php foreach ($daily_labels as $label): ?>
-                                <span><?php echo e($label); ?></span>
-                            <?php endforeach; ?>
+                        <div class="ug-view is-active" data-ug-view="daily">
+                            <svg class="line-chart" viewBox="0 0 700 260" preserveAspectRatio="none" role="img" aria-label="Daily user growth chart">
+                                <defs>
+                                    <pattern id="grid" width="110" height="52" patternUnits="userSpaceOnUse">
+                                        <path d="M110 0H0V52" fill="none" stroke="#d9e2ec" stroke-width="1" stroke-dasharray="3 3"></path>
+                                    </pattern>
+                                </defs>
+                                <rect x="40" y="0" width="640" height="220" fill="url(#grid)"></rect>
+                                <path d="M40 0V220H680" fill="none" stroke="#8d99a8" stroke-width="1.5"></path>
+                                <polyline points="<?php echo dashboardLinePoints($daily_values); ?>" fill="none" stroke="#08b7d4" stroke-width="4" transform="translate(40 0)"></polyline>
+                                <?php
+                                $point_pairs = explode(' ', dashboardLinePoints($daily_values));
+                                foreach ($point_pairs as $pair):
+                                    [$x, $y] = explode(',', $pair);
+                                ?>
+                                    <circle cx="<?php echo 40 + (float) $x; ?>" cy="<?php echo (float) $y; ?>" r="5" fill="#08b7d4" stroke="#fff" stroke-width="2"></circle>
+                                <?php endforeach; ?>
+                            </svg>
+                            <div class="axis-labels">
+                                <?php foreach ($daily_labels_list as $label): ?>
+                                    <span><?php echo e($label); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <div class="ug-view" data-ug-view="weekly">
+                            <svg class="line-chart" viewBox="0 0 700 260" preserveAspectRatio="none" role="img" aria-label="Weekly user growth chart">
+                                <defs>
+                                    <pattern id="grid-w" width="110" height="52" patternUnits="userSpaceOnUse">
+                                        <path d="M110 0H0V52" fill="none" stroke="#d9e2ec" stroke-width="1" stroke-dasharray="3 3"></path>
+                                    </pattern>
+                                </defs>
+                                <rect x="40" y="0" width="640" height="220" fill="url(#grid-w)"></rect>
+                                <path d="M40 0V220H680" fill="none" stroke="#8d99a8" stroke-width="1.5"></path>
+                                <polyline points="<?php echo dashboardLinePoints($weekly_users_values); ?>" fill="none" stroke="#08b7d4" stroke-width="4" transform="translate(40 0)"></polyline>
+                                <?php
+                                $weekly_point_pairs = explode(' ', dashboardLinePoints($weekly_users_values));
+                                foreach ($weekly_point_pairs as $pair):
+                                    [$x, $y] = explode(',', $pair);
+                                ?>
+                                    <circle cx="<?php echo 40 + (float) $x; ?>" cy="<?php echo (float) $y; ?>" r="5" fill="#08b7d4" stroke="#fff" stroke-width="2"></circle>
+                                <?php endforeach; ?>
+                            </svg>
+                            <div class="axis-labels">
+                                <?php foreach ($weekly_users_labels_list as $label): ?>
+                                    <span><?php echo e($label); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <div class="ug-view" data-ug-view="monthly">
+                            <svg class="line-chart" viewBox="0 0 700 260" preserveAspectRatio="none" role="img" aria-label="Monthly user growth chart">
+                                <defs>
+                                    <pattern id="grid-m" width="110" height="52" patternUnits="userSpaceOnUse">
+                                        <path d="M110 0H0V52" fill="none" stroke="#d9e2ec" stroke-width="1" stroke-dasharray="3 3"></path>
+                                    </pattern>
+                                </defs>
+                                <rect x="40" y="0" width="640" height="220" fill="url(#grid-m)"></rect>
+                                <path d="M40 0V220H680" fill="none" stroke="#8d99a8" stroke-width="1.5"></path>
+                                <polyline points="<?php echo dashboardLinePoints($monthly_users_values); ?>" fill="none" stroke="#08b7d4" stroke-width="4" transform="translate(40 0)"></polyline>
+                                <?php
+                                $monthly_point_pairs = explode(' ', dashboardLinePoints($monthly_users_values));
+                                foreach ($monthly_point_pairs as $pair):
+                                    [$x, $y] = explode(',', $pair);
+                                ?>
+                                    <circle cx="<?php echo 40 + (float) $x; ?>" cy="<?php echo (float) $y; ?>" r="5" fill="#08b7d4" stroke="#fff" stroke-width="2"></circle>
+                                <?php endforeach; ?>
+                            </svg>
+                            <div class="axis-labels">
+                                <?php foreach ($monthly_users_labels_list as $label): ?>
+                                    <span><?php echo e($label); ?></span>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     </article>
 
@@ -322,7 +422,7 @@ adminLayoutStart('dashboard', 'Dashboard', 'Monitor platform activity, user grow
                             <?php endforeach; ?>
                         </div>
                         <div class="axis-labels">
-                            <?php foreach ($weekly_labels as $label): ?>
+                            <?php foreach ($weekly_shops_labels_list as $label): ?>
                                 <span><?php echo e($label); ?></span>
                             <?php endforeach; ?>
                         </div>
@@ -382,7 +482,7 @@ adminLayoutStart('dashboard', 'Dashboard', 'Monitor platform activity, user grow
                         </article>
                         <article class="insight-card">
                             <strong><?php echo dashboardIcon('trend'); ?>Growth Rate</strong>
-                            <p><?php echo (int) array_sum($daily_values); ?> new user<?php echo array_sum($daily_values) === 1 ? '' : 's'; ?> in the last 7 days</p>
+                            <p><span data-ug-caption-total><?php echo (int) array_sum($daily_values); ?></span> new user<span data-ug-caption-plural><?php echo array_sum($daily_values) === 1 ? '' : 's'; ?></span> <span data-ug-caption-period>in the last 7 days</span></p>
                         </article>
                         <article class="insight-card">
                             <strong><?php echo dashboardIcon('activity'); ?>Platform Activity</strong>
@@ -414,4 +514,40 @@ adminLayoutStart('dashboard', 'Dashboard', 'Monitor platform activity, user grow
                     <?php endif; ?>
                 </section>
             </div>
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+(function () {
+    var tabsWrap = document.querySelector('[data-ug-tabs]');
+    if (!tabsWrap) return;
+
+    var captionTotal = document.querySelector('[data-ug-caption-total]');
+    var captionPlural = document.querySelector('[data-ug-caption-plural]');
+
+    var periods = {
+        daily: { total: <?php echo (int) array_sum($daily_values); ?>, label: 'in the last 7 days' },
+        weekly: { total: <?php echo (int) array_sum($weekly_users_values); ?>, label: 'in the last 7 weeks' },
+        monthly: { total: <?php echo (int) array_sum($monthly_users_values); ?>, label: 'in the last 7 months' }
+    };
+
+    function setActive(period) {
+        tabsWrap.querySelectorAll('[data-ug-tab]').forEach(function (tab) {
+            tab.classList.toggle('active', tab.dataset.ugTab === period);
+        });
+        document.querySelectorAll('[data-ug-view]').forEach(function (view) {
+            view.classList.toggle('is-active', view.dataset.ugView === period);
+        });
+        if (captionTotal && captionPlural && periods[period]) {
+            captionTotal.textContent = periods[period].total;
+            captionPlural.textContent = periods[period].total === 1 ? '' : 's';
+            var periodEl = document.querySelector('[data-ug-caption-period]');
+            if (periodEl) periodEl.textContent = periods[period].label;
+        }
+    }
+
+    tabsWrap.querySelectorAll('[data-ug-tab]').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            setActive(tab.dataset.ugTab);
+        });
+    });
+})();
+</script>
 <?php adminLayoutEnd(); ?>

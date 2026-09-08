@@ -1306,6 +1306,19 @@ body.admin-dashboard-body .approval-btn {
     background: var(--admin-cyan);
 }
 
+.admin-dashboard-content .tab {
+    cursor: pointer;
+    border: 0;
+}
+
+.admin-dashboard-content .ug-view {
+    display: none;
+}
+
+.admin-dashboard-content .ug-view.is-active {
+    display: block;
+}
+
 .admin-dashboard-content .line-chart {
     width: 100%;
     height: 260px;

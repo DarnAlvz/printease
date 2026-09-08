@@ -149,16 +149,24 @@ function activityBrowserSummary($user_agent)
 }
 
 $range = strtolower(trim((string) ($_GET['range'] ?? 'today')));
-$allowed_ranges = ['today', 'yesterday', 'week'];
+$allowed_ranges = ['today', 'week', 'month', 'all'];
 if (!in_array($range, $allowed_ranges, true)) {
     $range = 'today';
 }
 
 $today = new DateTimeImmutable('today');
-if ($range === 'yesterday') {
+if ($range === 'all') {
+    $start = null;
+    $end = null;
+    $range_label = 'All Time';
+} elseif ($range === 'yesterday') {
     $start = $today->modify('-1 day');
     $end = $today;
     $range_label = 'Yesterday';
+} elseif ($range === 'month') {
+    $start = $today->modify('first day of this month');
+    $end = $today->modify('+1 day');
+    $range_label = 'This Month';
 } elseif ($range === 'week') {
     $start = $today->modify('monday this week');
     $end = $today->modify('+1 day');
@@ -169,8 +177,8 @@ if ($range === 'yesterday') {
     $range_label = 'Today';
 }
 
-$start_date = $start->format('Y-m-d');
-$end_date = $end->format('Y-m-d');
+$start_date = $start ? $start->format('Y-m-d') : '';
+$end_date = $end ? $end->format('Y-m-d') : '';
 $search = trim((string) ($_GET['search'] ?? ''));
 $module_filter = trim((string) ($_GET['module'] ?? 'all'));
 
@@ -183,9 +191,16 @@ if ($module_filter !== 'all' && !in_array($module_filter, $module_values, true))
     $module_filter = 'all';
 }
 
-$where = ["al.created_at >= ?", "al.created_at < ?"];
-$types = 'ss';
-$params = [$start_date, $end_date];
+$where = [];
+$types = '';
+$params = [];
+
+if ($range !== 'all') {
+    $where[] = "al.created_at >= ?";
+    $where[] = "al.created_at < ?";
+    $types = 'ss';
+    $params = [$start_date, $end_date];
+}
 
 if ($module_filter !== 'all') {
     $where[] = "al.module = ?";
@@ -203,13 +218,14 @@ if ($search !== '') {
     $params[] = $like;
 }
 
-$where_sql = implode(' AND ', $where);
+$where_and = implode(' AND ', $where);
+$where_sql = $where_and !== '' ? "WHERE $where_and" : '';
 $logs = activityRows(
     $conn,
     "SELECT al.*, u.full_name, u.email, u.role
      FROM activity_logs al
      JOIN users u ON al.user_id = u.user_id
-     WHERE $where_sql
+     $where_sql
      ORDER BY al.created_at DESC
      LIMIT 50",
     $types,
@@ -221,7 +237,7 @@ $summary_rows = activityRows(
     "SELECT al.action, al.module
      FROM activity_logs al
      JOIN users u ON al.user_id = u.user_id
-     WHERE $where_sql",
+     $where_sql",
     $types,
     $params
 );
@@ -249,8 +265,9 @@ foreach ($summary_rows as $row) {
 
 $ranges = [
     'today' => 'Today',
-    'yesterday' => 'Yesterday',
     'week' => 'This Week',
+    'month' => 'This Month',
+    'all' => 'All Time',
 ];
 
 adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and monitor platform activity.');
