@@ -8,11 +8,9 @@ require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/../../components/head.php";
 require_once __DIR__ . "/../../components/customer_layout.php";
 require_once __DIR__ . "/../../components/customer_toasts.php";
-require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 require_once __DIR__ . "/../../../backend/includes/profile_guard.php";
 
-requireCompleteCustomerProfile($conn);
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 $redirect_query = ['view' => 'nearby'];
 if ((int) ($_GET['shop_id'] ?? 0) > 0) {

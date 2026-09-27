@@ -8,10 +8,10 @@ require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/../../components/head.php";
 require_once __DIR__ . "/../../components/customer_layout.php";
 require_once __DIR__ . "/../../components/customer_toasts.php";
-require_once __DIR__ . "/../../../backend/includes/status_guard.php";
+require_once __DIR__ . "/../../../backend/includes/profile_guard.php";
 require_once __DIR__ . "/../../../backend/config/cloudinary.php";
 
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 $customer_id = $_SESSION['user_id'];
 $search = trim($_GET['order_code'] ?? '');
@@ -311,6 +311,23 @@ function formatDateTime12Hour($datetime)
                             mysqli_stmt_bind_param($file_stmt, "i", $order['order_id']);
                             mysqli_stmt_execute($file_stmt);
                             $file = mysqli_fetch_assoc(mysqli_stmt_get_result($file_stmt));
+                            static $order_notes_supported = null;
+                            if ($order_notes_supported === null) {
+                                $notes_check = mysqli_query($conn, "SHOW TABLES LIKE 'order_notes'");
+                                $order_notes_supported = ($notes_check && mysqli_num_rows($notes_check) > 0);
+                            }
+                            $customer_notes = [];
+                            if ($order_notes_supported) {
+                                $notes_stmt = mysqli_prepare($conn, "SELECT note_type, note_text, created_at FROM order_notes WHERE order_id = ? ORDER BY created_at DESC, note_id DESC LIMIT 1");
+                                if ($notes_stmt) {
+                                    mysqli_stmt_bind_param($notes_stmt, "i", $order['order_id']);
+                                    mysqli_stmt_execute($notes_stmt);
+                                    $notes_result = mysqli_stmt_get_result($notes_stmt);
+                                    while ($note_row = mysqli_fetch_assoc($notes_result)) {
+                                        $customer_notes[] = $note_row;
+                                    }
+                                }
+                            }
                             ?>
 
                             <div <?php echo $is_focused_order ? 'id="focused-order"' : ''; ?>
@@ -349,6 +366,21 @@ function formatDateTime12Hour($datetime)
                                     <div class="customer-request-section">
                                         <div class="customer-request-section-title">Request Information</div>
                                         <div class="customer-request-detail-row">
+                                            <strong>File:</strong>
+                                            <?php if (!empty($file) && !empty($file['file_name'])): ?>
+                                                <span>
+                                                    <a href="<?php echo e($file['file_path']); ?>"
+                                                        target="_blank" rel="noopener"
+                                                        class="customer-request-file-link"
+                                                        title="<?php echo e($file['file_name']); ?>">
+                                                        <?php echo e($file['file_name']); ?>
+                                                    </a>
+                                                </span>
+                                            <?php else: ?>
+                                                <span>No file attached</span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="customer-request-detail-row">
                                             <strong>Service:</strong>
                                             <span><?php echo e($order_service_name); ?></span>
                                         </div>
@@ -360,6 +392,11 @@ function formatDateTime12Hour($datetime)
                                             <strong>Pickup:</strong>
                                             <span><?php echo e(formatDateTime12Hour($order['pickup_datetime'])); ?></span>
                                         </div>
+                                        <?php if (normalizeOrderStatus($order['order_status']) === 'ready_for_pickup'): ?>
+                                            <div class="customer-request-alert customer-request-alert--pending mt-2 p-3 rounded-xl text-sm">
+                                                <span>Show this request code when claiming your order at the shop.</span>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
 
                                     <div class="customer-request-section">
@@ -379,6 +416,19 @@ function formatDateTime12Hour($datetime)
                                             </div>
                                         <?php endif; ?>
                                     </div>
+
+                                    <?php if (!empty($customer_notes)): ?>
+                                        <div class="customer-request-section">
+                                            <div class="customer-request-section-title">Shop Pickup Notes</div>
+                                            <?php foreach ($customer_notes as $customer_note): ?>
+                                                <?php $is_refund_note = ($customer_note['note_type'] ?? '') === 'refund'; ?>
+                                                <div class="customer-request-alert mt-2 p-3 rounded-xl text-sm <?php echo $is_refund_note ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'; ?>">
+                                                    <p class="font-semibold"><?php echo $is_refund_note ? 'Refund on pickup' : 'Additional balance on pickup'; ?></p>
+                                                    <p class="mt-1"><?php echo e($customer_note['note_text']); ?></p>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
 
                                     <div class="customer-request-more" data-request-more hidden>
                                         <div class="customer-request-section">

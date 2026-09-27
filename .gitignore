@@ -5,6 +5,10 @@ uploads/*
 #runtime session storage
 backend/runtime/
 
+#runtime logs (profile setup error log)
+backend/logs/*
+!backend/logs/.htaccess
+
 vendor/
 
 NEED TO DOWNLOAD.txt

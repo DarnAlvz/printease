@@ -263,7 +263,7 @@ adminLayoutStart('reports', 'Business Reports', 'Comprehensive analytics and ins
     <form class="admin-report-toolbar" method="GET" action="reports.php">
         <label>
             <?php echo adminIcon('clock'); ?>
-            <select name="range" onchange="this.form.submit()" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+            <select name="range">
                 <?php foreach (['7d' => 'Last 7 Days', '30d' => 'Last 30 Days', '90d' => 'Last 90 Days', 'year' => 'This Year'] as $key => $label): ?>
                     <option value="<?php echo e($key); ?>" <?php echo $range === $key ? 'selected' : ''; ?>><?php echo e($label); ?></option>
                 <?php endforeach; ?>
@@ -409,5 +409,14 @@ adminLayoutStart('reports', 'Business Reports', 'Comprehensive analytics and ins
         </article>
     </section>
 </section>
+
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function () {
+        var rangeSelect = document.querySelector('.admin-report-toolbar select[name="range"]');
+        if (rangeSelect && rangeSelect.form) {
+            rangeSelect.addEventListener('change', function () { rangeSelect.form.submit(); });
+        }
+    })();
+</script>
 
 <?php adminLayoutEnd(); ?>

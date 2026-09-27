@@ -86,6 +86,8 @@ curl_setopt_array($ch, [
         'base64Image'       => $data_uri,
         'language'          => 'eng',
         'isOverlayRequired' => 'false',
+        'scale'             => 'true',
+        'OCREngine'         => '2',
     ],
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 30,

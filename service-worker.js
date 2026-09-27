@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v9";
+const CACHE_VERSION = "v11";
 const SHELL_CACHE = "printease-shell-" + CACHE_VERSION;
 const RUNTIME_CACHE = "printease-runtime-" + CACHE_VERSION;
 
@@ -7,7 +7,7 @@ const BASE_PATH = self.location.pathname.replace(/\/[^\/]*$/, "/");
 const urlsToCache = [
   BASE_PATH + "frontend/splash.php",
   BASE_PATH + "manifest.json",
-  BASE_PATH + "assets/css/index.css",
+  BASE_PATH + "assets/css/index.css?v=10",
   BASE_PATH + "assets/css/tailwind.css",
   BASE_PATH + "assets/js/pdf.min.js",
   BASE_PATH + "assets/js/pdf.worker.min.js",

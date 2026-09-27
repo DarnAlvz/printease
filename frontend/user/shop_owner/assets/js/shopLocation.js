@@ -11,10 +11,6 @@
     const addressInput = document.getElementById('shop_address');
     const coordinateNote = document.getElementById('shopCoordinateNote');
     const mapElement = document.getElementById('ownerShopMap');
-    const logoInput = document.getElementById('shop_logo');
-    const logoTargets = document.querySelectorAll('[data-shop-logo-preview]');
-    const originalLogoMarkup = new Map();
-    let logoPreviewUrl = '';
 
     const defaultLat = 12.0432;
     const defaultLng = 124.5946;
@@ -46,76 +42,6 @@
 
     const baseUrl = currentScriptBaseUrl();
     const reverseGeocodeUrl = baseUrl + 'backend/actions/reverse_geocode.php';
-
-    logoTargets.forEach(function (target) {
-        originalLogoMarkup.set(target.dataset.shopLogoPreview, target.outerHTML);
-    });
-
-    function revokeLogoPreview() {
-        if (logoPreviewUrl) {
-            URL.revokeObjectURL(logoPreviewUrl);
-            logoPreviewUrl = '';
-        }
-    }
-
-    function restoreLogoPreview() {
-        revokeLogoPreview();
-
-        originalLogoMarkup.forEach(function (markup, location) {
-            const target = document.querySelector('[data-shop-logo-preview="' + location + '"]');
-            if (target) {
-                target.outerHTML = markup;
-            }
-        });
-    }
-
-    function showLogoPreview(file) {
-        revokeLogoPreview();
-        logoPreviewUrl = URL.createObjectURL(file);
-
-        const profileTarget = document.querySelector('[data-shop-logo-preview="profile"]');
-        if (profileTarget) {
-            profileTarget.innerHTML = '<img src="' + logoPreviewUrl + '" class="shop-logo-profile" alt="Selected shop logo preview">';
-        }
-
-        const sidebarTarget = document.querySelector('[data-shop-logo-preview="sidebar"]');
-        if (sidebarTarget) {
-            sidebarTarget.outerHTML = '<img src="' + logoPreviewUrl + '" class="owner-brand-logo" alt="Selected shop logo preview" data-shop-logo-preview="sidebar">';
-        }
-
-        const topbarTarget = document.querySelector('[data-shop-logo-preview="topbar"]');
-        if (topbarTarget) {
-            topbarTarget.outerHTML = '<img src="' + logoPreviewUrl + '" class="owner-user-logo" alt="Selected shop logo preview" data-shop-logo-preview="topbar">';
-        }
-    }
-
-    if (logoInput) {
-        logoInput.addEventListener('change', function () {
-            const file = logoInput.files && logoInput.files[0];
-
-            if (!file) {
-                restoreLogoPreview();
-                return;
-            }
-
-            const extension = file.name.split('.').pop().toLowerCase();
-            const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'jfif'];
-            const validMimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
-
-            if (!allowedExtensions.includes(extension) || !validMimeType) {
-                logoInput.value = '';
-                restoreLogoPreview();
-                if (typeof window.ownerShowToast === 'function') {
-                    window.ownerShowToast('Please select a valid JPG, PNG, or WebP shop logo.', 'error');
-                }
-                return;
-            }
-
-            showLogoPreview(file);
-        });
-
-        window.addEventListener('beforeunload', revokeLogoPreview);
-    }
 
     function updateCoordinateFields(latlng) {
         latitudeInput.value = latlng.lat.toFixed(8);

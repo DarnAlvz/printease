@@ -8,10 +8,8 @@ require_once __DIR__ . "/../../../backend/includes/functions.php";
 require_once __DIR__ . "/../../components/head.php";
 require_once __DIR__ . "/../../components/customer_layout.php";
 require_once __DIR__ . "/../../components/customer_toasts.php";
-require_once __DIR__ . "/../../../backend/includes/status_guard.php";
 require_once __DIR__ . "/../../../backend/includes/profile_guard.php";
-requireCompleteCustomerProfile($conn);
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 $shop_id = isset($_GET['shop_id']) ? intval($_GET['shop_id']) : 0;
 
@@ -231,11 +229,20 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
                     <label class="customer-order-field" data-document-upload-field>
                         <span>Upload Document</span>
-                        <input type="file" name="document_file" id="document_file" accept="application/pdf,.pdf" required
+                        <input type="file" name="document_file" id="document_file" accept="application/pdf,.pdf,.doc,.docx,.wps,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required
                             class="w-full border rounded-xl p-3">
                         <small>Each request must contain exactly one file attachment only.
-                            Only PDF files up to 25MB are accepted.
+                            PDF, DOC, DOCX, and WPS files up to 25MB are accepted.
                         </small>
+                        <div class="customer-upload-note" data-pdf-reco-note>
+                            <strong>Recommended: upload PDF.</strong>
+                            <span>If you have no edits for the shop to make, PDF is recommended — it preserves your file's exact formatting. Please submit ahead of your pickup time — the shop needs time to review your file, verify payment, and prepare your order.</span>
+                        </div>
+                        <div class="customer-upload-warning" data-office-warning hidden role="status">
+                            <strong>Note for Word / WPS files (.doc, .docx, .wps):</strong>
+                            <span>Upload Word / WPS if you want the shop to edit your file. Expect layout, spacing, fonts, or images to shift when opened on another computer.</span>
+                            <span>Initial payment is based on your estimated page count. After the shop finalizes your edits, any price difference is settled in cash on pickup — an additional balance or a refund.</span>
+                        </div>
                     </label>
 
                     <label class="customer-order-field" data-other-upload-field hidden>
@@ -275,11 +282,17 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                                 class="w-full border rounded-xl p-3">
                         </label>
 
-                        <div class="customer-order-field">
+                        <div class="customer-order-field" data-page-count-auto>
                             <span>Pages</span>
                             <strong class="w-full border rounded-xl p-3 bg-gray-50 block"
                                 data-page-count-label>1</strong>
-                            <small data-page-count-status>Upload a PDF to detect pages automatically.</small>
+                            <small data-page-count-status>Upload a file to detect pages automatically (PDF only).</small>
+                        </div>
+                        <div class="customer-order-field" data-page-count-manual hidden>
+                            <span>Pages (your estimate)</span>
+                            <input type="number" id="estimated_page_count" min="1" max="10000" value="1" required
+                                class="w-full border rounded-xl p-3">
+                            <small>Enter the estimated/actual page count of your Word / WPS file. The shop will verify after finalizing your edits — any difference is settled in cash on pickup (additional balance or refund).</small>
                         </div>
                     </div>
 
@@ -354,8 +367,9 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                         <label class="customer-order-field">
                             <span>Instruction</span>
                             <textarea name="customer_instruction" id="customer_instruction" rows="4"
-                                placeholder="Example: Please print back-to-back."
+                                placeholder="Example: Please change the font to Arial 12, set paper to A4, and print back-to-back. If no edits, write &quot;No edits, print as is.&quot;"
                                 class="w-full border rounded-xl p-3"></textarea>
+                            <small>Be specific: paper size, font style/size, margins, pages to edit — or write "No edits".</small>
                         </label>
                     </div>
                 </section>
@@ -450,6 +464,9 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         const detectedPageCount = document.getElementById("detected_page_count");
         const pageCountLabel = document.querySelector("[data-page-count-label]");
         const pageCountStatus = document.querySelector("[data-page-count-status]");
+        const pageCountAuto = document.querySelector("[data-page-count-auto]");
+        const pageCountManual = document.querySelector("[data-page-count-manual]");
+        const estimatedPageCount = document.getElementById("estimated_page_count");
         const paperPrice = document.querySelector("[data-paper-price]");
         const totalBreakdown = document.querySelector("[data-total-breakdown]");
         const reviewBreakdown = document.querySelector("[data-review-breakdown]");
@@ -531,6 +548,73 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             return file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
         }
 
+        function selectedFileIsOfficeDoc(file) {
+            if (!file) return false;
+            if (/\.(docx?|wps)$/i.test(file.name || "")) return true;
+            return file.type === "application/msword" ||
+                file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                file.type === "application/vnd.ms-works" ||
+                file.type === "application/x-wps" ||
+                file.type === "application/wps-office" ||
+                file.type === "application/octet-stream";
+        }
+
+        function selectedDocumentFileIsAllowed(file) {
+            if (!file) return false;
+            return selectedFileIsPdf(file) || selectedFileIsOfficeDoc(file);
+        }
+
+        function selectedFileIsNonPdfOfficeDoc(file) {
+            return !!file && selectedFileIsOfficeDoc(file) && !selectedFileIsPdf(file);
+        }
+
+        function updateOfficeWarning() {
+            const warning = document.querySelector("[data-office-warning]");
+            if (!warning || !documentFile) return;
+            const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
+            warning.hidden = !selectedFileIsNonPdfOfficeDoc(file);
+            updateManualPagesVisibility();
+        }
+
+        function currentOfficeFileSelected() {
+            if (!isDocumentOrder() || !documentFile) return false;
+            const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
+            return selectedFileIsNonPdfOfficeDoc(file);
+        }
+
+        function manualEstimateValue() {
+            const raw = estimatedPageCount ? parseInt(estimatedPageCount.value || "0", 10) : 0;
+            if (!Number.isFinite(raw)) return 0;
+            return Math.max(1, Math.min(10000, raw));
+        }
+
+        function updateManualPagesVisibility() {
+            const showManual = currentOfficeFileSelected();
+            if (pageCountManual) pageCountManual.hidden = !showManual;
+            if (pageCountAuto) pageCountAuto.hidden = showManual;
+            if (showManual) applyManualEstimate(false);
+        }
+
+        function applyManualEstimate(recompute = true) {
+            if (!estimatedPageCount || !detectedPageCount) return;
+            const estimate = manualEstimateValue();
+            if (estimate >= 1) {
+                detectedPageCount.value = String(estimate);
+                if (pageCountLabel) pageCountLabel.textContent = String(estimate);
+                if (pageCountStatus) pageCountStatus.textContent = "Estimated " + estimate + " page" + (estimate === 1 ? "" : "s") + ". The shop will verify — differences are settled in cash on pickup.";
+                if (recompute) computeTotal();
+            }
+        }
+
+        function validateManualEstimate() {
+            if (!currentOfficeFileSelected()) return "";
+            const raw = estimatedPageCount ? parseInt(estimatedPageCount.value || "0", 10) : 0;
+            if (!raw || raw < 1 || raw > 10000) {
+                return "Please enter your estimated page count (1 to 10000).";
+            }
+            return "";
+        }
+
         function isDocumentOrder() {
             return !customerServiceType || customerServiceType.value === "Document Printing";
         }
@@ -580,8 +664,8 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             if (file.size > maxDocumentFileSize) {
                 return "Document file must be 25MB or smaller.";
             }
-            if (!selectedFileIsPdf(file)) {
-                return "Only PDF files are accepted for print requests.";
+            if (!selectedDocumentFileIsAllowed(file)) {
+                return "Only PDF, DOC, DOCX, or WPS files are accepted for print requests.";
             }
             return "";
         }
@@ -680,10 +764,12 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             const file = documentFile.files && documentFile.files[0] ? documentFile.files[0] : null;
             const requestId = ++pageCountRequestId;
             pageCountParseFailed = false;
+            updateOfficeWarning();
 
             if (!file) {
                 pageCountLoading = false;
-                setPageCount(1, "Upload a PDF to detect pages automatically.");
+                setPageCount(1, "Upload a file to detect pages automatically (PDF only).");
+                updateReview();
                 return;
             }
 
@@ -691,6 +777,16 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             if (fileValidationMessage) {
                 pageCountLoading = false;
                 setPageCount(1, fileValidationMessage);
+                updateReview();
+                return;
+            }
+
+            if (selectedFileIsNonPdfOfficeDoc(file)) {
+                pageCountLoading = false;
+                pageCountParseFailed = false;
+                const estimate = manualEstimateValue() || 1;
+                setPageCount(estimate, "Estimated " + estimate + " page" + (estimate === 1 ? "" : "s") + ". The shop will verify — differences are settled in cash on pickup.");
+                updateReview();
                 return;
             }
 
@@ -1019,6 +1115,14 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     documentFile.focus();
                     return false;
                 }
+                if (isDocumentOrder()) {
+                    const estimateMessage = validateManualEstimate();
+                    if (estimateMessage) {
+                        showAlert(estimateMessage);
+                        if (estimatedPageCount) estimatedPageCount.focus();
+                        return false;
+                    }
+                }
                 if (!isDocumentOrder() && serviceFileVerifying) {
                     showAlert("Please wait while the file is being checked.");
                     serviceFile.focus();
@@ -1043,6 +1147,13 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 if (isDocumentOrder() && pageCountParseFailed) {
                     showAlert("Please upload a valid PDF file. The file you selected cannot be read as a PDF.");
                     return false;
+                }
+                if (isDocumentOrder()) {
+                    const estimateMessageStep = validateManualEstimate();
+                    if (estimateMessageStep) {
+                        showAlert(estimateMessageStep);
+                        return false;
+                    }
                 }
                 if (!isDocumentOrder() && serviceFileVerifying) {
                     showAlert("Please wait while the file is being checked.");
@@ -1172,6 +1283,10 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
         if (servicePrintType) servicePrintType.onchange = computeTotal;
         if (serviceQuantity) serviceQuantity.oninput = computeTotal;
         documentFile.onchange = detectDocumentPages;
+        if (estimatedPageCount) estimatedPageCount.oninput = function () {
+            applyManualEstimate(true);
+            updateReview();
+        };
         if (serviceFile) serviceFile.onchange = function () {
             detectServiceFile();
             updateReview();

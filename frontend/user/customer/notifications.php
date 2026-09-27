@@ -9,9 +9,9 @@ require_once __DIR__ . "/../../components/head.php";
 require_once __DIR__ . "/../../components/customer_layout.php";
 require_once __DIR__ . "/../../components/customer_toasts.php";
 require_once __DIR__ . "/../../components/notifications.php";
-require_once __DIR__ . "/../../../backend/includes/status_guard.php";
+require_once __DIR__ . "/../../../backend/includes/profile_guard.php";
 
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 $customer_id = $_SESSION['user_id'];
 

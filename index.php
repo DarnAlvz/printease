@@ -21,7 +21,7 @@ if (!isset($_SESSION['seen_splash'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="assets/css/index.css">
+    <link rel="stylesheet" href="assets/css/index.css?v=10">
     <title>PrintEase E-Printing System</title>
     <?php renderPrintEaseIcons(); ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -74,7 +74,7 @@ if (!isset($_SESSION['seen_splash'])) {
 
                 <div class="hero-actions">
                     <a class="btn btn-primary" href="frontend/pages/login.php">Get Started</a>
-                    <a class="btn btn-cyan" href="frontend/pages/register.php">Register Now</a>
+                    <a class="hero-link" href="frontend/pages/register.php">Register Now</a>
 
                 </div>
 

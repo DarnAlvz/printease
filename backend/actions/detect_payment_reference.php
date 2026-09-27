@@ -3,7 +3,7 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
-require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/gcash_ocr.php";
 require_once __DIR__ . "/../includes/rate_limit.php";
 
@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 validateCsrf();
 
 checkRole("customer");
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 $customer_id = $_SESSION['user_id'];
 $order_id = intval($_POST['order_id'] ?? 0);
@@ -52,7 +52,7 @@ if (!$order) {
     paymentReferenceJson(false, 'Request not found.');
 }
 
-$ocr_customer_limit = rateLimitCheck($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60);
+$ocr_customer_limit = rateLimitCheck($conn, 'ocr_customer_minute', $customer_key, 'all', 10, 60);
 $ocr_ip_limit = rateLimitCheck($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60);
 
 if (!$ocr_customer_limit['allowed'] || !$ocr_ip_limit['allowed']) {
@@ -78,7 +78,7 @@ if (!move_uploaded_file($_FILES['proof_of_payment_file']['tmp_name'], $tmp_path)
     paymentReferenceJson(false, 'Failed to prepare image for OCR.');
 }
 
-rateLimitRecord($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60, 60);
+rateLimitRecord($conn, 'ocr_customer_minute', $customer_key, 'all', 10, 60, 60);
 rateLimitRecord($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60, 60 * 60);
 
 $ocr_text = runReceiptOcr($tmp_path);

@@ -278,12 +278,12 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
             <?php echo adminIcon('search'); ?>
             <input type="search" name="search" value="<?php echo e($search); ?>" placeholder="Search by user, role, module, or action...">
         </label>
-        <select name="range" onchange="this.form.submit()" aria-label="Date range" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+        <select name="range" aria-label="Date range">
             <?php foreach ($ranges as $key => $label): ?>
                 <option value="<?php echo e($key); ?>" <?php echo $range === $key ? 'selected' : ''; ?>><?php echo e($label); ?></option>
             <?php endforeach; ?>
         </select>
-        <select name="module" onchange="this.form.submit()" aria-label="Module filter" nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+        <select name="module" aria-label="Module filter">
             <option value="all">All Logs</option>
             <?php foreach ($module_values as $module): ?>
                 <option value="<?php echo e($module); ?>" <?php echo $module_filter === $module ? 'selected' : ''; ?>><?php echo e($module); ?></option>
@@ -460,7 +460,12 @@ adminLayoutStart('activity', 'System Activity Logs', 'Track system actions and m
             if (event.key === 'Escape') closeModal();
         });
 
-        
+        document.querySelectorAll('.admin-activity-toolbar select[name="range"], .admin-activity-toolbar select[name="module"]').forEach(function (select) {
+            select.addEventListener('change', function () {
+                if (select.form) select.form.submit();
+            });
+        });
+
     })();
 </script>
 

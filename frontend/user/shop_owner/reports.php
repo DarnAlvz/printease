@@ -271,6 +271,68 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     echo "\xEF\xBB\xBF";
     $output = fopen('php://output', 'w');
+    $peso = "\xE2\x82\xB1";
+    $report_money = function ($amount) use ($peso) {
+        return $peso . number_format((float) $amount, 2);
+    };
+
+    fputcsv($output, ['Reporting Period', $range_label . ' (' . $start_date . ' to ' . $end_date . ')']);
+    fputcsv($output, []);
+
+    fputcsv($output, ['SUMMARY']);
+    fputcsv($output, ['Total Print Jobs', number_format((int) ($summary['total_orders'] ?? 0))]);
+    fputcsv($output, ['Completed', number_format((int) ($summary['completed_orders'] ?? 0)) . ' (' . $completion_rate . '%)']);
+    fputcsv($output, ['Unique Customers', number_format((int) ($summary['unique_customers'] ?? 0))]);
+    fputcsv($output, ['Average Paid Job', $report_money($summary['average_paid'] ?? 0)]);
+    fputcsv($output, ['Paid Revenue', $report_money($summary['paid_revenue'] ?? 0)]);
+    fputcsv($output, []);
+
+    fputcsv($output, ['PAID REVENUE TREND']);
+    fputcsv($output, ['Period', 'Revenue']);
+    foreach ($trend as $trend_point) {
+        fputcsv($output, array_map('reportCsvValue', [$trend_point['label'], $report_money($trend_point['value'])]));
+    }
+    fputcsv($output, []);
+
+    $export_status_labels = [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'ready_for_pickup' => 'Ready for Pickup',
+        'completed' => 'Completed',
+    ];
+    fputcsv($output, ['PRINT JOB STATUS']);
+    fputcsv($output, ['Status', 'Count', 'Percent']);
+    foreach ($export_status_labels as $status_key => $status_label) {
+        $status_count = (int) ($status_counts[$status_key] ?? 0);
+        $status_percent = (int) ($summary['total_orders'] ?? 0) > 0 ? round(($status_count / (int) $summary['total_orders']) * 100) : 0;
+        fputcsv($output, array_map('reportCsvValue', [$status_label, (string) $status_count, $status_percent . '%']));
+    }
+    fputcsv($output, []);
+
+    fputcsv($output, ['TOP PRINT DEMAND']);
+    foreach ($top_print_data as $demand_title => $demand_rows) {
+        fputcsv($output, [$demand_title]);
+        fputcsv($output, ['Value', 'Count']);
+        foreach ($demand_rows as $demand_row) {
+            fputcsv($output, array_map('reportCsvValue', [$demand_row['label'], (string) (int) $demand_row['total']]));
+        }
+    }
+    fputcsv($output, []);
+
+    fputcsv($output, ['TOP CUSTOMERS']);
+    fputcsv($output, ['Rank', 'Name', 'Email', 'Print Jobs', 'Spending']);
+    foreach ($top_customers as $customer_index => $customer) {
+        fputcsv($output, array_map('reportCsvValue', [
+            (string) ($customer_index + 1),
+            $customer['full_name'],
+            $customer['email'],
+            (string) (int) $customer['order_count'],
+            $report_money($customer['spending']),
+        ]));
+    }
+    fputcsv($output, []);
+
+    fputcsv($output, ['PRINT JOB REPORT']);
     fputcsv($output, ['Job Code', 'Customer', 'Email', 'Paper Size', 'Paper Type', 'Print Type', 'Copies', 'Job Status', 'Payment Status', 'Job Amount', 'Paid Amount', 'Job Date']);
     while ($order = mysqli_fetch_assoc($export_result)) {
         fputcsv($output, array_map('reportCsvValue', [

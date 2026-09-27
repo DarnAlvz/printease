@@ -4186,6 +4186,54 @@ body.admin-dashboard-body .metric-card {
     background: rgba(255, 255, 255, .96) !important;
 }
 
+body.admin-dashboard-body .content > *,
+.admin-main > *,
+.admin-dashboard-content > *,
+.admin-dashboard-content .metrics-grid > *,
+.admin-dashboard-content .charts-grid > *,
+.admin-dashboard-content .insight-grid > *,
+.admin-shop-stats > *,
+.admin-user-stats > *,
+.admin-report-metrics > *,
+.admin-report-grid > *,
+.admin-report-approval-grid > *,
+.admin-activity-stats > *,
+.admin-settings-grid > * {
+    min-width: 0;
+}
+
+@media (max-width: 1180px) {
+    .admin-main,
+    body.admin-dashboard-body .content {
+        padding-right: 24px;
+        padding-left: 24px;
+    }
+
+    .admin-dashboard-content .charts-grid,
+    .admin-report-grid,
+    .admin-settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-dashboard-content .insight-grid,
+    .admin-report-approval-grid {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .admin-shop-stats,
+    .admin-user-stats,
+    .admin-report-metrics,
+    .admin-activity-stats {
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    }
+
+    .admin-shop-toolbar,
+    .admin-user-toolbar,
+    .admin-activity-toolbar {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 820px) {
     .admin-sidebar,
     body.admin-dashboard-body .sidebar,

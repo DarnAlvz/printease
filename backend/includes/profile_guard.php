@@ -90,4 +90,58 @@ function requireCompleteCustomerProfile($conn) {
         exit();
     }
 }
+
+function requireCustomerFeatureAccess($conn) {
+    if (!isset($_SESSION['user_id'])) {
+        header("Location: " . BASE_URL . "frontend/pages/login.php");
+        exit();
+    }
+
+    $customer_id = (int) $_SESSION['user_id'];
+
+    $sql = "SELECT phone_number, address, valid_id_front_file, valid_id_back_file, account_status
+            FROM users
+            WHERE user_id = ?
+            AND role = 'customer'
+            LIMIT 1";
+
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
+        error_log("SQL prepare error in requireCustomerFeatureAccess: " . mysqli_error($conn));
+        die("A system error occurred. Please try again later.");
+    }
+
+    mysqli_stmt_bind_param($stmt, "i", $customer_id);
+    mysqli_stmt_execute($stmt);
+    $customer = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+    $profile_complete = $customer
+        && !empty($customer['phone_number'])
+        && !empty($customer['address'])
+        && !empty($customer['valid_id_front_file'])
+        && !empty($customer['valid_id_back_file']);
+
+    if (!$profile_complete) {
+        setToast("Please complete your customer profile first.", "warning");
+        header("Location: " . BASE_URL . "frontend/user/customer/profile.php");
+        exit();
+    }
+
+    $status = $customer['account_status'] ?? 'incomplete';
+    if ($status === 'verified') {
+        return true;
+    }
+
+    $message = match ($status) {
+        'pending' => 'Your profile is submitted and waiting for Super Admin approval.',
+        'inactive' => 'Your account has been deactivated by the Admin. Please contact support.',
+        'rejected' => 'Your account has been rejected. Please contact support.',
+        default => 'Your account must be active before accessing this feature.',
+    };
+
+    setToast($message, $status);
+    header("Location: " . BASE_URL . "frontend/user/customer/dashboard.php");
+    exit();
+}
 ?>

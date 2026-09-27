@@ -227,7 +227,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     </article>
                 </div>
 
-                <form action="../../../backend/actions/save_customer_profile.php" method="POST"
+                <form action="<?php echo BASE_URL; ?>backend/actions/save_customer_profile.php" method="POST"
                     enctype="multipart/form-data"
                     id="customerProfileEditForm"
                     class="customer-profile-edit-form"
@@ -257,7 +257,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                             </span>
                             <span class="customer-profile-photo-copy">
                                 <strong>Change photo</strong>
-                                <small data-profile-picture-status>JPG, PNG, or WebP only.</small>
+                                <small data-profile-picture-status>JPG, PNG, or WebP only, max 10MB.</small>
                             </span>
                         </button>
                     </div>
@@ -289,6 +289,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                             class="mt-2 bg-green-600 text-white py-2 px-4 rounded-xl font-semibold">
                             Use My Current Location
                         </button>
+                        <p class="text-xs text-gray-500 mt-2">If location permission is denied, you can still type your complete address manually.</p>
 
                         <p id="locationStatus" class="text-sm text-gray-500 mt-2"></p>
                     </div>
@@ -297,14 +298,14 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                         <label class="block text-sm font-semibold mb-1">Valid ID - Front</label>
                         <input type="file" name="valid_id_front_file" accept="image/jpeg,image/png,image/webp"
                             class="w-full border rounded-xl p-3">
-                        <p class="text-xs text-gray-500 mt-1">Upload the front side of your valid ID. JPG, PNG, or WebP only, max 2MB.</p>
+                        <p class="text-xs text-gray-500 mt-1">Upload the front side of your valid ID. JPG, PNG, or WebP only, max 10MB.</p>
                     </div>
 
                     <div>
                         <label class="block text-sm font-semibold mb-1">Valid ID - Back</label>
                         <input type="file" name="valid_id_back_file" accept="image/jpeg,image/png,image/webp"
                             class="w-full border rounded-xl p-3">
-                        <p class="text-xs text-gray-500 mt-1">Upload the back side of your valid ID. JPG, PNG, or WebP only, max 2MB.</p>
+                        <p class="text-xs text-gray-500 mt-1">Upload the back side of your valid ID. JPG, PNG, or WebP only, max 10MB.</p>
                     </div>
 
                     <?php if ($valid_id_front_url !== '' && $valid_id_back_url !== ''): ?>
@@ -505,6 +506,8 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
             let selectedValidIdBackBlobName = '';
             let validIdBackReading = false;
 
+            var maxFileSize = 10 * 1024 * 1024;
+
             if (!editTrigger || !editForm || !cancelEdit) return;
 
             function openEditor() {
@@ -549,9 +552,18 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                 photoInput.addEventListener('change', function () {
                     const file = photoInput.files && photoInput.files[0];
                     if (!file) {
-                        photoStatus.textContent = 'JPG, PNG, or WebP only.';
+                        photoStatus.textContent = 'JPG, PNG, or WebP only, max 10MB.';
                         selectedProfileBlob = null;
                         selectedProfileBlobName = '';
+                        return;
+                    }
+
+                    if (file.size > maxFileSize) {
+                        photoInput.value = '';
+                        photoStatus.textContent = 'Image is too large. Max size is 10MB.';
+                        selectedProfileBlob = null;
+                        selectedProfileBlobName = '';
+                        if (window.customerShowToast) window.customerShowToast('Profile picture must be 10MB or smaller.', 'error');
                         return;
                     }
 
@@ -584,7 +596,7 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
             }
 
             if (validIdFrontInput || validIdBackInput) {
-                function bindValidIdInput(input, setBlob, setBlobName, setReading) {
+                function bindValidIdInput(input, setBlob, setBlobName, setReading, label) {
                     input.addEventListener('change', function () {
                         const file = input.files && input.files[0];
                         if (!file) {
@@ -592,6 +604,15 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                             setBlobName('');
                             return;
                         }
+
+                        if (file.size > maxFileSize) {
+                            input.value = '';
+                            setBlob(null);
+                            setBlobName('');
+                            if (window.customerShowToast) window.customerShowToast(label + ' must be 10MB or smaller.', 'error');
+                            return;
+                        }
+
                         setBlobName(file.name);
                         setReading(true);
                         readFileIntoBlob(file).then(function (blob) {
@@ -605,14 +626,16 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     bindValidIdInput(validIdFrontInput,
                         function (b) { selectedValidIdFrontBlob = b; },
                         function (n) { selectedValidIdFrontBlobName = n; },
-                        function (r) { validIdFrontReading = r; });
+                        function (r) { validIdFrontReading = r; },
+                        'Valid ID front');
                 }
 
                 if (validIdBackInput) {
                     bindValidIdInput(validIdBackInput,
                         function (b) { selectedValidIdBackBlob = b; },
                         function (n) { selectedValidIdBackBlobName = n; },
-                        function (r) { validIdBackReading = r; });
+                        function (r) { validIdBackReading = r; },
+                        'Valid ID back');
                 }
             }
 
@@ -624,17 +647,17 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     return;
                 }
 
-                var maxSize = 2 * 1024 * 1024;
+                var maxSize = maxFileSize;
                 if (selectedProfileBlob && selectedProfileBlob.size > maxSize) {
-                    if (window.customerShowToast) window.customerShowToast('Profile picture must be 2MB or smaller.', 'error');
+                    if (window.customerShowToast) window.customerShowToast('Profile picture must be 10MB or smaller.', 'error');
                     return;
                 }
                 if (selectedValidIdFrontBlob && selectedValidIdFrontBlob.size > maxSize) {
-                    if (window.customerShowToast) window.customerShowToast('Valid ID front must be 2MB or smaller.', 'error');
+                    if (window.customerShowToast) window.customerShowToast('Valid ID front must be 10MB or smaller.', 'error');
                     return;
                 }
                 if (selectedValidIdBackBlob && selectedValidIdBackBlob.size > maxSize) {
-                    if (window.customerShowToast) window.customerShowToast('Valid ID back must be 2MB or smaller.', 'error');
+                    if (window.customerShowToast) window.customerShowToast('Valid ID back must be 10MB or smaller.', 'error');
                     return;
                 }
 
@@ -668,26 +691,86 @@ $uses_google_session = ($_SESSION['auth_provider'] ?? 'password') === 'google';
                     submitBtn.textContent = 'Saving…';
                 }
 
-                fetch(editForm.action, { method: 'POST', body: fd, credentials: 'same-origin' })
+                console.debug('[profile-save] submitting', {
+                    full_name: editForm.querySelector('input[name="full_name"]').value,
+                    phone_number: editForm.querySelector('input[name="phone_number"]').value,
+                    has_address: !!editForm.querySelector('textarea[name="address"]').value,
+                    profile_picture_mb: selectedProfileBlob ? (selectedProfileBlob.size / (1024 * 1024)).toFixed(2) : null,
+                    valid_id_front_mb: selectedValidIdFrontBlob ? (selectedValidIdFrontBlob.size / (1024 * 1024)).toFixed(2) : null,
+                    valid_id_back_mb: selectedValidIdBackBlob ? (selectedValidIdBackBlob.size / (1024 * 1024)).toFixed(2) : null,
+                    online: navigator.onLine
+                });
+
+                fetch(editForm.action, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
                     .then(function (res) {
+                        return res.text().then(function (bodyText) {
+                            return { res: res, bodyText: bodyText };
+                        });
+                    })
+                    .then(function (result) {
+                        var res = result.res;
+                        var bodyText = result.bodyText;
+                        var data = null;
+                        try { data = JSON.parse(bodyText); } catch (e) { data = null; }
+
                         if (!res.ok) {
+                            console.error('[profile-save] request failed', {
+                                status: res.status,
+                                statusText: res.statusText,
+                                online: navigator.onLine,
+                                body: bodyText
+                            });
                             if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Profile'; }
-                            if (window.customerShowToast) window.customerShowToast('Upload failed. File must be 2MB or smaller.', 'error');
+                            var msg = '';
+                            if (data && data.message) {
+                                msg = data.message;
+                            } else if (res.status === 504 || res.statusText === 'Offline' || navigator.onLine === false) {
+                                msg = "You appear to be offline or the connection timed out. Please check your internet connection and try again.";
+                            } else if (bodyText && bodyText.length < 300) {
+                                msg = bodyText;
+                            } else {
+                                msg = "Profile could not be saved (HTTP " + res.status + "). Please try again.";
+                            }
+                            if (window.customerShowToast) window.customerShowToast(msg, 'error');
                             return;
                         }
+
+                        if (data && data.success) {
+                            if (window.customerShowToast) window.customerShowToast(data.message || 'Profile saved.', (data.status === 'success' ? 'success' : 'warning'));
+                            if (data.redirect) {
+                                window.location.href = data.redirect;
+                            } else if (res.redirected || res.url) {
+                                window.location.href = res.url;
+                            } else {
+                                window.location.reload();
+                            }
+                            return;
+                        }
+
+                        if (data && data.message) {
+                            if (window.customerShowToast) window.customerShowToast(data.message, 'error');
+                            return;
+                        }
+
                         if (res.redirected || res.url) {
                             window.location.href = res.url;
                         } else {
                             window.location.reload();
                         }
                     })
-                    .catch(function () {
+                    .catch(function (err) {
+                        console.error('[profile-save] network error', err, { online: navigator.onLine });
                         if (submitBtn) {
                             submitBtn.disabled = false;
                             submitBtn.textContent = 'Save Profile';
                         }
                         if (window.customerShowToast) {
-                            window.customerShowToast('Upload failed. Check your connection and file size (max 2MB).', 'error');
+                            window.customerShowToast('Upload failed. Check your connection and file size (max 10MB).', 'error');
                         }
                     });
             });

@@ -3,12 +3,12 @@ require_once __DIR__ . "/../config/db.php";
 require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
-require_once __DIR__ . "/../includes/status_guard.php";
+require_once __DIR__ . "/../includes/profile_guard.php";
 require_once __DIR__ . "/../includes/gcash_ocr.php";
 require_once __DIR__ . "/../includes/rate_limit.php";
 
 checkRole("customer");
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 validateCsrf();
 
@@ -96,27 +96,32 @@ if (!move_uploaded_file($_FILES['proof_of_payment_file']['tmp_name'], $target_pa
     redirect(BASE_URL . "frontend/user/customer/payment.php?order_id=" . $order_id);
 }
 
-$ocr_customer_limit = rateLimitCheck($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60);
+$ocr_customer_limit = rateLimitCheck($conn, 'ocr_customer_minute', $customer_key, 'all', 10, 60);
 $ocr_ip_limit = rateLimitCheck($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60);
 $ocr_text = '';
+$ocr_skipped = false;
 
 if (!$ocr_customer_limit['allowed'] || !$ocr_ip_limit['allowed']) {
     $retry_after = max((int) $ocr_customer_limit['retry_after'], (int) $ocr_ip_limit['retry_after']);
     error_log('[OCR] Rate limited in submit_payment_proof. customer_reason=' . ($ocr_customer_limit['reason'] ?? '?') . ' ip_reason=' . ($ocr_ip_limit['reason'] ?? '?'));
     setToast("OCR was skipped because it is temporarily rate limited. Your payment proof was still submitted for review.", "warning");
+    $ocr_skipped = true;
 } else {
-    rateLimitRecord($conn, 'ocr_customer_minute', $customer_key, 'all', 3, 60, 60);
+    rateLimitRecord($conn, 'ocr_customer_minute', $customer_key, 'all', 10, 60, 60);
     rateLimitRecord($conn, 'ocr_ip_hour', 'all', $ip, 30, 60 * 60, 60 * 60);
     $ocr_text = runReceiptOcr($target_path);
 }
-$ocr_reference_number = detectGcashReferenceFromText($ocr_text);
-$ocr_payment_date = detectGcashPaymentDateFromText($ocr_text);
+$ocr_reference_number = $ocr_skipped ? null : detectGcashReferenceFromText($ocr_text);
+$ocr_payment_date = $ocr_skipped ? null : detectGcashPaymentDateFromText($ocr_text);
 
 if ($reference_number === '' && $ocr_reference_number !== null) {
     $reference_number = $ocr_reference_number;
 }
 
-$payment_reference_match = gcashOcrStatus($ocr_reference_number, $ocr_payment_date);
+// 'unchecked' = OCR never ran (rate-limited). Keeps skipped proofs visually
+// distinct from genuine 'not_detected' misses so the shop owner knows to
+// verify manually; the backfill job picks these up via NULL ocr_payment_date.
+$payment_reference_match = $ocr_skipped ? 'unchecked' : gcashOcrStatus($ocr_reference_number, $ocr_payment_date);
 
 mysqli_begin_transaction($conn);
 $transaction_started = true;

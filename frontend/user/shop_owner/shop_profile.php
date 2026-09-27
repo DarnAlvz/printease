@@ -237,17 +237,17 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
 </div>
 
 <?php if ($shop && $service_count === 0): ?>
-<section class="owner-card shop-services-banner" style="border-left: 4px solid #f59e0b; background: #fffbeb; margin-bottom: 20px;">
-    <div style="display: flex; align-items: flex-start; gap: 14px; padding: 4px 0;">
-        <?php echo ownerIcon('file-text', 'icon'); ?>
-        <div style="flex: 1;">
-            <h3 style="margin: 0 0 4px; font-size: 15px;">Add Paper Pricing to Go Live</h3>
-            <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+<section class="owner-card shop-services-banner">
+    <div class="shop-services-banner__inner">
+        <span class="shop-services-banner__icon"><?php echo ownerIcon('file-text', 'icon'); ?></span>
+        <div>
+            <h3>Add Paper Pricing to Go Live</h3>
+            <p>
                 Your shop profile is complete, but customers won't see your shop until you add at least one paper size and print price.
                 Also make sure to select your Services Offered below so customers know what you offer.
             </p>
-            <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
-                <a href="services.php" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+            <div class="shop-services-banner__actions">
+                <a href="services.php" class="btn btn-primary">
                     <?php echo ownerIcon('plus', 'icon-sm'); ?>
                     Add Paper Pricing
                 </a>
@@ -270,8 +270,8 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
             <section class="owner-card shop-profile-card">
                 <div class="card-head">
                     <div>
-                        <h2>Shop Profile</h2>
-                        <p class="card-note">Review your logo, permit, and location preview.</p>
+                        <h2><?php echo ownerIcon('store', 'icon'); ?> Shop Profile</h2>
+                        <p class="card-note">Logo and verification snapshot customers will recognize.</p>
                     </div>
                     <span class="status-badge <?php echo ownerStatusClass($permit_status); ?>">
                         <?php
@@ -300,12 +300,27 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                         </label>
                         <input id="shop_logo" class="file-input-hidden" type="file" name="shop_logo"
                             accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
-                        <p class="card-note">Recommended: 500x500px, PNG or JPG</p>
+                        <p class="card-note" data-file-meta-for="shop_logo">Recommended: 500x500px, PNG or JPG</p>
+                        <button type="button" class="file-preview-clear" data-file-clear-for="shop_logo"
+                            title="Clears the file you just selected. Your saved logo will not change."
+                            hidden>Remove selected file</button>
                     </div>
                 </div>
+            </section>
 
+            <section class="owner-card shop-location-card">
+                <div class="card-head">
+                    <div>
+                        <h2><?php echo ownerIcon('map-pin', 'icon'); ?> Shop Location</h2>
+                        <p class="card-note">Make the physical shop easy for customers to find.</p>
+                    </div>
+                    <?php if (!empty($shop['latitude']) && !empty($shop['longitude'])): ?>
+                        <span class="status-badge status-success"><?php echo ownerIcon('circle-check', 'icon-sm'); ?> Pin Saved</span>
+                    <?php else: ?>
+                        <span class="status-badge status-warning"><?php echo ownerIcon('clock', 'icon-sm'); ?> Needs Pin</span>
+                    <?php endif; ?>
+                </div>
                 <div class="shop-location-block">
-                    <h3>Shop Location</h3>
                     <div class="location-display">
                         <?php echo ownerIcon('map-pin', 'icon'); ?>
                         <span>
@@ -329,22 +344,23 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                             No exact shop pin saved yet.
                         <?php endif; ?>
                     </div>
+                    <?php if (empty($shop['latitude']) || empty($shop['longitude'])): ?>
+                        <div class="shop-location-visibility-note" role="alert">
+                            <?php echo ownerIcon('triangle-alert', 'icon-sm'); ?>
+                            <span>
+                                Set your shop location pin so customers can see your shop on the customer map/list.
+                                Kailangan mag-set ng shop pin para ma-display ang shop sa customer side.
+                            </span>
+                        </div>
+                    <?php endif; ?>
                     <p class="card-note">Use current location or click the map to place the shop pin manually. If permission was denied before, reset location permission in the browser address bar.</p>
                 </div>
-
-                <?php if (!empty($shop['business_permit_file'])): ?>
-                    <div class="permit-preview-block">
-                        <p class="card-note">Business Permit</p>
-                        <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview"
-                            alt="Business permit">
-                    </div>
-                <?php endif; ?>
             </section>
 
             <section class="owner-card shop-services-card">
                 <div class="card-head">
                     <div>
-                        <h2>Services Offered</h2>
+                        <h2><?php echo ownerIcon('layers', 'icon'); ?> Services Offered</h2>
                         <p class="card-note">Select all services your shop provides. Some services may require a shop visit and cannot be requested online.</p>
                     </div>
                 </div>
@@ -382,189 +398,11 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
                 </div>
                 <p class="card-note">Online request availability is set automatically for each service type.</p>
             </section>
-        </div>
 
-        <div class="shop-management-side">
-            <section class="owner-card shop-details-card">
+            <section class="owner-card operating-hours-card">
                 <div class="card-head">
                     <div>
-                        <h2>Shop Details</h2>
-                        <p class="card-note">Click Edit before making profile changes.</p>
-                    </div>
-                    <button type="button" class="btn btn-soft shop-edit-button" id="editShopProfile">
-                        <?php echo ownerIcon('edit-3', 'icon'); ?>
-                        Edit
-                    </button>
-                </div>
-
-                <div class="shop-details-fields">
-                    <div class="field full">
-                        <label for="shop_name">Shop Name</label>
-                        <input id="shop_name" type="text" name="shop_name"
-                            value="<?php echo e($shop['shop_name'] ?? ''); ?>" placeholder="Shop Name" required
-                            data-editable disabled>
-                    </div>
-
-                    <div class="field full">
-                        <label for="shop_address">Complete Shop Address</label>
-                        <textarea id="shop_address" name="shop_address" rows="3"
-                            placeholder="Example: Purok 2, Magsaysay Blvd, Brgy. Central, Calbayog City, Samar" required
-                            data-editable disabled><?php echo e($shop['shop_address'] ?? ''); ?></textarea>
-                        <span class="muted">Used for admin verification and official shop records.</span>
-                    </div>
-
-                    <div class="field full">
-                        <label for="display_address">Street / Area Display</label>
-                        <input id="display_address" type="text" name="display_address"
-                            value="<?php echo e($shop['display_address'] ?? ''); ?>"
-                            placeholder="Example: Magsaysay Blvd" data-editable disabled>
-                        <span class="muted">This shorter location will be shown to customers.</span>
-                    </div>
-
-                    <div class="field full">
-                        <label for="landmark">Nearby Landmark</label>
-                        <input id="landmark" type="text" name="landmark"
-                            value="<?php echo e($shop['landmark'] ?? ''); ?>"
-                            placeholder="Example: Near Christ the King" data-editable disabled>
-                        <span class="muted">Optional, but helpful for customer navigation.</span>
-                    </div>
-
-                    <div class="payment-setup-status <?php echo e($payment_setup_class); ?>" id="paymentSetupStatusLegacy" hidden aria-hidden="true">
-                        <span class="payment-setup-emoji" aria-hidden="true">
-                            <?php if ($payment_setup_emoji === 'gcash'): ?>
-                                <img src="<?php echo BASE_URL; ?>assets/images/gcash.svg" alt="" class="payment-setup-icon">
-                            <?php elseif ($payment_setup_emoji === 'qr'): ?>
-                                <img src="<?php echo BASE_URL; ?>assets/images/qr-code.png" alt="" class="payment-setup-icon">
-                            <?php else: ?>
-                                <?php echo ownerIcon('triangle-alert', 'icon-sm'); ?>
-                            <?php endif; ?>
-                        </span>
-                        <span class="payment-setup-text"><?php echo e($payment_setup_label); ?></span>
-                    </div>
-
-                    <div class="field full">
-                        <label for="gcash_name">GCash Account Name (Optional if you have QR Code) </label>
-                        <input id="gcash_name" type="text" name="gcash_name"
-                            value="<?php echo e($payment_qr_channel['gcash_account_name'] ?? ($shop['gcash_name'] ?? '')); ?>"
-                            placeholder="Account name shown in GCash" data-editable disabled>
-                        <span class="muted">Shown to customers when they pay online through GCash.</span>
-                    </div>
-
-                    <div class="field full">
-                        <label for="gcash_number">GCash Number (Optional if you have QR Code)</label>
-                        <input id="gcash_number" type="text" name="gcash_number"
-                            value="<?php echo e($payment_qr_channel['gcash_number'] ?? ($shop['gcash_number'] ?? '')); ?>" placeholder="09XXXXXXXXX"
-                            data-editable disabled>
-                    </div>
-
-                    <div class="field full">
-                        <label for="merchant_link">GCash Payment Link</label>
-                        <div class="merchant-link-row">
-                            <input id="merchant_link" type="url" name="merchant_link"
-                                value="<?php echo e($payment_merchant_link); ?>"
-                                placeholder="https://..." data-editable disabled>
-                            <a href="<?php echo e($payment_merchant_link); ?>"
-                                target="_blank" rel="noopener noreferrer"
-                                class="btn btn-soft merchant-link-preview<?php echo $payment_merchant_link === '' ? ' hidden' : ''; ?>"
-                                id="merchantLinkPreview"
-                                title="Open this payment link in a new tab">
-                                <?php echo ownerIcon('external-link', 'icon-sm'); ?>
-                                Open Preview
-                            </a>
-                        </div>
-                        <span class="field-error" id="merchantLinkError"></span>
-                        <span class="muted">Customers can use this link to directly access your GCash payment channel. Leave empty to remove this payment method.</span>
-                    </div>
-
-                    <div class="field full">
-                        <label for="gcash_qr_file">GCash QR Code</label>
-                        <?php if (!empty($payment_qr_code)): ?>
-                            <div class="shop-logo-panel">
-                                <img src="<?php echo GCASH_QR_URL . e($payment_qr_code); ?>" class="shop-logo-preview"
-                                    alt="GCash QR code">
-                                <div>
-                                    <h3>Current GCash QR</h3>
-                                    <p class="card-note">Upload a new QR image to replace it.</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                        <div class="qr-upload-action-row">
-                            <div class="qr-upload-input-wrap">
-                                <input id="gcash_qr_file" type="file" name="gcash_qr_file"
-                                    accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
-                            </div>
-                            <?php if (!empty($payment_qr_code)): ?>
-                                <div class="qr-remove-toggle-container">
-                                    <label class="qr-remove-label" for="remove_gcash_qr">
-                                        <input type="checkbox" id="remove_gcash_qr" name="remove_gcash_qr" value="1" class="qr-remove-checkbox" data-editable disabled aria-describedby="removeQrTooltip">
-                                        <span class="qr-remove-text">Remove current QR</span>
-                                    </label>
-                                    <div class="qr-remove-tooltip" role="tooltip" id="removeQrTooltip">
-                                        Remove current QR code (this removes the QR payment method)
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        <span class="muted">Required before customers can pay online through GCash and submit proof.</span>
-                    </div>
-
-                    <div class="field full">
-                        <label for="payment_instructions">Payment Instructions</label>
-                        <textarea id="payment_instructions" name="payment_instructions" rows="3" required
-                            placeholder="Tell customers to pay the exact total and upload their GCash receipt."
-                            data-editable disabled><?php echo e($payment_instructions); ?></textarea>
-                        <span class="muted">Saving payment details sends them to Super Admin for approval.</span>
-                    </div>
-
-                    <div class="field full">
-                        <label>Payment Details Approval</label>
-                        <div class="payment-approval-badges">
-                            <?php if ($payment_qr_code !== ''): ?>
-                                <span class="status-badge <?php echo ownerStatusClass($payment_qr_approval === 'approved' ? 'verified' : ($payment_qr_approval === 'rejected' ? 'rejected' : 'pending')); ?>">
-                                    QR Code: <?php echo e(ucfirst($payment_qr_approval)); ?>
-                                </span>
-                            <?php endif; ?>
-                            <?php if ($payment_merchant_link !== ''): ?>
-                                <span class="status-badge <?php echo ownerStatusClass($payment_link_approval === 'approved' ? 'verified' : ($payment_link_approval === 'rejected' ? 'rejected' : 'pending')); ?>">
-                                    Merchant Link: <?php echo e(ucfirst($payment_link_approval)); ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                        <?php if ($payment_qr_code !== '' && $payment_qr_approval === 'rejected'): ?>
-                            <div class="payment-setup-status payment-setup-rejected" style="margin-top:10px;">
-                                <span class="payment-setup-emoji" aria-hidden="true">!</span>
-                                <span class="payment-setup-text">
-                                    QR Code rejected: <?php echo e(!empty($payment_qr_channel['rejected_reason']) ? $payment_qr_channel['rejected_reason'] : 'No reason provided.'); ?>
-                                </span>
-                            </div>
-                        <?php endif; ?>
-                        <?php if ($payment_merchant_link !== '' && $payment_link_approval === 'rejected'): ?>
-                            <div class="payment-setup-status payment-setup-rejected" style="margin-top:10px;">
-                                <span class="payment-setup-emoji" aria-hidden="true">!</span>
-                                <span class="payment-setup-text">
-                                    Merchant Link rejected: <?php echo e(!empty($payment_link_channel['rejected_reason']) ? $payment_link_channel['rejected_reason'] : 'No reason provided.'); ?>
-                                </span>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="field full">
-                        <label for="business_permit_file">Business Permit</label>
-                        <input id="business_permit_file" type="file" name="business_permit_file" data-editable disabled>
-                        <?php if (!empty($shop['business_permit_file'])): ?>
-                            <span class="muted">Current permit is on file. Upload a new one to replace it.</span>
-                        <?php else: ?>
-                            <span class="muted">Required when completing a new shop profile.</span>
-                        <?php endif; ?>
-                    </div>
-
-                </div>
-            </section>
-
-            <section class="owner-card">
-                <div class="card-head">
-                    <div>
-                        <h2>Operating Hours</h2>
+                        <h2><?php echo ownerIcon('clock', 'icon'); ?> Operating Hours</h2>
                         <p class="card-note">Set shop availability schedule.</p>
                     </div>
                 </div>
@@ -611,6 +449,259 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
 
                 </div>
             </section>
+        </div>
+
+        <div class="shop-management-side">
+            <section class="owner-card shop-details-card">
+                <div class="card-head">
+                    <div>
+                        <h2><?php echo ownerIcon('file-text', 'icon'); ?> Shop Details</h2>
+                        <p class="card-note">Click Edit before making profile changes.</p>
+                    </div>
+                    <button type="button" class="btn btn-soft shop-edit-button" id="editShopProfile">
+                        <?php echo ownerIcon('edit-3', 'icon'); ?>
+                        Edit
+                    </button>
+                </div>
+
+                <div class="shop-details-fields">
+                    <div class="field full">
+                        <label for="shop_name">Shop Name</label>
+                        <input id="shop_name" type="text" name="shop_name"
+                            value="<?php echo e($shop['shop_name'] ?? ''); ?>" placeholder="Shop Name" required
+                            data-editable disabled>
+                    </div>
+
+                    <div class="field full">
+                        <label for="shop_address">Complete Shop Address</label>
+                        <textarea id="shop_address" name="shop_address" rows="3"
+                            placeholder="Example: Purok 2, Magsaysay Blvd, Brgy. Central, Calbayog City, Samar" required
+                            data-editable disabled><?php echo e($shop['shop_address'] ?? ''); ?></textarea>
+                        <span class="muted">Used for admin verification and official shop records.</span>
+                    </div>
+
+                    <div class="field full">
+                        <label for="display_address">Street / Area Display</label>
+                        <input id="display_address" type="text" name="display_address"
+                            value="<?php echo e($shop['display_address'] ?? ''); ?>"
+                            placeholder="Example: Magsaysay Blvd" data-editable disabled>
+                        <span class="muted">This shorter location will be shown to customers.</span>
+                    </div>
+
+                    <div class="field full">
+                        <label for="landmark">Nearby Landmark</label>
+                        <input id="landmark" type="text" name="landmark"
+                            value="<?php echo e($shop['landmark'] ?? ''); ?>"
+                            placeholder="Example: Near Christ the King" data-editable disabled>
+                        <span class="muted">Optional, but helpful for customer navigation.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="owner-card payment-details-card">
+                <div class="card-head">
+                    <div>
+                        <h2><?php echo ownerIcon('philippine-peso', 'icon'); ?> Payment Details</h2>
+                        <p class="card-note">Set up GCash details so customers can pay online.</p>
+                    </div>
+                    <div class="payment-approval-badges">
+                        <?php if ($payment_qr_code !== ''): ?>
+                            <span class="status-badge <?php echo ownerStatusClass($payment_qr_approval === 'approved' ? 'verified' : ($payment_qr_approval === 'rejected' ? 'rejected' : 'pending')); ?>">
+                                QR Code: <?php echo e(ucfirst($payment_qr_approval)); ?>
+                            </span>
+                        <?php endif; ?>
+                        <?php if ($payment_merchant_link !== ''): ?>
+                            <span class="status-badge <?php echo ownerStatusClass($payment_link_approval === 'approved' ? 'verified' : ($payment_link_approval === 'rejected' ? 'rejected' : 'pending')); ?>">
+                                Merchant Link: <?php echo e(ucfirst($payment_link_approval)); ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="shop-details-fields payment-details-fields">
+                    <?php if ($payment_qr_code !== '' && $payment_qr_approval === 'rejected'): ?>
+                        <div class="payment-setup-status payment-setup-rejected payment-rejection-alert">
+                            <span class="payment-setup-emoji" aria-hidden="true">!</span>
+                            <span class="payment-setup-text">
+                                QR Code rejected: <?php echo e(!empty($payment_qr_channel['rejected_reason']) ? $payment_qr_channel['rejected_reason'] : 'No reason provided.'); ?>
+                            </span>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($payment_merchant_link !== '' && $payment_link_approval === 'rejected'): ?>
+                        <div class="payment-setup-status payment-setup-rejected payment-rejection-alert">
+                            <span class="payment-setup-emoji" aria-hidden="true">!</span>
+                            <span class="payment-setup-text">
+                                Merchant Link rejected: <?php echo e(!empty($payment_link_channel['rejected_reason']) ? $payment_link_channel['rejected_reason'] : 'No reason provided.'); ?>
+                            </span>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="payment-setup-status <?php echo e($payment_setup_class); ?>" id="paymentSetupStatusLegacy" hidden aria-hidden="true">
+                        <span class="payment-setup-emoji" aria-hidden="true">
+                            <?php if ($payment_setup_emoji === 'gcash'): ?>
+                                <img src="<?php echo BASE_URL; ?>assets/images/gcash.svg" alt="" class="payment-setup-icon">
+                            <?php elseif ($payment_setup_emoji === 'qr'): ?>
+                                <img src="<?php echo BASE_URL; ?>assets/images/qr-code.png" alt="" class="payment-setup-icon">
+                            <?php else: ?>
+                                <?php echo ownerIcon('triangle-alert', 'icon-sm'); ?>
+                            <?php endif; ?>
+                        </span>
+                        <span class="payment-setup-text"><?php echo e($payment_setup_label); ?></span>
+                    </div>
+
+                    <div class="payment-account-grid">
+                        <div class="field">
+                            <label for="gcash_name">GCash Account Name (Optional if you have QR Code) </label>
+                            <input id="gcash_name" type="text" name="gcash_name"
+                                value="<?php echo e($payment_qr_channel['gcash_account_name'] ?? ($shop['gcash_name'] ?? '')); ?>"
+                                placeholder="Account name shown in GCash" data-editable disabled>
+                            <span class="muted">Shown to customers when they pay online through GCash.</span>
+                        </div>
+
+                        <div class="field">
+                            <label for="gcash_number">GCash Number (Optional if you have QR Code)</label>
+                            <input id="gcash_number" type="text" name="gcash_number"
+                                value="<?php echo e($payment_qr_channel['gcash_number'] ?? ($shop['gcash_number'] ?? '')); ?>" placeholder="09XXXXXXXXX"
+                                data-editable disabled>
+                            <span class="muted">Optional when your GCash QR code is available.</span>
+                        </div>
+                    </div>
+
+                    <div class="field full">
+                        <label for="merchant_link">GCash Payment Link</label>
+                        <div class="merchant-link-row">
+                            <input id="merchant_link" type="url" name="merchant_link"
+                                value="<?php echo e($payment_merchant_link); ?>"
+                                placeholder="https://..." data-editable disabled>
+                            <a href="<?php echo e($payment_merchant_link); ?>"
+                                target="_blank" rel="noopener noreferrer"
+                                class="btn btn-soft merchant-link-preview<?php echo $payment_merchant_link === '' ? ' hidden' : ''; ?>"
+                                id="merchantLinkPreview"
+                                title="Open this payment link in a new tab">
+                                <?php echo ownerIcon('external-link', 'icon-sm'); ?>
+                                Open Preview
+                            </a>
+                        </div>
+                        <span class="field-error" id="merchantLinkError"></span>
+                        <span class="muted">Customers can use this link to directly access your GCash payment channel. Leave empty to remove this payment method.</span>
+                    </div>
+
+                    <div class="field full">
+                        <label for="gcash_qr_file">GCash QR Code</label>
+                        <div data-file-preview="gcash_qr_file">
+                            <?php if (!empty($payment_qr_code)): ?>
+                                <div class="shop-logo-panel">
+                                    <img src="<?php echo GCASH_QR_URL . e($payment_qr_code); ?>" class="shop-logo-preview image-view-trigger"
+                                        alt="GCash QR code (click to view full size)" data-lightbox-img>
+                                    <div>
+                                        <h3>Current GCash QR</h3>
+                                        <p class="card-note">Click the QR image to preview it full size.</p>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="shop-logo-panel">
+                                    <div class="shop-logo-placeholder"><?php echo ownerIcon('store', 'icon-xl'); ?></div>
+                                    <div>
+                                        <h3>No GCash QR uploaded</h3>
+                                        <p class="card-note">Upload a QR code to accept GCash payments.</p>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="qr-upload-action-row">
+                            <div class="qr-upload-input-wrap">
+                                <input id="gcash_qr_file" class="file-upload-native" type="file" name="gcash_qr_file"
+                                    accept=".jpg,.jpeg,.png,.webp,.jfif,image/jpeg,image/png,image/webp" data-editable disabled>
+                                <label class="file-upload-control" for="gcash_qr_file">
+                                    <?php echo ownerIcon('upload', 'icon-sm'); ?>
+                                    <span data-file-label-for="gcash_qr_file">Choose QR Code</span>
+                                </label>
+                            </div>
+                            <?php if (!empty($payment_qr_code)): ?>
+                                <div class="qr-remove-toggle-container">
+                                    <label class="qr-remove-label" for="remove_gcash_qr">
+                                        <input type="checkbox" id="remove_gcash_qr" name="remove_gcash_qr" value="1" class="qr-remove-checkbox" data-editable disabled aria-describedby="removeQrTooltip">
+                                        <span class="qr-remove-text">Remove current QR</span>
+                                    </label>
+                                    <div class="qr-remove-tooltip" role="tooltip" id="removeQrTooltip">
+                                        Remove current QR code (this removes the QR payment method)
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <span class="file-meta-row">
+                            <span class="muted" data-file-meta-for="gcash_qr_file">Required before customers can pay online through GCash and submit proof.</span>
+                            <button type="button" class="file-preview-clear" data-file-clear-for="gcash_qr_file"
+                                title="Clears the file you just selected. This does not delete your saved QR code."
+                                hidden>Remove selected file</button>
+                        </span>
+                    </div>
+
+                    <div class="field full">
+                        <label for="payment_instructions">Payment Instructions</label>
+                        <textarea id="payment_instructions" name="payment_instructions" rows="3" required
+                            placeholder="Tell customers to pay the exact total and upload their GCash receipt."
+                            data-editable disabled><?php echo e($payment_instructions); ?></textarea>
+                        <span class="muted">Saving payment details sends them to Super Admin for approval.</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="owner-card business-permit-card">
+                <div class="card-head">
+                    <div>
+                        <h2><?php echo ownerIcon('folder', 'icon'); ?> Business Permit</h2>
+                        <p class="card-note">Current permit status and replacement upload.</p>
+                    </div>
+                    <span class="status-badge <?php echo ownerStatusClass($permit_status); ?>">
+                        <?php echo ownerIcon($permit_icon, 'icon-sm'); ?>
+                        <?php echo e(ownerStatusLabel($permit_status)); ?>
+                    </span>
+                </div>
+
+                <div class="permit-file-row">
+                    <div data-file-preview="business_permit_file">
+                        <?php if (!empty($shop['business_permit_file'])): ?>
+                            <?php $permit_ext = strtolower(pathinfo($shop['business_permit_file'], PATHINFO_EXTENSION)); ?>
+                            <div class="permit-preview-block">
+                                <img src="<?php echo PERMITS_URL . e($shop['business_permit_file']); ?>" class="permit-preview image-view-trigger"
+                                    alt="Business permit (click to view)" data-lightbox-img data-file-ext="<?php echo e($permit_ext); ?>">
+                                <div>
+                                    <strong><?php echo e($shop['business_permit_file']); ?></strong>
+                                    <span>Click the permit image to preview it. Current permit is on file.</span>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="permit-empty-state">
+                                <?php echo ownerIcon('circle-alert', 'icon'); ?>
+                                <div>
+                                    <strong>No permit uploaded</strong>
+                                    <span>Required when completing a new shop profile.</span>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="field full">
+                        <label for="business_permit_file">Business Permit</label>
+                        <input id="business_permit_file" class="file-upload-native" type="file" name="business_permit_file"
+                            accept=".jpg,.jpeg,.png,.webp,.jfif,.pdf,image/jpeg,image/png,image/webp,application/pdf" data-editable disabled>
+                        <label class="file-upload-control" for="business_permit_file">
+                            <?php echo ownerIcon('upload', 'icon-sm'); ?>
+                            <span data-file-label-for="business_permit_file">Choose Permit File</span>
+                        </label>
+                        <span class="file-meta-row">
+                            <?php if (!empty($shop['business_permit_file'])): ?>
+                                <span class="muted" data-file-meta-for="business_permit_file">Current permit is on file. Upload a new one to replace it.</span>
+                            <?php else: ?>
+                                <span class="muted" data-file-meta-for="business_permit_file">Required when completing a new shop profile. JPG, PNG, WebP or PDF up to 10MB.</span>
+                            <?php endif; ?>
+                            <button type="button" class="file-preview-clear" data-file-clear-for="business_permit_file"
+                                title="Clears the file you just selected. Your saved permit will not change."
+                                hidden>Remove selected file</button>
+                        </span>
+                    </div>
+                </div>
+            </section>
 
             <div class="shop-management-actions">
                 <button type="submit" name="save_profile" class="btn btn-primary" id="saveShopProfile" disabled>
@@ -624,6 +715,16 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
 
 <script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
     (function() {
+        document.querySelectorAll('.file-upload-native').forEach(function(input) {
+            var labelText = document.querySelector('[data-file-label-for="' + input.id + '"]');
+            if (!labelText) return;
+            var defaultText = labelText.textContent;
+            input.addEventListener('change', function() {
+                var file = input.files && input.files[0];
+                labelText.textContent = file ? file.name : defaultText;
+            });
+        });
+
         var form = document.getElementById('shopProfileForm');
         if (!form) return;
 
@@ -890,7 +991,57 @@ ownerLayoutStart('profile', 'Shop Management', 'Manage your shop details, permit
     })();
 </script>
 
+<script src="assets/js/filePreview.js?v=<?php echo filemtime(__DIR__ . '/assets/js/filePreview.js'); ?>"></script>
 <script src="assets/js/shopLocation.js?v=<?php echo filemtime(__DIR__ . '/assets/js/shopLocation.js'); ?>" data-base-url="<?php echo e(BASE_URL); ?>"></script>
 
+
+<div class="owner-image-viewer" id="ownerImageViewer" aria-hidden="true">
+    <div class="owner-image-viewer__panel" role="dialog" aria-modal="true" aria-label="Image preview">
+        <button type="button" class="owner-image-viewer__close" data-image-viewer-close aria-label="Close image preview">&times;</button>
+        <img src="" alt="Preview">
+    </div>
+</div>
+
+<script nonce="<?php echo $GLOBALS['csp_nonce'] ?? ''; ?>">
+    (function () {
+        var viewer = document.getElementById('ownerImageViewer');
+        if (!viewer) return;
+        var img = viewer.querySelector('img');
+        var closeBtn = viewer.querySelector('[data-image-viewer-close]');
+
+        function open(src) {
+            img.src = src;
+            viewer.classList.add('is-open');
+            viewer.setAttribute('aria-hidden', 'false');
+        }
+
+        function close() {
+            viewer.classList.remove('is-open');
+            viewer.setAttribute('aria-hidden', 'true');
+            img.src = '';
+        }
+
+        document.addEventListener('click', function (event) {
+            var trigger = event.target.closest('[data-lightbox-img]');
+            if (trigger) {
+                event.preventDefault();
+                var ext = (trigger.getAttribute('data-file-ext') || '').toLowerCase();
+                if (ext === 'pdf') {
+                    window.open(trigger.currentSrc || trigger.src, '_blank', 'noopener');
+                    return;
+                }
+                open(trigger.currentSrc || trigger.src);
+            }
+        });
+
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        viewer.addEventListener('click', function (event) {
+            if (event.target === viewer) close();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') close();
+        });
+    })();
+</script>
 
 <?php ownerLayoutEnd(); ?>

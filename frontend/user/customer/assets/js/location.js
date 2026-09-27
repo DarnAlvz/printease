@@ -17,14 +17,24 @@
     var baseUrl = currentScriptBaseUrl();
     var reverseGeocodeUrl = baseUrl + 'backend/actions/reverse_geocode.php';
 
+    function isSecureLocationContext() {
+        return window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    }
+
     function useCurrentLocation() {
         if (busy) return;
 
         var status = document.getElementById("locationStatus");
+        if (!status) return;
         status.innerText = "Getting your current location...";
 
+        if (!isSecureLocationContext()) {
+            status.innerText = "Current location may require HTTPS or localhost. You can still type your complete address manually.";
+            return;
+        }
+
         if (!navigator.geolocation) {
-            status.innerText = "Location is not supported by your browser.";
+            status.innerText = "Current location is not supported by this browser. Please type your complete address manually.";
             return;
         }
 
@@ -59,13 +69,13 @@
             },
             function(error) {
                 if (error && error.code === 1) {
-                    status.innerText = "Location permission denied. Please type your address manually.";
+                    status.innerText = "Location permission was denied. Allow location in your browser or site settings, then try again. You can also type your complete address manually.";
                 } else if (error && error.code === 2) {
-                    status.innerText = "Location unavailable. Please type your address manually.";
+                    status.innerText = "Your device could not provide a current location. Please type your complete address manually.";
                 } else if (error && error.code === 3) {
-                    status.innerText = "Location detection timed out. Please type your address manually.";
+                    status.innerText = "Location detection timed out. Please try again or type your complete address manually.";
                 } else {
-                    status.innerText = "Could not detect location. Please type your address manually.";
+                    status.innerText = "Could not detect your location. Please type your complete address manually.";
                 }
                 busy = false;
             },

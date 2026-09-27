@@ -4,13 +4,11 @@ require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../includes/auth.php";
 require_once __DIR__ . "/../includes/functions.php";
 require_once __DIR__ . "/../includes/profile_guard.php";
-require_once __DIR__ . "/../includes/status_guard.php";
 require_once __DIR__ . "/../includes/rate_limit.php";
 require_once __DIR__ . "/../config/cloudinary.php";
 
 checkRole("customer");
-requireCompleteCustomerProfile($conn);
-requireVerifiedStatus($conn);
+requireCustomerFeatureAccess($conn);
 
 validateCsrf();
 
@@ -138,6 +136,39 @@ if ($is_document_order && (!isset($_FILES['document_file']) || $_FILES['document
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
+function isOfficeDocumentExtension($extension)
+{
+    return in_array($extension, ['doc', 'docx', 'wps'], true);
+}
+
+function officeDocumentAllowedMime($extension, $mime)
+{
+    $mime = strtolower((string) $mime);
+    $allowed_by_extension = [
+        'docx' => [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        'doc' => [
+            'application/msword',
+            'application/octet-stream',
+            'application/x-ole-storage',
+        ],
+        'wps' => [
+            'application/vnd.ms-works',
+            'application/x-wps',
+            'application/wps-office',
+            'application/msword',
+            'application/zip',
+            'application/octet-stream',
+        ],
+    ];
+
+    $allowed = $allowed_by_extension[$extension] ?? [];
+    return in_array($mime, $allowed, true);
+}
+
 function validateOrderDocumentUpload(array $file)
 {
     $max_file_size = 25 * 1024 * 1024;
@@ -149,19 +180,31 @@ function validateOrderDocumentUpload(array $file)
 
     $original_name = basename((string) ($file['name'] ?? ''));
     $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
-    if ($extension !== 'pdf') {
-        setError("Only PDF files are accepted for print requests.");
+    if ($extension !== 'pdf' && !isOfficeDocumentExtension($extension)) {
+        setError("Only PDF, DOC, DOCX, or WPS files are accepted for print requests.");
         return false;
     }
 
     $tmp_name = (string) ($file['tmp_name'] ?? '');
     if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+        if (isOfficeDocumentExtension($extension)) {
+            setError("Please upload a valid document file.");
+            return false;
+        }
         setError("Please upload a valid PDF file.");
         return false;
     }
 
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($tmp_name);
+
+    if (isOfficeDocumentExtension($extension)) {
+        if (!officeDocumentAllowedMime($extension, $mime)) {
+            setError("Only PDF, DOC, DOCX, or WPS files are accepted for print requests.");
+            return false;
+        }
+        return true;
+    }
     if ($mime !== 'application/pdf') {
         setError("Only PDF files are accepted for print requests.");
         return false;
@@ -347,7 +390,11 @@ $transaction_started = false;
 
 try {
     if ($is_document_order) {
-        $page_count = getPdfPageCount($file_tmp, $detected_page_count);
+        if ($file_type === 'pdf') {
+            $page_count = getPdfPageCount($file_tmp, $detected_page_count);
+        } else {
+            $page_count = max(1, min(10000, $detected_page_count));
+        }
         $total_amount = (float) $service['price_per_page'] * $page_count * $copies;
         $order_paper_size = $service['paper_size'];
         $order_paper_type = $service['paper_type'];

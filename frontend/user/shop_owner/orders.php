@@ -196,6 +196,37 @@ while ($order = mysqli_fetch_assoc($result)) {
     $orders[] = $order;
 }
 
+$order_notes_map = [];
+$order_notes_table_exists = false;
+$table_check = mysqli_query($conn, "SHOW TABLES LIKE 'order_notes'");
+if ($table_check && mysqli_num_rows($table_check) > 0) {
+    $order_notes_table_exists = true;
+    $note_order_ids = [];
+    foreach ($orders as $note_order) {
+        $note_order_ids[(int) ($note_order['order_id'] ?? 0)] = true;
+    }
+    unset($note_order_ids[0]);
+    if (!empty($note_order_ids)) {
+        $note_placeholders = implode(',', array_fill(0, count($note_order_ids), '?'));
+        $note_types = str_repeat('i', count($note_order_ids));
+        $note_params = array_keys($note_order_ids);
+        $notes_sql = "SELECT note_id, order_id, note_type, note_text, created_at FROM order_notes WHERE order_id IN ($note_placeholders) ORDER BY created_at DESC, note_id DESC";
+        $notes_stmt = mysqli_prepare($conn, $notes_sql);
+        if ($notes_stmt) {
+            mysqli_stmt_bind_param($notes_stmt, $note_types, ...$note_params);
+            mysqli_stmt_execute($notes_stmt);
+            $notes_result = mysqli_stmt_get_result($notes_stmt);
+            while ($note_row = mysqli_fetch_assoc($notes_result)) {
+                // Overwrite semantics: keep only the latest note per order (legacy rows may stack).
+                $map_order_id = (int) $note_row['order_id'];
+                if (!isset($order_notes_map[$map_order_id])) {
+                    $order_notes_map[$map_order_id] = [$note_row];
+                }
+            }
+        }
+    }
+}
+
 $shop_service_type_lookup = [];
 $service_types_stmt = mysqli_prepare($conn, "SELECT service_type FROM shop_service_types WHERE shop_id = ?");
 if ($service_types_stmt) {
@@ -297,6 +328,88 @@ function ownerDownloadFileUrl(array $file)
     return BASE_URL . 'backend/actions/download_order_file.php?file_id=' . $file_id;
 }
 
+function ownerAcceptDownloadUrl(array $file)
+{
+    $file_id = (int) ($file['file_id'] ?? 0);
+    if ($file_id <= 0) {
+        return '';
+    }
+
+    // Accept & Download must force download (like PDF): never open raw docx inline.
+    return BASE_URL . 'backend/actions/download_order_file.php?file_id=' . $file_id . '&mode=download';
+}
+
+function ownerOrderFileExtension(array $file)
+{
+    $from_name = strtolower(pathinfo((string) ($file['file_name'] ?? ''), PATHINFO_EXTENSION));
+    if ($from_name !== '') {
+        return $from_name;
+    }
+
+    return strtolower(trim((string) ($file['file_type'] ?? '')));
+}
+
+// viewable: doc/docx -> click opens Office viewer (new tab).
+// download-only: wps -> click forces download (viewer has no .wps support).
+// native: pdf/images -> keep existing inline preview.
+function ownerOrderFileKind(array $file)
+{
+    $ext = ownerOrderFileExtension($file);
+
+    if ($ext === 'doc' || $ext === 'docx') {
+        return 'viewable';
+    }
+
+    if ($ext === 'wps') {
+        return 'download-only';
+    }
+
+    return 'native';
+}
+
+function ownerOrderViewerUrl(array $file)
+{
+    if (ownerOrderFileKind($file) !== 'viewable') {
+        return '';
+    }
+
+    $path = trim((string) ($file['file_path'] ?? ''));
+    if ($path === '') {
+        return '';
+    }
+
+    if (str_starts_with($path, '//')) {
+        $path = 'https:' . $path;
+    }
+
+    // Only public Cloudinary URLs can be fed to the Office viewer.
+    if (!preg_match('/^https:\/\/res\.cloudinary\.com\//i', $path)) {
+        return '';
+    }
+
+    return 'https://view.officeapps.live.com/op/view.aspx?src=' . rawurlencode($path);
+}
+
+function ownerOrderPreviewUrl(array $file)
+{
+    $kind = ownerOrderFileKind($file);
+    if ($kind === 'viewable') {
+        $viewer = ownerOrderViewerUrl($file);
+        if ($viewer !== '') {
+            return $viewer;
+        }
+    }
+
+    if ($kind !== 'native') {
+        $forced = ownerAcceptDownloadUrl($file);
+        if ($forced !== '') {
+            return $forced;
+        }
+    }
+
+    return ownerDownloadFileUrl($file);
+}
+
 function ownerDownloadFileName(array $file)
 {
     $file_name = trim((string) ($file['file_name'] ?? ''));
@@ -377,15 +490,18 @@ function renderAcceptDownloadForm(array $order, array $file_rows, $hidden = fals
 ?>
     <form action="<?php echo BASE_URL; ?>backend/actions/update_order_status.php" method="POST"
         class="orders-update-form orders-status-action order-modal-accept-form" data-accept-download-form
+        data-owner-local-handler="true"
         data-order-id="<?php echo e($order['order_id']); ?>" <?php echo $hidden ? 'hidden' : ''; ?>>
         <?php echo csrfField(); ?>
         <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
         <input type="hidden" name="order_status" value="processing">
         <?php foreach ($file_rows as $file): ?>
-            <?php $download_url = ownerDownloadFileUrl($file); ?>
+            <?php $download_url = ownerAcceptDownloadUrl($file); ?>
             <?php if ($download_url !== ''): ?>
                 <input type="hidden" data-download-url value="<?php echo e($download_url); ?>"
-                    data-download-name="<?php echo e(ownerDownloadFileName($file)); ?>">
+                    data-download-name="<?php echo e(ownerDownloadFileName($file)); ?>"
+                    data-file-ext="<?php echo e(ownerOrderFileExtension($file)); ?>"
+                    data-file-kind="<?php echo e(ownerOrderFileKind($file)); ?>">
             <?php endif; ?>
         <?php endforeach; ?>
         <button type="submit" name="update_order" class="btn order-btn-completed">
@@ -526,7 +642,7 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             <td>
                                 <?php renderOwnerCustomerIdentity($order); ?>
                             </td>
-                            <td><?php echo e($first_file); ?></td>
+                            <td><span class="order-file-name" title="<?php echo e($first_file); ?>"><?php echo e($first_file); ?></span></td>
                             <td>
                                 <div class="print-detail-chips">
                                     <span><?php echo ownerIcon('package', 'icon-sm'); ?>Service: <?php echo e($selected_service_name); ?></span>
@@ -632,10 +748,28 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                     <strong>No uploaded file</strong>
                                     <span>No file is attached to this print job.</span>
                                 <?php else: ?>
-                                    <strong><?php echo e(count($file_rows) > 1 ? count($file_rows) . ' Uploaded Files' : 'PDF Document'); ?></strong>
+                                    <?php
+                                    $first_file_ext = strtolower(pathinfo((string) ($file_rows[0]['file_name'] ?? ''), PATHINFO_EXTENSION));
+                                    $first_file_type = strtolower((string) ($file_rows[0]['file_type'] ?? $first_file_ext));
+                                    $is_office_file = in_array($first_file_type, ['doc', 'docx', 'wps'], true);
+                                    $file_label = count($file_rows) > 1
+                                        ? count($file_rows) . ' Uploaded Files'
+                                        : ($is_office_file ? 'Word / WPS Document' : 'PDF Document');
+                                    ?>
+                                    <strong><?php echo e($file_label); ?></strong>
                                     <?php foreach ($file_rows as $file): ?>
-                                        <a href="<?php echo e(ownerDownloadFileUrl($file)); ?>"
-                                            target="_blank" rel="noopener"><?php echo e($file['file_name']); ?></a>
+                                        <?php
+                                        $preview_url = ownerOrderPreviewUrl($file);
+                                        $preview_kind = ownerOrderFileKind($file);
+                                        $preview_hint = $preview_kind === 'viewable'
+                                            ? 'Preview in new tab (Office viewer)'
+                                            : ($preview_kind === 'download-only' ? 'Download file' : 'Open file in new tab');
+                                        if ($preview_url === '') {
+                                            $preview_url = ownerDownloadFileUrl($file);
+                                        }
+                                        ?>
+                                        <a href="<?php echo e($preview_url); ?>"
+                                            target="_blank" rel="noopener" class="order-file-name" title="<?php echo e($file['file_name'] . ' — ' . $preview_hint); ?>"><?php echo e($file['file_name']); ?></a>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
@@ -836,6 +970,55 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                                 </div>
                             </div>
                         </section>
+
+                        <?php
+                        $modal_notes = $order_notes_map[(int) $order['order_id']] ?? [];
+                        $show_adjust_form = !empty($file_rows) && !empty($is_office_file) && $is_document_service && ($order['order_status'] ?? '') === 'ready_for_pickup';
+                        ?>
+                        <?php if ($show_adjust_form || !empty($modal_notes)): ?>
+                            <section class="order-modal-section">
+                                <h3 data-adjust-title>Pickup Balance</h3>
+                                <?php if (!empty($modal_notes)): ?>
+                                    <div class="order-notes-list">
+                                        <?php foreach ($modal_notes as $note): ?>
+                                            <div class="order-note-item order-note-<?php echo e($note['note_type']); ?>">
+                                                <strong><?php echo ($note['note_type'] ?? '') === 'refund' ? 'Refund' : 'Additional balance'; ?></strong>
+                                                <span><?php echo e($note['note_text']); ?></span>
+                                                <small><?php echo e(!empty($note['created_at']) ? date('M d, Y - g:i A', strtotime($note['created_at'])) : ''); ?></small>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($show_adjust_form && $owner_is_verified): ?>
+                                    <?php
+                                    $template_additional = 'Your printing request has an additional balance of ₱{X}. Please settle the remaining amount upon pickup.';
+                                    $template_refund = 'Your printing request has a refund of ₱{X}. Please claim it in cash upon pickup.';
+                                    ?>
+                                    <form action="<?php echo BASE_URL; ?>backend/actions/send_order_adjustment_note.php" method="POST"
+                                        class="orders-update-form order-adjust-form" data-adjust-form
+                                        data-template-additional="<?php echo e($template_additional); ?>"
+                                        data-template-refund="<?php echo e($template_refund); ?>">
+                                        <?php echo csrfField(); ?>
+                                        <input type="hidden" name="order_id" value="<?php echo e($order['order_id']); ?>">
+                                        <div class="order-adjust-pills" role="radiogroup" aria-label="Note type">
+                                            <label class="order-adjust-pill">
+                                                <input type="radio" name="note_type" value="additional" data-adjust-pill checked>
+                                                <span>Request additional</span>
+                                            </label>
+                                            <label class="order-adjust-pill">
+                                                <input type="radio" name="note_type" value="refund" data-adjust-pill>
+                                                <span>Request refund</span>
+                                            </label>
+                                        </div>
+                                        <label for="adjust-text-<?php echo e($order['order_id']); ?>">Note to customer (edit amount manually)</label>
+                                        <textarea id="adjust-text-<?php echo e($order['order_id']); ?>" name="note_text" rows="3"
+                                            class="payment-reject-textarea" data-adjust-text maxlength="500" required><?php echo e($template_additional); ?></textarea>
+                                        <button type="submit" name="send_order_adjustment_note" class="btn order-btn-ready">Send Note</button>
+                                        <small class="muted">Cash settlement on pickup. Sending a new note replaces the previous one.</small>
+                                    </form>
+                                <?php endif; ?>
+                            </section>
+                        <?php endif; ?>
                     </div>
 
                     <footer class="order-modal-footer">
@@ -999,6 +1182,47 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
             button.addEventListener('click', function() {
                 openModal(document.getElementById(button.dataset.orderModalTarget));
             });
+        });
+
+        document.addEventListener('change', function (event) {
+            const target = event.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const pill = target.closest('[data-adjust-pill]');
+            if (!pill) return;
+            // Only react to the radio that became checked; some browsers fire
+            // change on the unchecked sibling too, which used to swap in the
+            // wrong template and could leave the textarea blank.
+            if (pill.type === 'radio' && !pill.checked) return;
+            if (pill.value !== 'refund' && pill.value !== 'additional') return;
+            const form = pill.closest('[data-adjust-form]');
+            const textarea = form ? form.querySelector('[data-adjust-text]') : null;
+            if (!form || !textarea) return;
+            const fallbackAdditional = 'Your printing request has an additional balance of \u20B1{X}. Please settle the remaining amount upon pickup.';
+            const fallbackRefund = 'Your printing request has a refund of \u20B1{X}. Please claim it in cash upon pickup.';
+            const templateRefund = form.dataset.templateRefund || fallbackRefund;
+            const templateAdditional = form.dataset.templateAdditional || fallbackAdditional;
+            const current = pill.value === 'refund' ? 'additional' : 'refund';
+            try {
+                form.dataset['draft_' + current] = textarea.value;
+            } catch (datasetError) {
+                /* drafts are best-effort only */
+            }
+            const saved = form.dataset['draft_' + pill.value];
+            let next = (saved !== undefined && saved !== '')
+                ? saved
+                : (pill.value === 'refund' ? templateRefund : templateAdditional);
+            // Never blank the textarea: a blank swap is what made the
+            // Pickup Balance block look like a white/empty modal.
+            if (next === undefined || next === null || String(next).trim() === '') {
+                next = pill.value === 'refund' ? templateRefund : templateAdditional;
+            }
+            textarea.value = next;
+            // Keep the section title in sync with the selected pill.
+            const adjustSection = form.closest('section');
+            const adjustTitle = adjustSection ? adjustSection.querySelector('[data-adjust-title]') : null;
+            if (adjustTitle) {
+                adjustTitle.textContent = pill.value === 'refund' ? 'Pickup Refund' : 'Pickup Balance';
+            }
         });
 
         document.addEventListener('click', function(event) {
@@ -1343,9 +1567,21 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
         });
 
         document.querySelectorAll('[data-accept-download-form]').forEach(function(form) {
+            // Single-source guard: delegated handler in live-updates.js skips forms
+            // flagged here, preventing the double-tab bug on Accept & Download.
+            form.dataset.ownerLocalHandler = 'true';
+            if (form.dataset.acceptBound === 'true') {
+                return;
+            }
+            form.dataset.acceptBound = 'true';
             form.addEventListener('submit', async function(event) {
                 event.preventDefault();
                 event.stopPropagation();
+                // Stop immediate propagation as well so no other delegated
+                // submit handler can open a second tab for the same click.
+                if (typeof event.stopImmediatePropagation === 'function') {
+                    try { event.stopImmediatePropagation(); } catch (stopError) { /* best-effort */ }
+                }
 
                 if (form.dataset.downloadStarted === 'true') {
                     return;
@@ -1400,10 +1636,33 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             throw new Error((checkData && checkData.message) || 'Download failed. Please open the file preview link and download manually.');
                         }
 
+                        // Accept = viewer + auto-download for doc/docx/pdf (new-tab preview
+                        // plus a real file download via the proxy). wps/images: download
+                        // or preview only. fileExt comes from the hardened check endpoint.
+                        const fileKind = checkData.file_kind || '';
+                        const fileExt = String(checkData.file_ext || '').toLowerCase();
+                        const forceDownload = Boolean(checkData.force_download)
+                            || fileKind === 'viewable'
+                            || fileKind === 'download-only';
+                        const downloadUrl = (forceDownload && checkData.download_url)
+                            ? checkData.download_url
+                            : ((checkData.remote && checkData.url) ? checkData.url : file.url);
+
+                        let viewerUrl = (fileKind === 'viewable' && checkData.viewer_url) ? checkData.viewer_url : null;
+                        // PDF live behavior: same as Word — raw PDF in new tab (browser
+                        // renders it like before) plus proxy auto-download.
+                        if (!viewerUrl && fileKind === 'native' && fileExt === 'pdf'
+                            && checkData.remote && checkData.url && checkData.download_url) {
+                            viewerUrl = checkData.url;
+                        }
+
                         resolvedFiles.push({
-                            url: checkData.remote && checkData.url ? checkData.url : file.url,
-                            name: file.name,
-                            remote: Boolean(checkData.remote)
+                            downloadUrl: fileKind === 'native' && fileExt === 'pdf' && checkData.download_url ? checkData.download_url : downloadUrl,
+                            viewerUrl: viewerUrl,
+                            name: (checkData.file_name || file.name),
+                            remote: Boolean(checkData.remote) && !forceDownload,
+                            forced: forceDownload || Boolean(viewerUrl && fileKind === 'native'),
+                            kind: fileKind
                         });
                     }
 
@@ -1445,21 +1704,60 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                     }
 
                     resolvedFiles.forEach(function(file, index) {
-                        window.setTimeout(function() {
+                        const baseDelay = index * 350;
+
+                        function openNewTab(url) {
                             const link = document.createElement('a');
-                            link.href = file.url;
-                            if (file.remote) {
-                                link.target = '_blank';
-                                link.rel = 'noopener';
-                            } else {
-                                link.download = file.name;
-                            }
+                            link.href = url;
+                            link.target = '_blank';
+                            link.rel = 'noopener';
                             link.style.display = 'none';
                             document.body.appendChild(link);
                             link.click();
                             link.remove();
-                        }, index * 150);
+                        }
+
+                        function triggerDownload(url, name) {
+                            // Same-origin proxy URL + attachment headers: saves
+                            // without navigating away or opening a blank tab.
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = name;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                        }
+
+                        // Viewable (doc/docx): viewer preview like PDF new-tab,
+                        // plus auto-download of the actual file.
+                        if (file.viewerUrl) {
+                            window.setTimeout(function() {
+                                openNewTab(file.viewerUrl);
+                            }, baseDelay);
+                            window.setTimeout(function() {
+                                triggerDownload(file.downloadUrl, file.name);
+                            }, baseDelay + 150);
+                        } else if (file.forced) {
+                            window.setTimeout(function() {
+                                triggerDownload(file.downloadUrl, file.name);
+                            }, baseDelay);
+                        } else if (file.remote) {
+                            window.setTimeout(function() {
+                                openNewTab(file.downloadUrl);
+                            }, baseDelay);
+                        } else {
+                            window.setTimeout(function() {
+                                triggerDownload(file.downloadUrl, file.name);
+                            }, baseDelay);
+                        }
                     });
+
+                    // Popup-blocker fallback: leave manual links in the toast area
+                    // via console so owners can still open them if blocked.
+                    if (resolvedFiles.some(function(f) { return f.viewerUrl; }) && window.console) {
+                        try { console.info('[PrintEase] viewer+download opened', resolvedFiles); } catch (logError) { /* best-effort */ }
+                    }
 
                     closeModal(form.closest('.order-modal') || activeModal);
 

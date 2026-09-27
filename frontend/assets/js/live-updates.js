@@ -1275,8 +1275,12 @@
 
         document.addEventListener('submit', function (event) {
             const form = event.target.closest('[data-accept-download-form]');
-            if (form && form.dataset.ownerLocalHandler === 'true') return;
             if (!form || form.dataset.downloadStarted === 'true') return;
+            // Preferred path is the local inline handler in orders.php which sets
+            // acceptBound='true' on init and calls stopImmediatePropagation on submit.
+            // Skip here only when the local handler is actually bound, so dynamically
+            // injected forms (no inline binding yet) still work via this fallback.
+            if (form.dataset.acceptBound === 'true') return;
             event.preventDefault();
             const files = Array.from(form.querySelectorAll('[data-download-url]')).map(function (input, index) {
                 return {
@@ -1305,10 +1309,29 @@
                                 throw new Error((data && data.message) || 'Download failed. Please open the file preview link and download manually.');
                             }
 
+                            // Accept = viewer + auto-download for doc/docx/pdf.
+                            const fileKind = data.file_kind || '';
+                            const fileExt = String(data.file_ext || '').toLowerCase();
+                            const forceDownload = Boolean(data.force_download)
+                                || fileKind === 'viewable'
+                                || fileKind === 'download-only';
+                            const downloadUrl = (forceDownload && data.download_url)
+                                ? data.download_url
+                                : ((data.remote && data.url) ? data.url : file.url);
+
+                            let viewerUrl = (fileKind === 'viewable' && data.viewer_url) ? data.viewer_url : null;
+                            if (!viewerUrl && fileKind === 'native' && fileExt === 'pdf'
+                                && data.remote && data.url && data.download_url) {
+                                viewerUrl = data.url;
+                            }
+
                             return {
-                                url: data.remote && data.url ? data.url : file.url,
-                                name: file.name,
-                                remote: Boolean(data.remote)
+                                downloadUrl: fileKind === 'native' && fileExt === 'pdf' && data.download_url ? data.download_url : downloadUrl,
+                                viewerUrl: viewerUrl,
+                                name: (data.file_name || file.name),
+                                remote: Boolean(data.remote) && !forceDownload,
+                                forced: forceDownload || Boolean(viewerUrl && fileKind === 'native'),
+                                kind: fileKind
                             };
                         });
                     });
@@ -1317,30 +1340,57 @@
                     const formData = new FormData(form);
                     if (!formData.has('update_order')) formData.append('update_order', '1');
 
-                    return fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin' })
+                    return fetch(form.action, { method: 'POST', body: formData, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(function (response) {
-                            if (!response.ok) throw new Error('Print job update failed.');
+                            return response.json().catch(function () { return null; }).then(function (data) {
+                                if (!response.ok || !data || !data.success) {
+                                    // 409 means already accepted elsewhere: still allow the
+                                    // single download but surface the message once.
+                                    const msg = (data && data.message) || 'Print job update failed.';
+                                    throw new Error(msg);
+                                }
 
-                            resolvedFiles.forEach(function (file, index) {
-                                window.setTimeout(function () {
-                                    const link = document.createElement('a');
-                                    link.href = file.url;
-                                    if (file.remote) {
+                                resolvedFiles.forEach(function (file, index) {
+                                    const baseDelay = index * 350;
+
+                                    function openNewTab(url) {
+                                        const link = document.createElement('a');
+                                        link.href = url;
                                         link.target = '_blank';
                                         link.rel = 'noopener';
-                                    } else {
-                                        link.download = file.name;
+                                        link.style.display = 'none';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        link.remove();
                                     }
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    link.remove();
-                                }, index * 150);
-                            });
 
-                            const orderForm = document.querySelector('[data-live-target="owner_orders"]');
-                            window.setTimeout(function () {
-                                if (orderForm) refreshLiveForm(orderForm, { updateHistory: false });
-                            }, Math.max(1200, resolvedFiles.length * 350));
+                                    function triggerDownload(url, name) {
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = name;
+                                        link.style.display = 'none';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        link.remove();
+                                    }
+
+                                    if (file.viewerUrl) {
+                                        window.setTimeout(function () { openNewTab(file.viewerUrl); }, baseDelay);
+                                        window.setTimeout(function () { triggerDownload(file.downloadUrl, file.name); }, baseDelay + 150);
+                                    } else if (file.forced) {
+                                        window.setTimeout(function () { triggerDownload(file.downloadUrl, file.name); }, baseDelay);
+                                    } else if (file.remote) {
+                                        window.setTimeout(function () { openNewTab(file.downloadUrl); }, baseDelay);
+                                    } else {
+                                        window.setTimeout(function () { triggerDownload(file.downloadUrl, file.name); }, baseDelay);
+                                    }
+                                });
+
+                                const orderForm = document.querySelector('[data-live-target="owner_orders"]');
+                                window.setTimeout(function () {
+                                    if (orderForm) refreshLiveForm(orderForm, { updateHistory: false });
+                                }, Math.max(1200, resolvedFiles.length * 350));
+                            });
                         });
                 })
                 .catch(function (error) {
