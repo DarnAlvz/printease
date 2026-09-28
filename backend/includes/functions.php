@@ -382,6 +382,123 @@ function validateImageStructure($filePath, $expected_mime) {
     return true;
 }
 
+// Single source of truth for Word / WPS uploads.
+// Used by both Document Printing and other services so allowlists never drift.
+function isOfficeDocumentExtension($extension) {
+    return in_array(strtolower((string) $extension), ['doc', 'docx', 'wps'], true);
+}
+
+function officeDocumentAllowedMime($extension, $mime) {
+    $extension = strtolower((string) $extension);
+    $mime = strtolower((string) $mime);
+    $allowed_by_extension = [
+        'docx' => [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        'doc' => [
+            'application/msword',
+            'application/octet-stream',
+            'application/x-ole-storage',
+        ],
+        'wps' => [
+            'application/vnd.ms-works',
+            'application/x-wps',
+            'application/wps-office',
+            'application/msword',
+            'application/zip',
+            'application/octet-stream',
+        ],
+    ];
+
+    $allowed = $allowed_by_extension[$extension] ?? [];
+    return in_array($mime, $allowed, true);
+}
+
+function serviceUploadAllowedExtensions() {
+    return ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'wps'];
+}
+
+// Photo/ID services accept images only (gallery picker is correct there).
+// Lamination/Tarpaulin/Invitation accept images + PDF/DOC/DOCX (Files picker).
+// NOTE: doc/wps stay supported only via the generic list above for legacy
+// rows; the per-service matrix below is the enforced rule for new uploads.
+function servicePhotoOnlyType($service_type) {
+    return in_array(trim((string) $service_type), ['Photo Printing', 'ID Printing'], true);
+}
+
+function serviceUploadAllowedExtensionsFor($service_type) {
+    if (servicePhotoOnlyType($service_type)) {
+        return ['jpg', 'jpeg', 'png'];
+    }
+    return ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'];
+}
+
+function serviceUploadAllowedMimesFor($service_type) {
+    if (servicePhotoOnlyType($service_type)) {
+        return ['image/jpeg', 'image/png'];
+    }
+    return ['application/pdf', 'image/jpeg', 'image/png'];
+}
+
+function serviceUploadTypeErrorFor($service_type) {
+    if (servicePhotoOnlyType($service_type)) {
+        return "Attachment must be a JPG or PNG file.";
+    }
+    return "Attachment must be a JPG, PNG, PDF, DOC, or DOCX file.";
+}
+
+function orderMaxUploadBytes() {
+    return 25 * 1024 * 1024;
+}
+
+// Maps PHP upload error codes to user-safe messages.
+// Never expose ini paths or server internals to the customer.
+function orderUploadErrorMessage($error, $max_bytes) {
+    $max_mb = max(1, (int) round($max_bytes / (1024 * 1024)));
+    switch ((int) $error) {
+        case UPLOAD_ERR_INI_SIZE:
+        case UPLOAD_ERR_FORM_SIZE:
+            return "File is too large for the server. Please upload a file {$max_mb}MB or smaller.";
+        case UPLOAD_ERR_PARTIAL:
+            return "Upload was interrupted. Please try uploading again.";
+        case UPLOAD_ERR_NO_TMP_DIR:
+        case UPLOAD_ERR_CANT_WRITE:
+        case UPLOAD_ERR_EXTENSION:
+            return "Upload is temporarily unavailable. Please try again later.";
+        default:
+            return "Please upload a valid file.";
+    }
+}
+
+// Detects post_max_size overflow where PHP empties $_POST and $_FILES.
+// Must run before reading $_POST keys to avoid undefined-key warnings on live.
+function orderPostOverflowed() {
+    if (!empty($_POST) || !empty($_FILES)) {
+        return false;
+    }
+    $content_length = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? ''));
+    return $method === 'POST' && $content_length > 0;
+}
+
+function orderFinfoMime($tmp_path) {
+    if (!class_exists('finfo')) {
+        return null;
+    }
+    try {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = @$finfo->file($tmp_path);
+        if ($mime === false || $mime === '') {
+            return '';
+        }
+        return strtolower((string) $mime);
+    } catch (Throwable $exception) {
+        return null;
+    }
+}
+
 function getPdfPageCount($filePath, $fallback = 1) {
     $fallback = max(1, (int) $fallback);
 

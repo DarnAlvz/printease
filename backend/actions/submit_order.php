@@ -10,6 +10,20 @@ require_once __DIR__ . "/../config/cloudinary.php";
 checkRole("customer");
 requireCustomerFeatureAccess($conn);
 
+// Live guard: post_max_size overflow empties $_POST/$_FILES.
+// Must run before touching $_POST keys to avoid undefined-key warnings.
+if (orderPostOverflowed()) {
+    error_log("submit_order: POST overflow, CONTENT_LENGTH=" . ($_SERVER['CONTENT_LENGTH'] ?? 'unknown'));
+    setError("Request was too large for the server. Please upload a file 25MB or smaller.");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
+}
+
+if (!class_exists('finfo')) {
+    error_log("submit_order: fileinfo extension missing, uploads blocked");
+    setError("Upload validation is temporarily unavailable. Please try again later.");
+    redirect(BASE_URL . "frontend/user/customer/explore.php?view=all");
+}
+
 validateCsrf();
 
 $expected_token = $_SESSION['order_submit_token'] ?? null;
@@ -46,8 +60,8 @@ $copies = $is_document_order ? max(1, min(1000, intval($_POST['copies'] ?? 1))) 
 $order_status = 'pending';
 $instruction = trim((string) ($_POST['customer_instruction'] ?? ''));
 
-// Basic validation - cant pick past date and time  
-$pickup_datetime = $_POST['pickup_datetime'];
+// Basic validation - cant pick past date and time
+$pickup_datetime = trim((string) ($_POST['pickup_datetime'] ?? ''));
 date_default_timezone_set('Asia/Manila');
 
 $pickup_timestamp = strtotime($pickup_datetime);
@@ -131,50 +145,33 @@ if (!$is_document_order) {
     }
 }
 
-if ($is_document_order && (!isset($_FILES['document_file']) || $_FILES['document_file']['error'] !== UPLOAD_ERR_OK)) {
-    setError("Please upload a document file.");
+if ($is_document_order && (!isset($_FILES['document_file']) || (int) ($_FILES['document_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK)) {
+    $doc_error = (int) ($_FILES['document_file']['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($doc_error === UPLOAD_ERR_NO_FILE) {
+        setError("Please upload a document file.");
+    } else {
+        setError(orderUploadErrorMessage($doc_error, orderMaxUploadBytes()));
+    }
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
-}
-
-function isOfficeDocumentExtension($extension)
-{
-    return in_array($extension, ['doc', 'docx', 'wps'], true);
-}
-
-function officeDocumentAllowedMime($extension, $mime)
-{
-    $mime = strtolower((string) $mime);
-    $allowed_by_extension = [
-        'docx' => [
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/zip',
-            'application/octet-stream',
-        ],
-        'doc' => [
-            'application/msword',
-            'application/octet-stream',
-            'application/x-ole-storage',
-        ],
-        'wps' => [
-            'application/vnd.ms-works',
-            'application/x-wps',
-            'application/wps-office',
-            'application/msword',
-            'application/zip',
-            'application/octet-stream',
-        ],
-    ];
-
-    $allowed = $allowed_by_extension[$extension] ?? [];
-    return in_array($mime, $allowed, true);
 }
 
 function validateOrderDocumentUpload(array $file)
 {
-    $max_file_size = 25 * 1024 * 1024;
+    $max_file_size = orderMaxUploadBytes();
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+
+    if ($error !== UPLOAD_ERR_OK) {
+        setError(orderUploadErrorMessage($error, $max_file_size));
+        return false;
+    }
 
     if (($file['size'] ?? 0) > $max_file_size) {
         setError("Document file must be 25MB or smaller.");
+        return false;
+    }
+
+    if (($file['size'] ?? 0) <= 0) {
+        setError("Please upload a valid document file. Empty files are not accepted.");
         return false;
     }
 
@@ -195,11 +192,15 @@ function validateOrderDocumentUpload(array $file)
         return false;
     }
 
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($tmp_name);
+    $mime = orderFinfoMime($tmp_name);
+    if ($mime === null) {
+        error_log("submit_order: fileinfo unavailable during document validation");
+        setError("Upload validation is temporarily unavailable. Please try again later.");
+        return false;
+    }
 
     if (isOfficeDocumentExtension($extension)) {
-        if (!officeDocumentAllowedMime($extension, $mime)) {
+        if ($mime === '' || !officeDocumentAllowedMime($extension, $mime)) {
             setError("Only PDF, DOC, DOCX, or WPS files are accepted for print requests.");
             return false;
         }
@@ -232,9 +233,9 @@ function validateOrderDocumentUpload(array $file)
     return true;
 }
 
-function validateServiceUpload(array $file)
+function validateServiceUpload(array $file, string $service_type = '')
 {
-    $max_file_size = 25 * 1024 * 1024;
+    $max_file_size = orderMaxUploadBytes();
     $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
 
     if ($error === UPLOAD_ERR_NO_FILE) {
@@ -243,7 +244,7 @@ function validateServiceUpload(array $file)
     }
 
     if ($error !== UPLOAD_ERR_OK) {
-        setError("Please upload a valid attachment.");
+        setError(orderUploadErrorMessage($error, $max_file_size));
         return false;
     }
 
@@ -252,11 +253,46 @@ function validateServiceUpload(array $file)
         return false;
     }
 
+    if (($file['size'] ?? 0) <= 0) {
+        setError("Please upload a valid attachment. Empty files are not accepted.");
+        return false;
+    }
+
+    // Per-service matrix (server-enforced). Never trust the POSTed
+    // order_service_type here; the caller passes the pricing-row value.
+    $allowed_extensions = serviceUploadAllowedExtensionsFor($service_type);
+    $allowed_mimes = serviceUploadAllowedMimesFor($service_type);
+    $type_error = serviceUploadTypeErrorFor($service_type);
+
     $original_name = basename((string) ($file['name'] ?? ''));
     $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
-    if (!in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
-        setError("Attachment must be a PDF, JPG, or PNG file.");
+    if (!in_array($extension, $allowed_extensions, true)) {
+        setError($type_error);
         return false;
+    }
+
+    $tmp_name = (string) ($file['tmp_name'] ?? '');
+    if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
+        setError("Please upload a valid attachment.");
+        return false;
+    }
+
+    $mime = orderFinfoMime($tmp_name);
+    if ($mime === null) {
+        error_log("submit_order: fileinfo unavailable during service validation");
+        setError("Upload validation is temporarily unavailable. Please try again later.");
+        return false;
+    }
+
+    // Word branch (DOC/DOCX only per matrix; WPS never reaches here):
+    // same strict allow-map as Document Printing. Flat pricing still
+    // applies (page_count stays 1), file is input only.
+    if (isOfficeDocumentExtension($extension)) {
+        if ($mime === '' || !officeDocumentAllowedMime($extension, $mime)) {
+            setError($type_error);
+            return false;
+        }
+        return true;
     }
 
     $extension_mime_map = [
@@ -267,17 +303,8 @@ function validateServiceUpload(array $file)
     ];
     $expected_mime = $extension_mime_map[$extension] ?? null;
 
-    $tmp_name = (string) ($file['tmp_name'] ?? '');
-    if ($tmp_name === '' || !is_uploaded_file($tmp_name)) {
-        setError("Please upload a valid attachment.");
-        return false;
-    }
-
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($tmp_name);
-    $allowed_mimes = ['application/pdf', 'image/jpeg', 'image/png'];
-    if (!in_array($mime, $allowed_mimes, true)) {
-        setError("Attachment must be a PDF, JPG, or PNG file.");
+    if ($mime === '' || !in_array($mime, $allowed_mimes, true)) {
+        setError($type_error);
         return false;
     }
 
@@ -306,7 +333,22 @@ if ($is_document_order && !validateOrderDocumentUpload($_FILES['document_file'])
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
-if (!$is_document_order && (!isset($_FILES['service_file']) || !validateServiceUpload($_FILES['service_file']))) {
+// Server-trusted service type from the pricing row (never the POST value,
+// which is client-spoofable). Mismatch fails closed to the images-only group.
+$trusted_service_type = '';
+if (!$is_document_order) {
+    $trusted_service_type = trim((string) ($service_price['service_type'] ?? ''));
+    if ($trusted_service_type === '') {
+        $trusted_service_type = trim((string) ($_POST['order_service_type'] ?? $_POST['customer_service_type'] ?? ''));
+    }
+    $posted_service_type = trim((string) ($_POST['order_service_type'] ?? $_POST['customer_service_type'] ?? ''));
+    if ($posted_service_type !== '' && $trusted_service_type !== '' && $posted_service_type !== $trusted_service_type) {
+        error_log("submit_order: service type mismatch posted={$posted_service_type} pricing={$trusted_service_type} shop={$shop_id}");
+        $trusted_service_type = 'Photo Printing';
+    }
+}
+
+if (!$is_document_order && (!isset($_FILES['service_file']) || !validateServiceUpload($_FILES['service_file'], $trusted_service_type))) {
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
 }
 
@@ -325,7 +367,7 @@ function buildCloudinaryOrderSafeName($original_name)
     }
 
     $safe_base = substr($safe_base, 0, 80);
-    $unique_suffix = date('Ymd_His') . '_' . bin2hex(random_bytes(3));
+    $unique_suffix = date('Ymd_His') . '_' . bin2hex(random_bytes(8));
     $public_id = $safe_base . '_' . $unique_suffix;
 
     if ($extension !== '') {
@@ -340,6 +382,11 @@ function buildCloudinaryOrderSafeName($original_name)
 
 function createCloudinaryOrderUploadCopy($source_path, $safe_name)
 {
+    $source_path = (string) $source_path;
+    if ($source_path === '' || !is_uploaded_file($source_path)) {
+        throw new Exception("Uploaded file is not available. Please try uploading again.");
+    }
+
     $root = realpath(__DIR__ . "/../..");
     if ($root === false) {
         throw new Exception("Project upload directory is not available.");
@@ -351,7 +398,7 @@ function createCloudinaryOrderUploadCopy($source_path, $safe_name)
     }
 
     $temp_dir_real = realpath($temp_dir);
-    if ($temp_dir_real === false || !is_dir($temp_dir_real)) {
+    if ($temp_dir_real === false || !is_dir($temp_dir_real) || !is_writable($temp_dir_real)) {
         throw new Exception("Request upload temp directory is not available.");
     }
 
@@ -380,7 +427,13 @@ class OrderAlreadySubmittedException extends Exception
 
 $page_count = 1;
 $detected_page_count = max(1, min(10000, (int) ($_POST['detected_page_count'] ?? 1)));
-$original_name = $has_upload ? basename($_FILES[$active_upload_key]['name']) : '';
+$original_name = $has_upload ? basename((string) $_FILES[$active_upload_key]['name']) : '';
+// Truncate for DB safety (varchar) while keeping extension visible in logs.
+if ($original_name !== '' && strlen($original_name) > 180) {
+    $original_ext = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+    $original_base = substr(pathinfo($original_name, PATHINFO_FILENAME), 0, 150);
+    $original_name = $original_base . ($original_ext !== '' ? '.' . $original_ext : '');
+}
 $file_type = $has_upload ? strtolower(pathinfo($original_name, PATHINFO_EXTENSION)) : '';
 $file_tmp = $has_upload ? $_FILES[$active_upload_key]['tmp_name'] : '';
 $cloudinary_public_id = null;
@@ -418,6 +471,11 @@ try {
 
     $db_path = '';
     if ($has_upload) {
+        if (trim((string) (getenv('CLOUD_NAME') ?: '')) === '' || trim((string) (getenv('API_KEY') ?: '')) === '' || trim((string) (getenv('API_SECRET') ?: '')) === '') {
+            error_log("submit_order: Cloudinary env missing, upload blocked");
+            throw new Exception("File storage is temporarily unavailable. Please try again later.");
+        }
+
         $cloudinary_safe_name = buildCloudinaryOrderSafeName($original_name);
         $cloudinary_upload_copy = createCloudinaryOrderUploadCopy($file_tmp, $cloudinary_safe_name);
 
@@ -439,7 +497,7 @@ try {
 
         $db_path = $uploadResult['secure_url'] ?? '';
         $cloudinary_public_id = $uploadResult['public_id'] ?? null;
-        $cloudinary_resource_type = $uploadResult['resource_type'] ?? 'auto';
+        $cloudinary_resource_type = $uploadResult['resource_type'] ?? 'raw';
         if ($db_path === '') {
             throw new Exception("Cloudinary upload did not return a file URL.");
         }
@@ -560,7 +618,7 @@ try {
     if ($cloudinary_public_id) {
         try {
             $cloudinary->uploadApi()->destroy($cloudinary_public_id, [
-                "resource_type" => $cloudinary_resource_type ?: "auto",
+                "resource_type" => $cloudinary_resource_type ?: "raw",
             ]);
         } catch (Throwable $cleanup_exception) {
             error_log("Cloudinary cleanup failed for {$cloudinary_public_id}: " . $cleanup_exception->getMessage());
@@ -577,7 +635,8 @@ try {
         redirect(BASE_URL . "frontend/user/customer/orders.php");
     }
 
-    setError("Request submission failed: " . $e->getMessage());
+    error_log("submit_order failed for shop {$shop_id}: " . $e->getMessage());
+    setError("Request submission failed. Please try again.");
     redirect(BASE_URL . "frontend/user/customer/place_order.php?shop_id=" . $shop_id);
     exit();
 }

@@ -247,9 +247,11 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
                     <label class="customer-order-field" data-other-upload-field hidden>
                         <span>Upload File</span>
-                        <input type="file" name="service_file" id="service_file" accept="application/pdf,.pdf,image/png,image/jpeg,image/jpg" required
+                        <!-- Keep in sync with document_file accept (:232) minus WPS and with
+                             serviceAcceptForCurrentType() docs branch below. -->
+                        <input type="file" name="service_file" id="service_file" accept="application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.jpg,.jpeg,.png" required
                             class="w-full border rounded-xl p-3">
-                        <small>Required for this request. PDF, JPG, and PNG files up to 25MB are accepted.</small>
+                        <small>Required for this request. JPG, PNG, PDF, DOC, and DOCX files up to 25MB are accepted.</small>
                     </label>
                 </section>
 
@@ -314,7 +316,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
                         <label class="customer-order-field">
                             <span>Quantity</span>
-                            <input type="number" name="service_quantity" id="service_quantity" min="1" value="1"
+                            <input type="number" name="service_quantity" id="service_quantity" min="1" max="1000" value="1"
                                 class="w-full border rounded-xl p-3">
                         </label>
 
@@ -657,9 +659,62 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             return isPhotoPrintingOrder() || isTarpaulinPrintingOrder() || isIdPrintingOrder() || isInvitationCardPrintingOrder();
         }
 
+        // Photo/ID services accept images only (gallery picker is correct).
+        // Lamination/Tarpaulin/Invitation accept images + PDF/DOC/DOCX (Files picker).
+        // Mirrors serviceUploadAllowedExtensionsFor() in backend/includes/functions.php.
+        function isServicePhotoOnlyOrder() {
+            return isPhotoPrintingOrder() || isIdPrintingOrder();
+        }
+
+        function serviceAcceptForCurrentType() {
+            if (isServicePhotoOnlyOrder()) {
+                return "image/jpeg,.jpg,.jpeg,image/png,.png";
+            }
+            // Document-style pattern (same as document_file accept minus WPS):
+            // file-manager picker showing docs + images, validation decides.
+            // Keep in sync with the static service_file accept above.
+            return "application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.jpg,.jpeg,.png";
+        }
+
+        function serviceTypeErrorForCurrentType() {
+            if (isServicePhotoOnlyOrder()) {
+                return "Attachment must be a JPG or PNG file.";
+            }
+            return "Attachment must be a JPG, PNG, PDF, DOC, or DOCX file.";
+        }
+
+        function updateServiceFileAccept() {
+            if (!serviceFile) return;
+            serviceFile.accept = serviceAcceptForCurrentType();
+            const help = document.querySelector("[data-other-upload-field] small");
+            if (help) {
+                help.textContent = isServicePhotoOnlyOrder()
+                    ? "Required for this request. JPG and PNG files up to 25MB are accepted."
+                    : "Required for this request. JPG, PNG, PDF, DOC, and DOCX files up to 25MB are accepted.";
+            }
+        }
+
+        function selectedServiceFileIsImage(file) {
+            if (!file) return false;
+            if (file.type === "image/jpeg" || file.type === "image/png") return true;
+            return /\.(jpe?g|png)$/i.test(file.name || "");
+        }
+
+        function selectedServiceFileIsAllowedDoc(file) {
+            if (!file) return false;
+            if (selectedFileIsPdf(file)) return true;
+            if (/\.(docx?)$/i.test(file.name || "")) return true;
+            return file.type === "application/msword" ||
+                file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                file.type === "application/octet-stream";
+        }
+
         function validateDocumentFile(file) {
             if (!file) {
                 return "Please upload your document before continuing.";
+            }
+            if (file.size <= 0) {
+                return "Please upload a valid document file. Empty files are not accepted.";
             }
             if (file.size > maxDocumentFileSize) {
                 return "Document file must be 25MB or smaller.";
@@ -672,21 +727,38 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
 
         function selectedServiceFileIsAllowed(file) {
             if (!file) return true;
-            return file.type === "application/pdf" ||
-                file.type === "image/jpeg" ||
-                file.type === "image/png" ||
-                /\.(pdf|jpe?g|png)$/i.test(file.name || "");
+            if (file.size <= 0) return false;
+            if (isServicePhotoOnlyOrder()) {
+                // Photo/ID: images only.
+                if (selectedServiceFileIsImage(file)) return true;
+                // Empty type happens on some Windows browsers, fall back to extension.
+                if (!file.type) {
+                    return /\.(jpe?g|png)$/i.test(file.name || "");
+                }
+                return false;
+            }
+            // Lamination/Tarpaulin/Invitation: images + PDF/DOC/DOCX.
+            if (selectedServiceFileIsImage(file)) return true;
+            if (selectedServiceFileIsAllowedDoc(file)) return true;
+            // Empty type happens for .doc on some Windows browsers, fall back to extension.
+            if (!file.type) {
+                return /\.(pdf|jpe?g|png|docx?)$/i.test(file.name || "");
+            }
+            return false;
         }
 
         function validateServiceFile(file) {
             if (!file) {
                 return "Please upload a file for this service request.";
             }
+            if (file.size <= 0) {
+                return "Please upload a valid file. Empty files are not accepted.";
+            }
             if (file.size > maxServiceFileSize) {
                 return "Attachment must be 25MB or smaller.";
             }
             if (!selectedServiceFileIsAllowed(file)) {
-                return "Attachment must be a PDF, JPG, or PNG file.";
+                return serviceTypeErrorForCurrentType();
             }
             return "";
         }
@@ -730,6 +802,14 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             const file = serviceFile.files && serviceFile.files[0] ? serviceFile.files[0] : null;
             if (!file) return;
             if (validateServiceFile(file)) return;
+
+            // Word (DOC/DOCX) is input-only for Lamination/Tarpaulin/Invitation
+            // (flat price, no page count). Skip PDF/image content verification,
+            // server validates mime via finfo. WPS is not accepted here.
+            if (!isServicePhotoOnlyOrder() && selectedServiceFileIsAllowedDoc(file) && !selectedFileIsPdf(file)) {
+                serviceFileParseFailed = false;
+                return;
+            }
 
             const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
             const isImage = file.type === "image/jpeg" || file.type === "image/png" || /\.(jpe?g|png)$/i.test(file.name || "");
@@ -1006,6 +1086,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             if (documentFile) documentFile.required = documentMode && !visitOnlyMode;
             if (serviceFile) serviceFile.required = !documentMode && !visitOnlyMode && !noPriceMode;
             if (serviceQuantity) serviceQuantity.required = !documentMode && !visitOnlyMode && !noPriceMode;
+            if (!documentMode) updateServiceFileAccept();
 
             if (visitOnlyMode) {
                 serviceId.value = "";
@@ -1129,7 +1210,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     return false;
                 }
                 if (!isDocumentOrder() && serviceFileParseFailed) {
-                    showAlert("Please upload a valid file. The file you selected cannot be read as a valid PDF or image.");
+                    showAlert("Please upload a valid file. The file you selected cannot be read as a valid PDF, image, or document.");
                     serviceFile.focus();
                     return false;
                 }
@@ -1160,7 +1241,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     return false;
                 }
                 if (!isDocumentOrder() && serviceFileParseFailed) {
-                    showAlert("Please upload a valid file. The file you selected cannot be read as a valid PDF or image.");
+                    showAlert("Please upload a valid file. The file you selected cannot be read as a valid PDF, image, or document.");
                     return false;
                 }
                 if (isDocumentOrder() && (!serviceId.value || !selectedService())) {
@@ -1180,6 +1261,11 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 }
                 if (!isDocumentOrder() && parseInt(serviceQuantity.value || "0") < 1) {
                     showAlert("Quantity must be at least 1.");
+                    serviceQuantity.focus();
+                    return false;
+                }
+                if (!isDocumentOrder() && parseInt(serviceQuantity.value || "0") > 1000) {
+                    showAlert("Quantity must not exceed 1000.");
                     serviceQuantity.focus();
                     return false;
                 }

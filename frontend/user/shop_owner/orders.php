@@ -476,7 +476,7 @@ function renderOwnerCustomerIdentity(array $order, $show_email = false)
             <?php endif; ?>
         </span>
         <span class="owner-customer-copy">
-            <strong><?php echo e($name); ?></strong>
+            <strong title="<?php echo e($name); ?>"><?php echo e($name); ?></strong>
             <?php if ($show_email && $email !== ''): ?>
                 <small><?php echo e($email); ?></small>
             <?php endif; ?>
@@ -645,19 +645,19 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             <td><span class="order-file-name" title="<?php echo e($first_file); ?>"><?php echo e($first_file); ?></span></td>
                             <td>
                                 <div class="print-detail-chips">
-                                    <span><?php echo ownerIcon('package', 'icon-sm'); ?>Service: <?php echo e($selected_service_name); ?></span>
-                                    <span><?php echo ownerIcon('file-text', 'icon-sm'); ?><?php echo $is_document_service ? 'Paper: ' : 'Size: '; ?><?php echo e($order['paper_size']); ?></span>
+                                    <span title="Service: <?php echo e($selected_service_name); ?>"><?php echo ownerIcon('package', 'icon-sm'); ?>Service: <?php echo e($selected_service_name); ?></span>
+                                    <span title="<?php echo $is_document_service ? 'Paper: ' : 'Size: '; ?><?php echo e($order['paper_size']); ?>"><?php echo ownerIcon('file-text', 'icon-sm'); ?><?php echo $is_document_service ? 'Paper: ' : 'Size: '; ?><?php echo e($order['paper_size']); ?></span>
                                     <?php if ($is_document_service): ?>
-                                        <span><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['print_type']); ?></span>
-                                        <span><?php echo e($order_page_count); ?>p x<?php echo e($order['copies']); ?></span>
+                                        <span title="<?php echo e($order['print_type']); ?>"><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['print_type']); ?></span>
+                                        <span title="<?php echo e($order_page_count); ?> pages x<?php echo e($order['copies']); ?>"><?php echo e($order_page_count); ?>p x<?php echo e($order['copies']); ?></span>
                                     <?php elseif ($is_detailed_service): ?>
-                                        <span><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['paper_type']); ?> / <?php echo e($order['print_type']); ?></span>
-                                        <span>Qty: <?php echo e($order['copies']); ?></span>
+                                        <span title="<?php echo e($order['paper_type']); ?> / <?php echo e($order['print_type']); ?>"><?php echo ownerIcon('printer', 'icon-sm'); ?><?php echo e($order['paper_type']); ?> / <?php echo e($order['print_type']); ?></span>
+                                        <span class="chip-qty" title="Qty: <?php echo e($order['copies']); ?>">Qty: <?php echo e($order['copies']); ?></span>
                                     <?php else: ?>
-                                        <span><?php echo ownerIcon('printer', 'icon-sm'); ?>Qty: <?php echo e($order['copies']); ?></span>
+                                        <span class="chip-qty" title="Qty: <?php echo e($order['copies']); ?>"><?php echo ownerIcon('printer', 'icon-sm'); ?>Qty: <?php echo e($order['copies']); ?></span>
                                     <?php endif; ?>
                                 </div>
-                                <small class="muted"><?php echo $is_document_service || $is_detailed_service ? e($order['paper_type']) : e($selected_service_name); ?></small>
+                                <small class="muted print-detail-muted" title="<?php echo $is_document_service || $is_detailed_service ? e($order['paper_type']) : e($selected_service_name); ?>"><?php echo $is_document_service || $is_detailed_service ? e($order['paper_type']) : e($selected_service_name); ?></small>
                             </td>
                             <td>
                                 <?php if (!empty($order['pickup_datetime'])): ?>
@@ -1066,18 +1066,20 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                     <div class="order-card-mobile-customer">
                         <?php renderOwnerCustomerIdentity($order); ?>
                     </div>
-                    <p><strong>Service:</strong> <?php echo e($selected_service_name); ?></p>
+                    <p class="order-card-line" title="Service: <?php echo e($selected_service_name); ?>"><strong>Service:</strong> <?php echo e($selected_service_name); ?></p>
                     <?php if ($is_document_service): ?>
-                        <p><strong>Details:</strong> <?php echo e($order['paper_size']); ?>, <?php echo e($order['paper_type']); ?>,
-                            <?php echo e($order['print_type']); ?>, <?php echo e($order_page_count); ?> pages x<?php echo e($order['copies']); ?>
+                        <?php $mobile_details_text = $order['paper_size'] . ', ' . $order['paper_type'] . ', ' . $order['print_type'] . ', ' . $order_page_count . ' pages x' . $order['copies']; ?>
+                        <p class="order-card-line" title="<?php echo e($mobile_details_text); ?>"><strong>Details:</strong> <?php echo e($mobile_details_text); ?>
                         </p>
                     <?php elseif ($is_detailed_service): ?>
-                        <p><strong>Details:</strong> Size: <?php echo e($order['paper_size']); ?>, <?php echo ($is_tarpaulin_printing || $is_id_printing) ? 'Material' : 'Paper'; ?>: <?php echo e($order['paper_type']); ?>, Print: <?php echo e($order['print_type']); ?>, Quantity: <?php echo e($order['copies']); ?></p>
+                        <?php $mobile_details_text = 'Size: ' . $order['paper_size'] . ', ' . (($is_tarpaulin_printing || $is_id_printing) ? 'Material' : 'Paper') . ': ' . $order['paper_type'] . ', Print: ' . $order['print_type'] . ', Quantity: ' . $order['copies']; ?>
+                        <p class="order-card-line" title="<?php echo e($mobile_details_text); ?>"><strong>Details:</strong> <?php echo e($mobile_details_text); ?></p>
                     <?php else: ?>
-                        <p><strong>Details:</strong> Size: <?php echo e($order['paper_size']); ?>, Quantity: <?php echo e($order['copies']); ?></p>
+                        <?php $mobile_details_text = 'Size: ' . $order['paper_size'] . ', Quantity: ' . $order['copies']; ?>
+                        <p class="order-card-line" title="<?php echo e($mobile_details_text); ?>"><strong>Details:</strong> <?php echo e($mobile_details_text); ?></p>
                     <?php endif; ?>
                     <p><strong>Total:</strong> <?php echo ownerMoney($order['total_amount']); ?></p>
-                    <p><strong>Instruction:</strong> <?php echo e(ownerOrderCustomerInstruction($order) ?: 'No instruction'); ?></p>
+                    <p class="order-card-line" title="<?php echo e(ownerOrderCustomerInstruction($order) ?: 'No instruction'); ?>"><strong>Instruction:</strong> <?php echo e(ownerOrderCustomerInstruction($order) ?: 'No instruction'); ?></p>
                     <div class="row-actions">
                         <button type="button" class="btn order-btn-navy"
                             data-order-modal-target="order-modal-<?php echo e($order['order_id']); ?>">View Details</button>

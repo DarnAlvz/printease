@@ -8551,3 +8551,54 @@ body.owner-body [data-notification-center] {
     padding-bottom: 8px;
   }
 }
+
+/* Orders list single-line truncation (list only — modal keeps full wrapping).
+   Same pattern as .order-file-name: ellipsis + title tooltip for the full text.
+   NOTE: request code is intentionally NOT truncated (full display). */
+.orders-table .owner-customer-copy,
+.order-card-mobile .owner-customer-copy {
+  min-width: 0;
+}
+
+.orders-table .owner-customer-copy strong,
+.order-card-mobile .owner-customer-copy strong {
+  display: block;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
+.orders-table .print-detail-chips {
+  flex-wrap: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+}
+
+.orders-table .print-detail-chips span {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.orders-table .print-detail-chips span.chip-qty {
+  flex-shrink: 0;
+}
+
+.orders-table td small.print-detail-muted {
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-card-mobile p.order-card-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}

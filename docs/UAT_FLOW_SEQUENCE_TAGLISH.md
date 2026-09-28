@@ -6,65 +6,65 @@
 
 ## Phase 1 — Owner registration at shop setup (S-01 hanggang S-08)
 
-- [ ] **S-01 — Owner register (O-GATE)**
+- [✓] **S-01 — Owner register (O-GATE)**
   - Precon: walang owner account — Map: O-GATE-01
   - Steps: 1. Buksan register 2. Register bilang owner 3. Submit
   - Expected: account nagawa, hiningi ang shop profile, walang error
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-02 — Owner login (O-GATE)**
+  - Resulta: [✓] Pass [] Fail — Notes: ___
+- [✓] **S-02 — Owner login (O-GATE)**
   - Steps: 1. Login gamit owner account
   - Expected: pasok sa owner area o sa profile setup kung incomplete
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-03 — Complete shop profile (O-PRO-01/04)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-03 — Complete shop profile (O-PRO-01/04)**
   - Steps: 1. Fill shop name, address, map picker, hours 2. Save
   - Expected: nag-save, kita sa sidebar/topbar, nawala ang block message
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-04 — Verification gate (O-GATE-02)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-04 — Verification gate (O-GATE-02)**
   - Precon: kumpleto pero unverified
   - Steps: 1. Buksan Orders 2. Subukang mag-Accept
   - Expected: toast na need verification, blocked ang action
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-05 — Services at pricing setup (O-SVC-01)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-05 — Services at pricing setup (O-SVC-01)**
   - Precon: verified owner
   - Steps: 1. Magdagdag ng Document + 1 service (photo/tarpaulin/ID) 2. Lagay presyo 3. Save
   - Expected: nag-save, makikita ito ng customer mamaya
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-06 — Bawal na presyo (O-SVC-02)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-06 — Bawal na presyo (O-SVC-02)**
   - Steps: 1. Lagay negative o blank na presyo 2. Save
   - Expected: validation error, hindi nag-save
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-07 — Permit at GCash QR (O-PRO-02/03)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-07 — Permit at GCash QR (O-PRO-02/03)**
   - Steps: 1. Upload permit jpg/png/pdf (<=10MB) 2. Upload QR image 3. Save
   - Expected: preview kita bago save, nagamit ang QR sa payment
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-08 — Dashboard at notif (O-DASH-01/02/03)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-08 — Dashboard at notif (O-DASH-01/02/03)**
   - Steps: 1. Buksan dashboard 2. I-mute/unmute ang sound 3. Refresh 4. Buksan bell
   - Expected: tama ang counts, naalala ang sound setting, popover bumubukas
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
 
 ## Phase 2 — Customer registration at explore (S-09 hanggang S-12)
 
-- [ ] **S-09 — Customer register (C-AUTH-01)**
+- [✓] **S-09 — Customer register (C-AUTH-01)**
   - Precon: walang customer account
   - Steps: 1. Register 2. Submit
   - Expected: account nagawa, redirect login/dashboard
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-10 — Customer login + mali + Google (C-AUTH-02/03/04)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-10 — Customer login + mali + Google (C-AUTH-02/03/04)**
   - Steps: 1. Login tama 2. Logout 3. Login mali 4. Google login
   - Expected: tama = pasok, mali = error, Google = pasok walang duplicate
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-11 — Browse at search shop (C-EXP-01/02)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-11 — Browse at search shop (C-EXP-01/02)**
   - Steps: 1. Buksan Explore 2. Mag-search ng shop ni owner
   - Expected: kita ang shop, tama ang result, may empty message pag walang match
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
-- [ ] **S-12 — View shop details (C-EXP-03)**
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
+- [✓] **S-12 — View shop details (C-EXP-03)**
   - Steps: 1. Click shop ni owner
   - Expected: kita services, pricing galing S-05, hours, location
-  - Resulta: [ ] Pass [ ] Fail — Notes: ___
+  - Resulta: [✓] Pass [ ] Fail — Notes: ___
 
 ## Phase 3 — Customer place order (S-13 hanggang S-17)
 
-- [ ] **S-13 — Order PDF (C-ORD-01)**
+- [✓] **S-13 — Order PDF (C-ORD-01)**
   - Steps: 1. Piliin Document Printing 2. Upload PDF <25MB 3. Copies + pickup datetime 4. Submit
   - Expected: order nagawa, may order code, `pending` sa My Orders
   - Resulta: [ ] Pass [ ] Fail — Notes: ___ (order_code: ___)
