@@ -1104,6 +1104,7 @@ html.owner-sidebar-hovered .owner-sidebar .owner-logout {
 .chip-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .metric-head,
@@ -5326,10 +5327,7 @@ body.pricing-modal-open {
 
 .shop-management-grid {
   display: grid;
-  grid-template-columns: minmax(min(420px, 100%), 0.95fr) minmax(
-      min(460px, 100%),
-      1.05fr
-    );
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 24px;
   align-items: start;
 }
@@ -5457,6 +5455,8 @@ body.pricing-modal-open {
   display: grid;
   gap: 10px;
   align-content: center;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .upload-logo-btn {
@@ -5557,12 +5557,19 @@ body.pricing-modal-open {
 }
 
 .owner-location-map {
+  width: 100%;
+  max-width: 100%;
   height: 260px;
   min-height: 260px;
   padding: 0;
   display: block;
   overflow: hidden;
   background: #eef8ff;
+}
+
+.owner-location-map .leaflet-container {
+  width: 100%;
+  max-width: 100%;
 }
 
 .shop-management-form.is-locked .owner-location-map {
@@ -5714,10 +5721,11 @@ body.pricing-modal-open {
 
 .file-view-button {
   min-height: 38px;
-  min-width: max-content;
+  min-width: 0;
+  max-width: 100%;
   padding: 0 14px;
   gap: 6px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
 }
 
 .file-upload-native {
@@ -5762,7 +5770,8 @@ body.pricing-modal-open {
 }
 
 .file-upload-control > span {
-  min-width: max-content;
+  min-width: 0;
+  flex: 1 1 auto;
   color: var(--navy);
   font-size: 13px;
   font-weight: 800;
@@ -6809,8 +6818,7 @@ select {
     flex-direction: column;
   }
 
-  .payment-account-grid,
-  .shop-hours-grid {
+  .payment-account-grid {
     grid-template-columns: 1fr;
   }
 
@@ -8040,6 +8048,7 @@ button.btn:disabled,
 .service-type-check {
   position: relative;
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
@@ -8148,11 +8157,14 @@ button.btn:disabled,
 /* ── Operating Hours ─────────────────────────────── */
 .shop-hours-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 100%;
   gap: 16px;
 }
 
 .shop-hours-day {
+  min-width: 0;
+  max-width: 100%;
   padding: 18px;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
@@ -8193,13 +8205,17 @@ button.btn:disabled,
 
 .shop-hours-times {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
 }
 
 .shop-hours-times input[type="time"] {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 40px;
   border: 1px solid #93e4fb;
   border-radius: 8px;
@@ -8224,6 +8240,7 @@ button.btn:disabled,
 }
 
 .shop-hours-times span {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 13px;
 }
@@ -8232,12 +8249,6 @@ button.btn:disabled,
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-}
-
-@media (max-width: 600px) {
-  .shop-hours-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 600px) {
@@ -8300,11 +8311,14 @@ body.owner-body [data-notification-center] {
 /* ── Operating Hours ─────────────────────────────── */
 .shop-hours-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 100%;
     gap: 16px;
 }
 
 .shop-hours-day {
+    min-width: 0;
+    max-width: 100%;
     padding: 18px;
     border: 1px solid #e2e8f0;
     border-radius: 14px;
@@ -8345,13 +8359,17 @@ body.owner-body [data-notification-center] {
 
 .shop-hours-times {
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
 }
 
 .shop-hours-times input[type="time"] {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
     min-height: 40px;
     border: 1px solid #93e4fb;
     border-radius: 8px;
@@ -8362,6 +8380,7 @@ body.owner-body [data-notification-center] {
 }
 
 .shop-hours-times span {
+    flex: 0 0 auto;
     color: var(--muted);
     font-size: 13px;
 }
@@ -8370,12 +8389,6 @@ body.owner-body [data-notification-center] {
     margin: 0;
     color: var(--muted);
     font-size: 12px;
-}
-
-@media (max-width: 600px) {
-    .shop-hours-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 @media (max-width: 600px) {
@@ -8601,4 +8614,108 @@ body.owner-body [data-notification-center] {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+/* ============================================================
+   Shop Management responsiveness patch (layout-only, no redesign)
+   - Lets grid/flex children shrink instead of overlapping.
+   - Desktop (>1280px) keeps the current two-column design.
+   - 1280px and below: single-column cards (existing rule kept).
+   - 1024px and below: inner form/hours rows stack while they
+     would otherwise squeeze; map and uploads stay in-card.
+   - Jobs table keeps its contained inner scroll; the page itself
+     must never grow wider than the viewport.
+   ============================================================ */
+
+/* Base shrink guards: every grid/flex child may shrink. */
+.shop-management-form,
+.shop-management-grid,
+.shop-management-main,
+.shop-management-side,
+.shop-management-grid .owner-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shop-management-form input,
+.shop-management-form textarea,
+.shop-management-form select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shop-management-form img {
+  max-width: 100%;
+}
+
+.shop-management-form .card-note,
+.shop-management-form .muted,
+.location-coordinate-note {
+  overflow-wrap: break-word;
+}
+
+.card-head > * {
+  min-width: 0;
+}
+
+.shop-logo-upload-row,
+.permit-preview-block,
+.payment-details-card .shop-logo-panel {
+  flex-wrap: wrap;
+}
+
+.shop-services-banner__inner > div {
+  min-width: 0;
+}
+
+.shop-hours-day-head {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Sidebar/content width guards: content never forces page width. */
+.owner-shell,
+.owner-main {
+  min-width: 0;
+}
+
+/* Jobs page: table scrolls only inside its own card. */
+.orders-table-card {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.orders-table-card .owner-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Tablet / small laptop: stack inner two-up rows before they squeeze. */
+@media (max-width: 1024px) and (min-width: 821px) {
+  .shop-management-grid {
+    gap: 20px;
+  }
+
+  .shop-management-grid .owner-card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .payment-account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .merchant-link-row {
+    flex-direction: column;
+  }
+
+  .merchant-link-preview {
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .payment-details-card .payment-setup-status {
+    white-space: normal;
+  }
 }
