@@ -1309,9 +1309,12 @@
                                 throw new Error((data && data.message) || 'Download failed. Please open the file preview link and download manually.');
                             }
 
-                            // Accept = viewer + auto-download for doc/docx/pdf.
+                            // Accept = viewer + auto-download for doc/docx/pdf/images.
                             const fileKind = data.file_kind || '';
                             const fileExt = String(data.file_ext || '').toLowerCase();
+                            const previewableImageExts = ['jpg', 'jpeg', 'png', 'webp', 'jfif', 'gif'];
+                            const isPreviewableNative = fileKind === 'native'
+                                && (fileExt === 'pdf' || previewableImageExts.indexOf(fileExt) !== -1);
                             const forceDownload = Boolean(data.force_download)
                                 || fileKind === 'viewable'
                                 || fileKind === 'download-only';
@@ -1320,13 +1323,13 @@
                                 : ((data.remote && data.url) ? data.url : file.url);
 
                             let viewerUrl = (fileKind === 'viewable' && data.viewer_url) ? data.viewer_url : null;
-                            if (!viewerUrl && fileKind === 'native' && fileExt === 'pdf'
+                            if (!viewerUrl && isPreviewableNative
                                 && data.remote && data.url && data.download_url) {
                                 viewerUrl = data.url;
                             }
 
                             return {
-                                downloadUrl: fileKind === 'native' && fileExt === 'pdf' && data.download_url ? data.download_url : downloadUrl,
+                                downloadUrl: isPreviewableNative && data.download_url ? data.download_url : downloadUrl,
                                 viewerUrl: viewerUrl,
                                 name: (data.file_name || file.name),
                                 remote: Boolean(data.remote) && !forceDownload,

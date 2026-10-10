@@ -24,3 +24,5 @@ deploy/*.zip
 
 # database query
 backend/database/*.sql
+
+docs

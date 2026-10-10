@@ -763,12 +763,31 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             return "";
         }
 
+        // Tolerant %PDF check (mirrors backend pdfHeaderValid()): skips BOM +
+        // leading whitespace/control bytes that phone/WPS exports prepend.
+        // Reads 16 bytes to avoid missing the header after a BOM.
         function pdfFileLooksValid(file) {
-            return file.slice(0, 4).text().then(function (head) {
-                return head === "%PDF";
+            return file.slice(0, 16).arrayBuffer().then(function (buf) {
+                const bytes = new Uint8Array(buf);
+                let i = 0;
+                // Skip UTF-8 BOM.
+                if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+                    i = 3;
+                }
+                // Skip leading whitespace/control bytes.
+                while (i < bytes.length && (bytes[i] === 0x00 || bytes[i] === 0x09 || bytes[i] === 0x0A || bytes[i] === 0x0C || bytes[i] === 0x0D || bytes[i] === 0x20)) {
+                    i++;
+                }
+                return bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46;
             }).catch(function () {
                 return false;
             });
+        }
+
+        // Large PDFs (>10MB): skip full pdf.js parse to avoid OOM/hang on
+        // phones + shared hosts. Header check only; backend counts pages.
+        function shouldSkipFullPdfParse(file) {
+            return !!file && typeof file.size === "number" && file.size > 10 * 1024 * 1024;
         }
 
         function verifyImageFile(file) {
@@ -818,10 +837,22 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             serviceFileVerifying = true;
             try {
                 if (isPdf) {
-                    if (window.pdfjsLib && navigator.onLine !== false) {
-                        const buffer = await file.arrayBuffer();
-                        await pdfjsLib.getDocument({ data: buffer }).promise;
-                        serviceFileParseFailed = false;
+                    // Large or compressed-xref PDFs: header check only, backend
+                    // validates structure (FPDI OR text-scan). Never hard-block
+                    // on pdf.js here; backend is source of truth.
+                    if (shouldSkipFullPdfParse(file)) {
+                        serviceFileParseFailed = !(await pdfFileLooksValid(file));
+                    } else if (window.pdfjsLib && navigator.onLine !== false) {
+                        try {
+                            const buffer = await file.arrayBuffer();
+                            await pdfjsLib.getDocument({ data: buffer }).promise;
+                            serviceFileParseFailed = false;
+                        } catch (parseError) {
+                            // pdf.js fails on compressed-xref/encrypted PDFs that
+                            // viewers open fine — fall back to header, let backend
+                            // decide instead of blocking the user here.
+                            serviceFileParseFailed = !(await pdfFileLooksValid(file));
+                        }
                     } else {
                         serviceFileParseFailed = !(await pdfFileLooksValid(file));
                     }
@@ -830,7 +861,7 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                     serviceFileParseFailed = false;
                 }
             } catch (error) {
-                if (isPdf && navigator.onLine === false) {
+                if (isPdf) {
                     serviceFileParseFailed = !(await pdfFileLooksValid(file));
                 } else {
                     serviceFileParseFailed = true;
@@ -870,15 +901,19 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 return;
             }
 
-            if (!window.pdfjsLib || navigator.onLine === false) {
+            if (!window.pdfjsLib || navigator.onLine === false || shouldSkipFullPdfParse(file)) {
                 pageCountLoading = false;
                 const looksValid = await pdfFileLooksValid(file);
                 if (looksValid) {
+                    // Backend counts pages on submit (FPDI OR text-scan), so do
+                    // not block the wizard here for large/compressed PDFs.
+                    pageCountParseFailed = false;
                     setPageCount(1, "Page count will be verified when your request is sent.");
                 } else {
                     pageCountParseFailed = true;
                     setPageCount(1, "This does not look like a valid PDF file.");
                 }
+                updateReview();
                 return;
             }
 
@@ -892,23 +927,23 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
                 const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
                 if (requestId !== pageCountRequestId) return;
                 pageCountLoading = false;
+                pageCountParseFailed = false;
                 setPageCount(pdf.numPages || 1, (pdf.numPages || 1) + " PDF page" + ((pdf.numPages || 1) === 1 ? "" : "s") + " detected.");
             } catch (error) {
                 if (requestId !== pageCountRequestId) return;
                 pageCountLoading = false;
-                if (navigator.onLine === false) {
-                    const looksValid = await pdfFileLooksValid(file);
-                    if (looksValid) {
-                        pageCountParseFailed = false;
-                        setPageCount(1, "Page count will be verified when your request is sent.");
-                    } else {
-                        pageCountParseFailed = true;
-                        setPageCount(1, "This does not look like a valid PDF file.");
-                    }
+                // pdf.js fails on compressed-xref PDFs (WPS/phone exports) that
+                // viewers open fine. Fall back to header check and let the
+                // backend (FPDI OR text-scan) decide — warn, don't block.
+                const looksValid = await pdfFileLooksValid(file);
+                if (looksValid) {
+                    pageCountParseFailed = false;
+                    setPageCount(1, "Page count will be verified when your request is sent.");
                 } else {
                     pageCountParseFailed = true;
-                    setPageCount(1, "Could not read PDF pages. 1 page will be used.");
+                    setPageCount(1, "This does not look like a valid PDF file.");
                 }
+                updateReview();
             }
         }
 
@@ -1377,13 +1412,21 @@ $shop_is_busy = ($shop['shop_status'] ?? '') === 'busy';
             detectServiceFile();
             updateReview();
         };
-        pickupDatetime.onchange = updateReview;
         if (pickupDatetime) {
             function toggleDatetimeClass() {
                 pickupDatetime.classList.toggle('has-value', !!pickupDatetime.value);
             }
+            pickupDatetime.addEventListener('input', toggleDatetimeClass);
             pickupDatetime.addEventListener('change', toggleDatetimeClass);
+            pickupDatetime.addEventListener('change', updateReview);
+            pickupDatetime.addEventListener('input', updateReview);
             toggleDatetimeClass();
+            window.addEventListener('pageshow', toggleDatetimeClass);
+            if (wizard) {
+                wizard.addEventListener('reset', function () {
+                    setTimeout(toggleDatetimeClass, 0);
+                });
+            }
         }
         instruction.oninput = updateReview;
 

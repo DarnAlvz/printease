@@ -450,6 +450,28 @@ html[data-customer-theme="dark"] body.customer-body input[type="datetime-local"]
     caret-color: transparent;
 }
 
+/* Desktop Chrome/Edge renders native mm/dd/yyyy --:-- segments inline even
+   when empty, which overlaps the custom placeholder. Hide all edit parts
+   while empty (including focus) so only "Select date & time" shows. */
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-text,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-month-field,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-day-field,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-year-field,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-hour-field,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-minute-field,
+.customer-datetime-input:not(.has-value)::-webkit-datetime-edit-ampm-field,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-text,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-month-field,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-day-field,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-year-field,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-hour-field,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-minute-field,
+.customer-datetime-input:not(.has-value):focus::-webkit-datetime-edit-ampm-field {
+    color: transparent;
+}
+
 .customer-datetime-input::-webkit-calendar-picker-indicator {
     opacity: 0;
     position: absolute;
@@ -489,6 +511,12 @@ html[data-customer-theme="dark"] .customer-datetime-input {
     border-color: rgba(125, 211, 252, .28);
     background: rgba(7, 21, 36, .9);
     color: var(--customer-ink);
+}
+
+html[data-customer-theme="dark"] .customer-datetime-input:not(.has-value),
+html[data-customer-theme="dark"] .customer-datetime-input:not(.has-value):focus {
+    color: transparent;
+    caret-color: transparent;
 }
 
 html[data-customer-theme="dark"] .customer-datetime-input:focus {

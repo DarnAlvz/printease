@@ -356,8 +356,126 @@ function getPdfPageCountFromFpdi($filePath) {
     }
 }
 
+// Tolerant %PDF header check: skips UTF-8 BOM + leading whitespace/control
+// bytes that phone/WPS exports sometimes prepend. Reads only a few bytes.
+function pdfHeaderValid($filePath) {
+    if (!is_file($filePath) || !is_readable($filePath)) {
+        return false;
+    }
+    $handle = @fopen($filePath, 'rb');
+    if ($handle === false) {
+        return false;
+    }
+    $head = @fread($handle, 16);
+    @fclose($handle);
+    if (!is_string($head) || $head === '') {
+        return false;
+    }
+    // Strip UTF-8 BOM if present.
+    if (strncmp($head, "\xEF\xBB\xBF", 3) === 0) {
+        $head = substr($head, 3);
+    }
+    $head = ltrim($head, "\x00\x09\x0A\x0C\x0D\x20");
+    return strncmp($head, '%PDF', 4) === 0;
+}
+
+// PDF mime allowlist for .pdf uploads (Document + Lamination/Tarpaulin/
+// Invitation). octet-stream is allowed only because header + structure are
+// still enforced below; office extensions keep their own strict map.
+function isPdfMimeAllowed($mime) {
+    $mime = strtolower(trim((string) $mime));
+    return in_array($mime, [
+        'application/pdf',
+        'application/x-pdf',
+        'application/acrobat',
+        'application/x-acrobat',
+        'application/octet-stream',
+    ], true);
+}
+
+// Streaming structure check: counts /Type /Page without loading the whole
+// file (avoids 25MB file_get_contents OOM/timeout on phones/shared hosts).
+// Requires at least one page marker AND a %%EOF trailer.
+function pdfTextStructureValid($filePath) {
+    if (!is_file($filePath) || !is_readable($filePath)) {
+        return false;
+    }
+    $handle = @fopen($filePath, 'rb');
+    if ($handle === false) {
+        return false;
+    }
+    $pages = 0;
+    $tail = '';
+    while (!feof($handle)) {
+        $chunk = @fread($handle, 65536);
+        if (!is_string($chunk) || $chunk === '') {
+            break;
+        }
+        $scan = $tail . $chunk;
+        $pages += preg_match_all('/\/Type\s*\/Page\b/', $scan, $m);
+        // Keep overlap so a marker split across chunks is still counted once.
+        $tail = strlen($chunk) >= 32 ? substr($chunk, -32) : $chunk;
+        if ($pages >= 1 && ftell($handle) > 2 * 1024 * 1024) {
+            // Enough evidence for validity; full count is done by the
+            // page-count fallback which streams the rest if needed.
+            break;
+        }
+        if ($pages > 10000) {
+            break;
+        }
+    }
+    @fclose($handle);
+    if ($pages < 1) {
+        return false;
+    }
+    // Trailer check: %%EOF within last 4KB (linearized PDFs keep it at end).
+    $size = @filesize($filePath);
+    if ($size === false || $size <= 0) {
+        return false;
+    }
+    $handle = @fopen($filePath, 'rb');
+    if ($handle === false) {
+        return false;
+    }
+    $seek = max(0, $size - 4096);
+    @fseek($handle, $seek);
+    $tail_bytes = @stream_get_contents($handle);
+    @fclose($handle);
+    return is_string($tail_bytes) && strpos($tail_bytes, '%%EOF') !== false;
+}
+
 function validatePdfStructure($filePath) {
-    return getPdfPageCountFromFpdi($filePath) !== null;
+    if (!is_file($filePath) || !is_readable($filePath)) {
+        return false;
+    }
+    if (!pdfHeaderValid($filePath)) {
+        return false;
+    }
+    // 1) FPDI fast path (plain PDFs).
+    if (getPdfPageCountFromFpdi($filePath) !== null) {
+        return true;
+    }
+    // 2) Text structure fallback (compressed xref / object-stream PDFs from
+    // WPS/Word/Canva/phone scanners that FPDI cannot parse but viewers open).
+    if (pdfTextStructureValid($filePath)) {
+        return true;
+    }
+    // 3) Imagick last resort (when available on host).
+    if (class_exists('Imagick')) {
+        try {
+            $imagick = new Imagick();
+            $imagick->pingImage($filePath);
+            $count = $imagick->getNumberImages();
+            $imagick->clear();
+            $imagick->destroy();
+            if ((int) $count >= 1) {
+                return true;
+            }
+        } catch (Throwable $exception) {
+            // Fall through to false.
+        }
+    }
+    return false;
 }
 
 function validateImageStructure($filePath, $expected_mime) {
@@ -530,16 +648,28 @@ function getPdfPageCountFromText($filePath, $fallback = 1) {
         return $fallback;
     }
 
-    $contents = @file_get_contents($filePath);
-    if ($contents === false || $contents === '') {
+    // Streamed count: avoids loading 25MB PDFs fully into memory (OOM/504
+    // on shared hosts + phones). Overlaps chunk tails for split markers.
+    $handle = @fopen($filePath, 'rb');
+    if ($handle === false) {
         return $fallback;
     }
-
-    if (preg_match_all('/\/Type\s*\/Page\b/', $contents, $matches)) {
-        return max(1, count($matches[0]));
+    $count = 0;
+    $tail = '';
+    while (!feof($handle)) {
+        $chunk = @fread($handle, 65536);
+        if (!is_string($chunk) || $chunk === '') {
+            break;
+        }
+        $count += preg_match_all('/\/Type\s*\/Page\b/', $tail . $chunk, $m);
+        $tail = strlen($chunk) >= 32 ? substr($chunk, -32) : $chunk;
+        if ($count > 10000) {
+            break;
+        }
     }
+    @fclose($handle);
 
-    return $fallback;
+    return $count >= 1 ? max(1, (int) $count) : $fallback;
 }
 
 function csrfToken(): string {

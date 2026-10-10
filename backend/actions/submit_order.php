@@ -206,26 +206,28 @@ function validateOrderDocumentUpload(array $file)
         }
         return true;
     }
-    if ($mime !== 'application/pdf') {
+    // Lightweight order: mime (cheap) -> header (few bytes) -> structure
+    // (heavy FPDI/text/Imagick). octet-stream/x-pdf allowed here only when
+    // header + structure still pass; renamed office files (PK header) fail
+    // at the header stage with a specific hint.
+    if ($mime === '' || !isPdfMimeAllowed($mime)) {
+        error_log("submit_order: document pdf reject stage=mime name={$original_name} mime={$mime}");
         setError("Only PDF files are accepted for print requests.");
         return false;
     }
 
-    $handle = fopen($tmp_name, 'rb');
-    if ($handle === false) {
-        setError("Please upload a valid PDF file.");
-        return false;
-    }
-
-    $header = fread($handle, 4);
-    fclose($handle);
-
-    if ($header !== '%PDF') {
-        setError("Please upload a valid PDF file.");
+    if (!pdfHeaderValid($tmp_name)) {
+        error_log("submit_order: document pdf reject stage=header name={$original_name} mime={$mime}");
+        if ($mime === 'application/zip' || $mime === 'application/octet-stream') {
+            setError("That file looks like a Word/WPS file renamed to .pdf. Please export it as PDF again, or upload it as DOC/DOCX/WPS.");
+        } else {
+            setError("Please upload a valid PDF file.");
+        }
         return false;
     }
 
     if (!validatePdfStructure($tmp_name)) {
+        error_log("submit_order: document pdf reject stage=structure name={$original_name} mime={$mime} size=" . (int) ($file['size'] ?? 0));
         setError("Please upload a valid PDF file. The file you uploaded is not a readable PDF.");
         return false;
     }
@@ -295,8 +297,29 @@ function validateServiceUpload(array $file, string $service_type = '')
         return true;
     }
 
+    // PDF branch (Lamination/Tarpaulin/Invitation only; Photo/ID never reach
+    // here due to extension allowlist). Same tolerance as Document Printing:
+    // x-pdf/acrobat/octet-stream allowed when header + structure pass.
+    if ($extension === 'pdf') {
+        if ($mime === '' || !isPdfMimeAllowed($mime)) {
+            error_log("submit_order: service pdf reject stage=mime service={$service_type} name={$original_name} mime={$mime}");
+            setError($type_error);
+            return false;
+        }
+        if (!pdfHeaderValid($tmp_name)) {
+            error_log("submit_order: service pdf reject stage=header service={$service_type} name={$original_name} mime={$mime}");
+            setError("Attachment must be a valid PDF file. The file you uploaded is not a readable PDF.");
+            return false;
+        }
+        if (!validatePdfStructure($tmp_name)) {
+            error_log("submit_order: service pdf reject stage=structure service={$service_type} name={$original_name} mime={$mime}");
+            setError("Attachment must be a valid PDF file. The file you uploaded is not a readable PDF.");
+            return false;
+        }
+        return true;
+    }
+
     $extension_mime_map = [
-        'pdf' => 'application/pdf',
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
         'png' => 'image/png',
@@ -310,11 +333,6 @@ function validateServiceUpload(array $file, string $service_type = '')
 
     if ($expected_mime !== null && $mime !== $expected_mime) {
         setError("Attachment file type does not match its extension.");
-        return false;
-    }
-
-    if ($mime === 'application/pdf' && !validatePdfStructure($tmp_name)) {
-        setError("Attachment must be a valid PDF file. The file you uploaded is not a readable PDF.");
         return false;
     }
 

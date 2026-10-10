@@ -1638,11 +1638,14 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             throw new Error((checkData && checkData.message) || 'Download failed. Please open the file preview link and download manually.');
                         }
 
-                        // Accept = viewer + auto-download for doc/docx/pdf (new-tab preview
-                        // plus a real file download via the proxy). wps/images: download
-                        // or preview only. fileExt comes from the hardened check endpoint.
+                        // Accept = viewer + auto-download for doc/docx/pdf/images (new-tab preview
+                        // plus a real file download via the proxy). wps: download only.
+                        // fileExt comes from the hardened check endpoint.
                         const fileKind = checkData.file_kind || '';
                         const fileExt = String(checkData.file_ext || '').toLowerCase();
+                        const previewableImageExts = ['jpg', 'jpeg', 'png', 'webp', 'jfif', 'gif'];
+                        const isPreviewableNative = fileKind === 'native'
+                            && (fileExt === 'pdf' || previewableImageExts.indexOf(fileExt) !== -1);
                         const forceDownload = Boolean(checkData.force_download)
                             || fileKind === 'viewable'
                             || fileKind === 'download-only';
@@ -1651,15 +1654,15 @@ ownerLayoutStart('orders', 'Print Job Management', '', $notif_count, $shop, $own
                             : ((checkData.remote && checkData.url) ? checkData.url : file.url);
 
                         let viewerUrl = (fileKind === 'viewable' && checkData.viewer_url) ? checkData.viewer_url : null;
-                        // PDF live behavior: same as Word — raw PDF in new tab (browser
+                        // PDF/image live behavior: same as Word — raw file in new tab (browser
                         // renders it like before) plus proxy auto-download.
-                        if (!viewerUrl && fileKind === 'native' && fileExt === 'pdf'
+                        if (!viewerUrl && isPreviewableNative
                             && checkData.remote && checkData.url && checkData.download_url) {
                             viewerUrl = checkData.url;
                         }
 
                         resolvedFiles.push({
-                            downloadUrl: fileKind === 'native' && fileExt === 'pdf' && checkData.download_url ? checkData.download_url : downloadUrl,
+                            downloadUrl: isPreviewableNative && checkData.download_url ? checkData.download_url : downloadUrl,
                             viewerUrl: viewerUrl,
                             name: (checkData.file_name || file.name),
                             remote: Boolean(checkData.remote) && !forceDownload,

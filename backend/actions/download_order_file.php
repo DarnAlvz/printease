@@ -197,6 +197,21 @@ function officeDownloadMimeType($extension)
     if ($ext === 'pdf') {
         return 'application/pdf';
     }
+    if ($ext === 'jpg' || $ext === 'jpeg') {
+        return 'image/jpeg';
+    }
+    if ($ext === 'png') {
+        return 'image/png';
+    }
+    if ($ext === 'webp') {
+        return 'image/webp';
+    }
+    if ($ext === 'gif') {
+        return 'image/gif';
+    }
+    if ($ext === 'jfif') {
+        return 'image/jpeg';
+    }
 
     return 'application/octet-stream';
 }
